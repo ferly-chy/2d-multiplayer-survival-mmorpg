@@ -11,6 +11,7 @@ import {
 } from '../generated/types';
 import { Identity } from 'spacetimedb';
 import { calculateChunkIndex } from '../utils/chunkUtils';
+import { useLocalPlayer, useQuestUiTables, useWorldTable } from '../engine/selectors';
 import springIcon from '../assets/ui/spring.png';
 import summerIcon from '../assets/ui/summer.png';
 import autumnIcon from '../assets/ui/autumn.png';
@@ -72,35 +73,29 @@ function truncateLabel(label: string, maxLen: number = OBJECTIVE_LABEL_MAX_LEN):
 }
 
 interface DayNightCycleTrackerProps {
-    worldState: WorldState | null;
-    chunkWeather: Map<string, any>;
-    localPlayer: Player | undefined;
     isMobile?: boolean;
     onMinimizedChange?: (isMinimized: boolean) => void;
-    // Quest props (from SovaDirectivesIndicator)
-    tutorialQuestDefinitions?: Map<string, TutorialQuestDefinition>;
-    dailyQuestDefinitions?: Map<string, DailyQuestDefinition>;
-    playerTutorialProgress?: Map<string, PlayerTutorialProgress>;
-    playerDailyQuests?: Map<string, PlayerDailyQuest>;
     localPlayerId?: Identity;
     onOpenQuestsPanel?: () => void;
     hasNewNotification?: boolean;
 }
 
 const DayNightCycleTracker: React.FC<DayNightCycleTrackerProps> = ({
-    worldState,
-    chunkWeather,
-    localPlayer,
     isMobile = false,
     onMinimizedChange,
-    tutorialQuestDefinitions = new Map(),
-    dailyQuestDefinitions = new Map(),
-    playerTutorialProgress = new Map(),
-    playerDailyQuests = new Map(),
     localPlayerId,
     onOpenQuestsPanel,
     hasNewNotification = false,
 }) => {
+    const worldState = useWorldTable<WorldState | null>('worldState');
+    const chunkWeather = useWorldTable<Map<string, any>>('chunkWeather');
+    const localPlayer = useLocalPlayer(localPlayerId?.toHexString() ?? null);
+    const {
+        tutorialQuestDefinitions,
+        dailyQuestDefinitions,
+        playerTutorialProgress,
+        playerDailyQuests,
+    } = useQuestUiTables();
     const [isMinimized, setIsMinimized] = useState(false);
     const [hoveredElement, setHoveredElement] = useState<'season' | 'time' | 'weather' | 'quest' | null>(null);
     const [pulseAnimation, setPulseAnimation] = useState(false);

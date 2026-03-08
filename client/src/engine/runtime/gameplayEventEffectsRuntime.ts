@@ -1,13 +1,30 @@
 import type { DbConnection } from '../../generated';
-import type { GrassState, PlayerDiscoveredCairn } from '../../generated/types';
+import type {
+  AnimalCorpse,
+  Barrel,
+  GrassState,
+  PlacedExplosive,
+  PlayerDiscoveredCairn,
+  WildAnimal,
+} from '../../generated/types';
 import { playImmediateSound } from '../../hooks/useSoundSystem';
 import {
   cleanupCutGrassEffectSystem,
   handleGrassStateDestroyed,
 } from '../../effects/cutGrassEffect';
+import { triggerExplosionEffect } from '../../utils/renderers/explosiveRenderingUtils';
+import { triggerAnimalCorpseDestructionEffect } from '../../utils/renderers/animalCorpseRenderingUtils';
+import { triggerBarrelDestructionEffect } from '../../utils/renderers/barrelRenderingUtils';
 
 type GrassDeleteListener = (ctx: unknown, grassState: GrassState) => void;
 type CairnInsertListener = (ctx: unknown, discovery: PlayerDiscoveredCairn) => void;
+type PlacedExplosiveDeleteListener = (ctx: unknown, explosive: PlacedExplosive) => void;
+type AnimalCorpseDeleteListener = (ctx: unknown, corpse: AnimalCorpse) => void;
+type BarrelUpdateListener = (ctx: unknown, oldBarrel: Barrel, newBarrel: Barrel) => void;
+type BarrelDeleteListener = (ctx: unknown, barrel: Barrel) => void;
+type WildAnimalInsertListener = (ctx: unknown, animal: WildAnimal) => void;
+
+let hasDispatchedHostileEncounterEvent = false;
 
 class GameplayEventEffectsRuntime {
   private activeConnection: DbConnection | null = null;
@@ -15,6 +32,11 @@ class GameplayEventEffectsRuntime {
   private playedCairnIds = new Set<string>();
   private grassDeleteListener: GrassDeleteListener | null = null;
   private cairnInsertListener: CairnInsertListener | null = null;
+  private placedExplosiveDeleteListener: PlacedExplosiveDeleteListener | null = null;
+  private animalCorpseDeleteListener: AnimalCorpseDeleteListener | null = null;
+  private barrelUpdateListener: BarrelUpdateListener | null = null;
+  private barrelDeleteListener: BarrelDeleteListener | null = null;
+  private wildAnimalInsertListener: WildAnimalInsertListener | null = null;
 
   start(connection: DbConnection | null, localPlayerId: string | null): void {
     const connectionChanged = this.activeConnection !== connection;
@@ -24,6 +46,7 @@ class GameplayEventEffectsRuntime {
       this.detachListeners();
       this.activeConnection = connection;
       this.playedCairnIds.clear();
+      hasDispatchedHostileEncounterEvent = false;
     }
 
     if (playerChanged) {
@@ -68,6 +91,64 @@ class GameplayEventEffectsRuntime {
       };
       this.activeConnection.db.player_discovered_cairn.onInsert(this.cairnInsertListener);
     }
+
+    if (!this.placedExplosiveDeleteListener) {
+      this.placedExplosiveDeleteListener = (_ctx, explosive) => {
+        if (explosive.isDud) {
+          return;
+        }
+        const tier = explosive.explosiveType.tag === 'BabushkaSurprise' ? 'babushka' : 'matriarch';
+        triggerExplosionEffect(explosive.posX, explosive.posY, explosive.blastRadius, tier);
+      };
+      this.activeConnection.db.placed_explosive.onDelete(this.placedExplosiveDeleteListener);
+    }
+
+    if (!this.animalCorpseDeleteListener) {
+      this.animalCorpseDeleteListener = (_ctx, corpse) => {
+        const nowMs = Date.now();
+        const despawnAtMs = Number(corpse.despawnAt.microsSinceUnixEpoch / 1000n);
+        const deletedBeforeNaturalDespawn = nowMs < (despawnAtMs - 500);
+        if (corpse.health === 0 || deletedBeforeNaturalDespawn) {
+          triggerAnimalCorpseDestructionEffect(corpse);
+        }
+      };
+      this.activeConnection.db.animal_corpse.onDelete(this.animalCorpseDeleteListener);
+    }
+
+    if (!this.barrelUpdateListener) {
+      this.barrelUpdateListener = (_ctx, oldBarrel, newBarrel) => {
+        const wasHealthy = (oldBarrel.respawnAt?.microsSinceUnixEpoch ?? 0n) === 0n;
+        const isDestroyed = (newBarrel.respawnAt?.microsSinceUnixEpoch ?? 0n) !== 0n;
+        if (wasHealthy && isDestroyed && (newBarrel.variant ?? 0) !== 6) {
+          triggerBarrelDestructionEffect(newBarrel);
+        }
+      };
+      this.activeConnection.db.barrel.onUpdate(this.barrelUpdateListener);
+    }
+
+    if (!this.barrelDeleteListener) {
+      this.barrelDeleteListener = (_ctx, barrel) => {
+        if ((barrel.variant ?? 0) !== 6) {
+          triggerBarrelDestructionEffect(barrel);
+        }
+      };
+      this.activeConnection.db.barrel.onDelete(this.barrelDeleteListener);
+    }
+
+    if (!this.wildAnimalInsertListener) {
+      this.wildAnimalInsertListener = (_ctx, animal) => {
+        if (!animal.isHostileNpc) {
+          return;
+        }
+        const storageKey = 'broth_first_hostile_encounter_played';
+        if (localStorage.getItem(storageKey) === 'true' || hasDispatchedHostileEncounterEvent) {
+          return;
+        }
+        hasDispatchedHostileEncounterEvent = true;
+        window.dispatchEvent(new CustomEvent('sova-first-hostile-encounter'));
+      };
+      this.activeConnection.db.wild_animal.onInsert(this.wildAnimalInsertListener);
+    }
   }
 
   stop(): void {
@@ -75,6 +156,7 @@ class GameplayEventEffectsRuntime {
     this.activeConnection = null;
     this.localPlayerId = null;
     this.playedCairnIds.clear();
+    hasDispatchedHostileEncounterEvent = false;
     cleanupCutGrassEffectSystem();
   }
 
@@ -91,6 +173,31 @@ class GameplayEventEffectsRuntime {
     if (this.cairnInsertListener) {
       this.activeConnection.db.player_discovered_cairn.removeOnInsert(this.cairnInsertListener);
       this.cairnInsertListener = null;
+    }
+
+    if (this.placedExplosiveDeleteListener) {
+      this.activeConnection.db.placed_explosive.removeOnDelete(this.placedExplosiveDeleteListener);
+      this.placedExplosiveDeleteListener = null;
+    }
+
+    if (this.animalCorpseDeleteListener) {
+      this.activeConnection.db.animal_corpse.removeOnDelete(this.animalCorpseDeleteListener);
+      this.animalCorpseDeleteListener = null;
+    }
+
+    if (this.barrelUpdateListener) {
+      this.activeConnection.db.barrel.removeOnUpdate(this.barrelUpdateListener);
+      this.barrelUpdateListener = null;
+    }
+
+    if (this.barrelDeleteListener) {
+      this.activeConnection.db.barrel.removeOnDelete(this.barrelDeleteListener);
+      this.barrelDeleteListener = null;
+    }
+
+    if (this.wildAnimalInsertListener) {
+      this.activeConnection.db.wild_animal.removeOnInsert(this.wildAnimalInsertListener);
+      this.wildAnimalInsertListener = null;
     }
   }
 }

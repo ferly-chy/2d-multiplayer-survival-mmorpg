@@ -16,51 +16,29 @@
  * - Season and cycle information
  */
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Identity } from 'spacetimedb';
-import { useGameConnection } from '../contexts/GameConnectionContext';
+import React, { useMemo, useState } from 'react';
+import type { Identity } from 'spacetimedb';
 import { getItemIcon } from '../utils/itemIconUtils';
 import alkIcon from '../assets/ui/alk.png';
 import './AlkPanel.css';
+import { useAlkPanelController } from '../hooks/useAlkPanelController';
 
 // Types from generated bindings (will be available after spacetime generate)
 import {
-    AlkState,
-    AlkStation,
     AlkContract,
-    AlkPlayerContract,
-    PlayerShardBalance,
     AlkContractKind,
+    AlkPlayerContract,
     AlkContractStatus,
     AlkStationAllowance,
-    WorldState,
     ItemDefinition,
 } from '../generated/types';
 
 // Memory shard icon for rewards display
 const memoryShardIcon = getItemIcon('memory_shard.png');
 
-// Props interface
 interface AlkPanelProps {
-    playerIdentity: Identity | null;
     onClose: () => void;
-    // Data from subscriptions
-    alkState: AlkState | null;
-    alkStations: Map<string, AlkStation>;
-    alkContracts: Map<string, AlkContract>;
-    alkPlayerContracts: Map<string, AlkPlayerContract>;
-    playerShardBalance: PlayerShardBalance | null; // Legacy - we count inventory instead
-    worldState: WorldState | null;
-    itemDefinitions: Map<string, ItemDefinition>;
-    inventoryItems?: Map<string, any>; // For counting Memory Shards
-    // Player position for station proximity checking
-    playerPosition?: { x: number; y: number } | null;
-    // Initial tab to open to (e.g., 'buy-orders' when coming from delivery panel)
-    initialTab?: AlkTab;
 }
-
-// Tab types - expanded for all contract categories
-type AlkTab = 'seasonal' | 'materials' | 'arms' | 'armor' | 'tools' | 'provisions' | 'bonus' | 'buy-orders' | 'my-contracts';
 
 // Helper function to get season name
 const getSeasonName = (seasonIndex: number): string => {
@@ -758,294 +736,44 @@ const PlayerContractCard: React.FC<PlayerContractCardProps> = ({
 
 // Main ALK Panel Component
 const AlkPanel: React.FC<AlkPanelProps> = ({
-    playerIdentity,
     onClose,
-    alkState,
-    alkStations,
-    alkContracts,
-    alkPlayerContracts,
-    playerShardBalance,
-    worldState,
-    itemDefinitions,
-    inventoryItems,
-    playerPosition,
-    initialTab,
 }) => {
-    const [activeTab, setActiveTab] = useState<AlkTab>(initialTab || 'seasonal');
-    const [nearbyStationId, setNearbyStationId] = useState<number | null>(null);
-    const [isQuantityInputFocused, setIsQuantityInputFocused] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [isSearchFocused, setIsSearchFocused] = useState(false);
-
-    const connection = useGameConnection();
-    
-    // Check station proximity when player position changes
-    useEffect(() => {
-        if (!playerPosition || alkStations.size === 0) {
-            setNearbyStationId(null);
-            return;
-        }
-        
-        let nearestStationId: number | null = null;
-        let nearestDistanceSq = Infinity;
-        
-        for (const station of alkStations.values()) {
-            if (!station.isActive) continue;
-            
-            const dx = playerPosition.x - station.worldPosX;
-            const dy = playerPosition.y - station.worldPosY;
-            const distanceSq = dx * dx + dy * dy;
-            const radiusSq = station.interactionRadius * station.interactionRadius;
-            
-            if (distanceSq <= radiusSq && distanceSq < nearestDistanceSq) {
-                nearestDistanceSq = distanceSq;
-                nearestStationId = station.stationId;
-            }
-        }
-        
-        setNearbyStationId(nearestStationId);
-    }, [playerPosition, alkStations]);
-    
-    // Block movement keys while panel is open to prevent character movement during UI interaction
-    // Also block when quantity input or search input is focused (to prevent movement while typing)
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            // If search input is focused, allow all typing keys (including spacebar) to pass through
-            const target = e.target as HTMLElement;
-            if (isSearchFocused && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-                // Allow all typing keys including spacebar, letters, numbers, etc.
-                // Only handle Escape key for clearing search
-                if (e.key === 'Escape') {
-                    if (searchQuery) {
-                        setSearchQuery('');
-                        e.preventDefault();
-                        e.stopImmediatePropagation();
-                        return;
-                    }
-                }
-                // Don't block any other keys when typing in search
-                return;
-            }
-            
-            // Handle Escape to close (or clear search first)
-            if (e.key === 'Escape') {
-                if (searchQuery && isSearchFocused) {
-                    // Clear search first if focused on search
-                    setSearchQuery('');
-                    e.preventDefault();
-                    e.stopImmediatePropagation();
-                    return;
-                }
-                e.preventDefault();
-                e.stopImmediatePropagation();
-                onClose();
-                return;
-            }
-            // Block arrow keys from moving the player
-            // Always block if any input is focused
-            const isInputFocused = isQuantityInputFocused || isSearchFocused;
-            if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                if (isInputFocused || !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
-                    e.stopPropagation();
-                }
-            }
-            // Block WASD movement keys while panel is open
-            // Always block if any input is focused
-            if (e.key === 'w' || e.key === 'W' || e.key === 'a' || e.key === 'A' || 
-                e.key === 's' || e.key === 'S' || e.key === 'd' || e.key === 'D') {
-                if (isInputFocused || !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
-                    e.stopPropagation();
-                }
-            }
-            // Block common game hotkeys (Y, G, E, etc.) when input is focused
-            // to prevent tab switching or other game actions while typing
-            if (isInputFocused) {
-                if (e.key === 'y' || e.key === 'Y' || e.key === 'g' || e.key === 'G' ||
-                    e.key === 'e' || e.key === 'E' || e.key === 'r' || e.key === 'R' ||
-                    e.key === 'f' || e.key === 'F' || e.key === 'q' || e.key === 'Q' ||
-                    e.key === 'Tab') {
-                    e.stopPropagation();
-                }
-            }
-        };
-
-        // Use capture phase to intercept before game input handler
-        window.addEventListener('keydown', handleKeyDown, true);
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown, true);
-        };
-    }, [onClose, isQuantityInputFocused, isSearchFocused, searchQuery]);
-    
-    // Count Memory Shards in player's inventory (this is the real shard count)
-    const inventoryShardCount = useMemo(() => {
-        if (!playerIdentity || !inventoryItems || !itemDefinitions) return 0;
-        
-        // Find Memory Shard definition
-        const memoryShardDef = Array.from(itemDefinitions.values()).find(
-            def => def.name === 'Memory Shard'
-        );
-        if (!memoryShardDef) return 0;
-        
-        let total = 0;
-        inventoryItems.forEach((item) => {
-            // Check if owned by player and is Memory Shard
-            const loc = item.location;
-            if (!loc) return;
-            
-            let isOwned = false;
-            if (loc.tag === 'Inventory' && loc.value?.ownerId?.isEqual(playerIdentity)) {
-                isOwned = true;
-            } else if (loc.tag === 'Hotbar' && loc.value?.ownerId?.isEqual(playerIdentity)) {
-                isOwned = true;
-            }
-            
-            if (isOwned && item.itemDefId === memoryShardDef.id) {
-                total += Number(item.quantity);
-            }
-        });
-        
-        return total;
-    }, [playerIdentity, inventoryItems, itemDefinitions]);
-    
-    // Get current season from world state or ALK state
-    const currentSeason = useMemo(() => {
-        if (worldState) {
-            return Math.floor((Number(worldState.dayOfYear) - 1) / 90);
-        }
-        if (alkState) {
-            return Number(alkState.seasonIndex);
-        }
-        return 0;
-    }, [worldState, alkState]);
-
-    // Filter contracts by type (supporting both new and legacy kind names)
-    // Use string casting for forward compatibility with regenerated bindings
-    const getKindTag = (kind: AlkContractKind | undefined | null): string => 
-        kind && 'tag' in kind ? (kind.tag as string) : '';
-    
-    // Helper to filter out Memory Shard contracts (base currency cannot be traded for itself)
-    const isNotMemoryShard = (c: AlkContract) => c.itemName.trim() !== 'Memory Shard';
-    
-    const seasonalContracts = useMemo(() => {
-        return Array.from(alkContracts.values())
-            .filter(c => (getKindTag(c.kind) === 'SeasonalHarvest' || getKindTag(c.kind) === 'BaseFood') && c.isActive && isNotMemoryShard(c));
-    }, [alkContracts]);
-    
-    const materialsContracts = useMemo(() => {
-        return Array.from(alkContracts.values())
-            .filter(c => (getKindTag(c.kind) === 'Materials' || getKindTag(c.kind) === 'BaseIndustrial') && c.isActive && isNotMemoryShard(c));
-    }, [alkContracts]);
-    
-    const armsContracts = useMemo(() => {
-        return Array.from(alkContracts.values())
-            .filter(c => getKindTag(c.kind) === 'Arms' && c.isActive && isNotMemoryShard(c));
-    }, [alkContracts]);
-    
-    const armorContracts = useMemo(() => {
-        return Array.from(alkContracts.values())
-            .filter(c => getKindTag(c.kind) === 'Armor' && c.isActive && isNotMemoryShard(c));
-    }, [alkContracts]);
-    
-    const toolsContracts = useMemo(() => {
-        return Array.from(alkContracts.values())
-            .filter(c => getKindTag(c.kind) === 'Tools' && c.isActive && isNotMemoryShard(c));
-    }, [alkContracts]);
-    
-    const provisionsContracts = useMemo(() => {
-        return Array.from(alkContracts.values())
-            .filter(c => getKindTag(c.kind) === 'Provisions' && c.isActive && isNotMemoryShard(c));
-    }, [alkContracts]);
-    
-    const bonusContracts = useMemo(() => {
-        return Array.from(alkContracts.values())
-            .filter(c => getKindTag(c.kind) === 'DailyBonus' && c.isActive && isNotMemoryShard(c));
-    }, [alkContracts]);
-    
-    // Buy Order contracts - reverse contracts where players spend shards to buy materials
-    const buyOrderContracts = useMemo(() => {
-        return Array.from(alkContracts.values())
-            .filter(c => getKindTag(c.kind) === 'BuyOrder' && c.isActive && isNotMemoryShard(c));
-    }, [alkContracts]);
-    
-    // Global search across all contracts
-    const searchResults = useMemo(() => {
-        if (!searchQuery.trim()) return [];
-        
-        const query = searchQuery.toLowerCase().trim();
-        const allActiveContracts = Array.from(alkContracts.values())
-            .filter(c => c.isActive && isNotMemoryShard(c));
-        
-        return allActiveContracts.filter(contract => {
-            // Search by item name
-            const itemName = contract.itemName.trim().toLowerCase();
-            if (itemName.includes(query)) return true;
-            
-            // Search by category/kind name
-            const kindName = getContractKindName(contract.kind).toLowerCase();
-            if (kindName.includes(query)) return true;
-            
-            // Search by item definition name if available
-            const itemDef = itemDefinitions.get(contract.itemDefId.toString());
-            if (itemDef?.name?.toLowerCase().includes(query)) return true;
-            
-            return false;
-        });
-    }, [alkContracts, searchQuery, itemDefinitions]);
-    
-    // Check if search mode is active
-    const isSearchActive = searchQuery.trim().length > 0;
-    
-    // Get player's contracts - sorted by date submitted (most recent first)
-    const myContracts = useMemo(() => {
-        if (!playerIdentity) return [];
-        return Array.from(alkPlayerContracts.values())
-            .filter(pc => pc.playerId.toHexString() === playerIdentity.toHexString())
-            .sort((a, b) => {
-                // Sort by acceptedAt timestamp, most recent first (descending)
-                // SpacetimeDB Timestamp has microsSinceUnixEpoch property
-                const timeA = (a.acceptedAt as any)?.microsSinceUnixEpoch ?? 0n;
-                const timeB = (b.acceptedAt as any)?.microsSinceUnixEpoch ?? 0n;
-                // Compare as bigints (descending order - newest first)
-                if (timeB > timeA) return 1;
-                if (timeB < timeA) return -1;
-                return 0;
-            });
-    }, [alkPlayerContracts, playerIdentity]);
-    
-    // Get accepted contract IDs for this player (only ACTIVE contracts)
-    // Cancelled/Completed/Failed contracts should allow re-acceptance
-    const acceptedContractIds = useMemo(() => {
-        return new Set(
-            myContracts
-                .filter(pc => pc.status?.tag === 'Active')
-                .map(pc => pc.contractId.toString())
-        );
-    }, [myContracts]);
-    
-    // Handlers
-    const handleAcceptContract = useCallback((contractId: bigint, quantity: number) => {
-        if (!connection.connection) return;
-        connection.connection.reducers.acceptAlkContract({ contractId, targetQuantity: quantity, preferredStationId: nearbyStationId !== null ? nearbyStationId : undefined });
-    }, [connection, nearbyStationId]);
-    
-    const handleCancelContract = useCallback((playerContractId: bigint) => {
-        if (!connection.connection) return;
-        connection.connection.reducers.cancelAlkContract({ playerContractId });
-    }, [connection]);
-    
-    const handleDeliverContract = useCallback((playerContractId: bigint) => {
-        if (!connection.connection || nearbyStationId === null) return;
-        connection.connection.reducers.deliverAlkContract({ playerContractId, stationId: nearbyStationId });
-    }, [connection, nearbyStationId]);
-    
-    // Handler for purchasing materials from ALK (buy orders) (regenerate bindings after server publish to remove cast)
-    const handlePurchase = useCallback((contractId: bigint, bundlesToBuy: number) => {
-        if (!connection.connection) return;
-        (connection.connection.reducers as any).purchaseFromAlk(contractId, bundlesToBuy);
-    }, [connection]);
-    
-    // Check if player is at Central Compound (station_id = 0)
-    const isAtCentralCompound = nearbyStationId === 0;
+    const {
+        playerIdentity,
+        alkState,
+        alkContracts,
+        itemDefinitions,
+        inventoryItems,
+        worldState,
+        activeTab,
+        setActiveTab,
+        nearbyStationId,
+        alkStations,
+        setIsQuantityInputFocused,
+        searchQuery,
+        setSearchQuery,
+        isSearchFocused,
+        setIsSearchFocused,
+        inventoryShardCount,
+        currentSeason,
+        seasonalContracts,
+        materialsContracts,
+        armsContracts,
+        armorContracts,
+        toolsContracts,
+        provisionsContracts,
+        bonusContracts,
+        buyOrderContracts,
+        searchResults,
+        isSearchActive,
+        myContracts,
+        acceptedContractIds,
+        handleAcceptContract,
+        handleCancelContract,
+        handleDeliverContract,
+        handlePurchase,
+        isAtCentralCompound,
+    } = useAlkPanelController({ onClose });
     
     // Render contracts for the active tab (or search results)
     const renderContracts = () => {

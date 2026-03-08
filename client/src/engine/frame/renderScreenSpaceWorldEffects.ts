@@ -1,0 +1,177 @@
+import { calculateChunkIndex } from '../../utils/chunkUtils';
+import { renderRain } from '../../utils/renderers/rainRenderingUtils';
+import { renderWeatherOverlay } from '../../utils/renderers/weatherOverlayUtils';
+import { renderWardRadius, LANTERN_TYPE_LANTERN } from '../../utils/renderers/lanternRenderingUtils';
+import { renderStatusOverlayPasses } from './renderStatusOverlayPasses';
+
+interface RenderScreenSpaceWorldEffectsOptions {
+  ctx: CanvasRenderingContext2D;
+  localPlayer: any;
+  chunkWeather: Map<string, any> | undefined;
+  currentPredictedPosition: { x: number; y: number } | null;
+  worldState: any;
+  showPrecipitation: boolean;
+  isSnorkeling: boolean;
+  currentCameraOffsetX: number;
+  currentCameraOffsetY: number;
+  currentCanvasWidth: number;
+  currentCanvasHeight: number;
+  deltaTimeMs: number;
+  stormAtmosphereEnabled: boolean;
+  currentCycleProgress: number;
+  resolvedOverlayRgba: string;
+  maskCanvas: HTMLCanvasElement | null;
+  redrawMask: (args: {
+    cameraOffsetX: number;
+    cameraOffsetY: number;
+    predictedPosition: { x: number; y: number } | null;
+    worldMouseX: number | null;
+    worldMouseY: number | null;
+  }) => void;
+  currentWorldMouseX: number | null;
+  currentWorldMouseY: number | null;
+  visibleLanterns: any[];
+  worldParticlesQuality: number;
+  renderParticles: (ctx: CanvasRenderingContext2D, particles: any[]) => void;
+  resourceSparkleParticles: any[];
+  impactParticles: any[];
+  structureImpactParticles: any[];
+  hostileDeathParticles: any[];
+  showStatusOverlays: boolean;
+  activeConsumableEffects: Map<string, any>;
+  localPlayerId?: string;
+}
+
+export function renderScreenSpaceWorldEffects({
+  ctx,
+  localPlayer,
+  chunkWeather,
+  currentPredictedPosition,
+  worldState,
+  showPrecipitation,
+  isSnorkeling,
+  currentCameraOffsetX,
+  currentCameraOffsetY,
+  currentCanvasWidth,
+  currentCanvasHeight,
+  deltaTimeMs,
+  stormAtmosphereEnabled,
+  currentCycleProgress,
+  resolvedOverlayRgba,
+  maskCanvas,
+  redrawMask,
+  currentWorldMouseX,
+  currentWorldMouseY,
+  visibleLanterns,
+  worldParticlesQuality,
+  renderParticles,
+  resourceSparkleParticles,
+  impactParticles,
+  structureImpactParticles,
+  hostileDeathParticles,
+  showStatusOverlays,
+  activeConsumableEffects,
+  localPlayerId,
+}: RenderScreenSpaceWorldEffectsOptions): void {
+  let rainIntensity = 0.0;
+  if (localPlayer && chunkWeather) {
+    const playerX = currentPredictedPosition?.x ?? localPlayer.positionX;
+    const playerY = currentPredictedPosition?.y ?? localPlayer.positionY;
+    const currentChunkIndex = calculateChunkIndex(playerX, playerY);
+    const chunkWeatherData = chunkWeather.get(currentChunkIndex.toString());
+    if (chunkWeatherData && chunkWeatherData.currentWeather?.tag !== 'Clear') {
+      rainIntensity = chunkWeatherData.rainIntensity ?? 0.0;
+    }
+  }
+  if (rainIntensity === 0.0 && worldState?.rainIntensity) {
+    rainIntensity = worldState.rainIntensity;
+  }
+
+  const isWinter = worldState?.currentSeason?.tag === 'Winter';
+  if (showPrecipitation && !isSnorkeling) {
+    renderRain(
+      ctx,
+      -currentCameraOffsetX,
+      -currentCameraOffsetY,
+      currentCanvasWidth,
+      currentCanvasHeight,
+      rainIntensity,
+      deltaTimeMs / 1000,
+      isWinter,
+    );
+  }
+
+  if (stormAtmosphereEnabled) {
+    renderWeatherOverlay(
+      ctx,
+      currentCanvasWidth,
+      currentCanvasHeight,
+      rainIntensity,
+      currentCycleProgress,
+      Date.now(),
+    );
+  }
+
+  if (resolvedOverlayRgba !== 'transparent' && resolvedOverlayRgba !== 'rgba(0,0,0,0.00)' && maskCanvas) {
+    redrawMask({
+      cameraOffsetX: currentCameraOffsetX,
+      cameraOffsetY: currentCameraOffsetY,
+      predictedPosition: currentPredictedPosition,
+      worldMouseX: currentWorldMouseX,
+      worldMouseY: currentWorldMouseY,
+    });
+    ctx.drawImage(maskCanvas, 0, 0);
+  }
+
+  if (visibleLanterns && visibleLanterns.length > 0) {
+    ctx.save();
+    ctx.translate(currentCameraOffsetX, currentCameraOffsetY);
+    for (const lantern of visibleLanterns) {
+      if (lantern.lanternType !== LANTERN_TYPE_LANTERN && !lantern.isDestroyed) {
+        renderWardRadius(ctx, lantern, currentCycleProgress, true);
+      }
+    }
+    ctx.restore();
+  }
+
+  if (worldParticlesQuality > 1) {
+    ctx.save();
+    ctx.translate(currentCameraOffsetX, currentCameraOffsetY);
+    renderParticles(ctx, resourceSparkleParticles);
+    ctx.restore();
+  }
+
+  if (worldParticlesQuality > 0 && impactParticles.length > 0) {
+    ctx.save();
+    ctx.translate(currentCameraOffsetX, currentCameraOffsetY);
+    renderParticles(ctx, impactParticles);
+    ctx.restore();
+  }
+
+  if (worldParticlesQuality > 0 && structureImpactParticles.length > 0) {
+    ctx.save();
+    ctx.translate(currentCameraOffsetX, currentCameraOffsetY);
+    renderParticles(ctx, structureImpactParticles);
+    ctx.restore();
+  }
+
+  if (worldParticlesQuality > 0 && hostileDeathParticles.length > 0) {
+    ctx.save();
+    ctx.translate(currentCameraOffsetX, currentCameraOffsetY);
+    renderParticles(ctx, hostileDeathParticles);
+    ctx.restore();
+  }
+
+  renderStatusOverlayPasses({
+    ctx,
+    isSnorkeling,
+    canvasWidth: currentCanvasWidth,
+    canvasHeight: currentCanvasHeight,
+    showStatusOverlays,
+    localPlayer,
+    deltaTimeMs,
+    activeConsumableEffects,
+    localPlayerId,
+    cycleProgress: currentCycleProgress,
+  });
+}

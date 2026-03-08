@@ -1,15 +1,13 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Identity } from 'spacetimedb';
-import { AchievementDefinition, PlayerAchievement, AchievementCategory } from '../generated/types';
+import type { AchievementDefinition } from '../generated/types';
+import { useGameConnection } from '../contexts/GameConnectionContext';
+import { useGameUI } from '../contexts/GameUIContext';
+import { useGameScreenWorldTables } from '../engine/selectors';
 import achievementsIcon from '../assets/ui/achievements.png';
 
-interface AchievementsPanelProps {
-  playerIdentity: Identity | null;
-  achievementDefinitions: Map<string, AchievementDefinition>;
-  playerAchievements: Map<string, PlayerAchievement>;
-  onClose?: () => void;
-  onSearchFocusChange?: (isFocused: boolean) => void; // Blocks player movement when search is focused
-}
+/** Cairn achievements are hidden for now - set false to re-enable. */
+const HIDE_CAIRN_ACHIEVEMENTS = true;
+const CAIRN_ACHIEVEMENT_IDS = new Set(['first_cairn', 'cairn_5', 'cairn_hunter', 'cairn_all']);
 
 // Category display names
 const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
@@ -36,13 +34,10 @@ const CATEGORY_ICONS: Record<string, string> = {
 // Sort options
 type SortOption = 'alphabetical' | 'recent';
 
-const AchievementsPanel: React.FC<AchievementsPanelProps> = ({
-  playerIdentity,
-  achievementDefinitions,
-  playerAchievements,
-  onClose,
-  onSearchFocusChange,
-}) => {
+const AchievementsPanel: React.FC = () => {
+  const { dbIdentity: playerIdentity } = useGameConnection();
+  const { setIsCraftingSearchFocused } = useGameUI();
+  const { achievementDefinitions, playerAchievements } = useGameScreenWorldTables();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showUnlockedOnly, setShowUnlockedOnly] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('recent');
@@ -60,10 +55,20 @@ const AchievementsPanel: React.FC<AchievementsPanelProps> = ({
     return unlocked;
   }, [playerAchievements, playerIdentity]);
 
+  // Definitions with cairn achievements filtered out when hidden
+  const visibleDefinitions = useMemo(() => {
+    if (!HIDE_CAIRN_ACHIEVEMENTS) return achievementDefinitions;
+    const filtered = new Map<string, AchievementDefinition>();
+    achievementDefinitions.forEach((def, id) => {
+      if (!CAIRN_ACHIEVEMENT_IDS.has(id)) filtered.set(id, def);
+    });
+    return filtered;
+  }, [achievementDefinitions]);
+
   // Get all unique categories
   const categories = useMemo(() => {
     const cats = new Set<string>();
-    achievementDefinitions.forEach((def) => {
+    visibleDefinitions.forEach((def) => {
       // Handle tagged union for category
       const categoryTag = typeof def.category === 'object' && def.category?.tag
         ? def.category.tag
@@ -71,7 +76,7 @@ const AchievementsPanel: React.FC<AchievementsPanelProps> = ({
       cats.add(categoryTag);
     });
     return Array.from(cats).sort();
-  }, [achievementDefinitions]);
+  }, [visibleDefinitions]);
 
   // Get unlock timestamp for an achievement (returns bigint for sorting)
   const getUnlockTimestamp = useCallback((achievementId: string): bigint | null => {
@@ -96,7 +101,7 @@ const AchievementsPanel: React.FC<AchievementsPanelProps> = ({
 
   // Filter achievements by category, unlock status, and search query
   const filteredAchievements = useMemo(() => {
-    let achievements = Array.from(achievementDefinitions.values());
+    let achievements = Array.from(visibleDefinitions.values());
     
     // Filter by category
     if (selectedCategory) {
@@ -158,15 +163,15 @@ const AchievementsPanel: React.FC<AchievementsPanelProps> = ({
     }
     
     return achievements;
-  }, [achievementDefinitions, selectedCategory, showUnlockedOnly, unlockedAchievementIds, searchQuery, sortBy, getUnlockTimestamp]);
+  }, [visibleDefinitions, selectedCategory, showUnlockedOnly, unlockedAchievementIds, searchQuery, sortBy, getUnlockTimestamp]);
 
-  // Calculate stats
+  // Calculate stats (excludes hidden cairn achievements when HIDE_CAIRN_ACHIEVEMENTS)
   const stats = useMemo(() => {
-    const total = achievementDefinitions.size;
-    const unlocked = unlockedAchievementIds.size;
+    const total = visibleDefinitions.size;
+    const unlocked = Array.from(unlockedAchievementIds).filter((id) => visibleDefinitions.has(id)).length;
     const percentage = total > 0 ? Math.round((unlocked / total) * 100) : 0;
     return { total, unlocked, percentage };
-  }, [achievementDefinitions, unlockedAchievementIds]);
+  }, [visibleDefinitions, unlockedAchievementIds]);
 
   return (
     <div style={{
@@ -289,12 +294,12 @@ const AchievementsPanel: React.FC<AchievementsPanelProps> = ({
             onFocus={(e) => {
               e.target.style.borderColor = '#ffd700';
               e.target.style.boxShadow = '0 0 8px rgba(255, 215, 0, 0.3)';
-              onSearchFocusChange?.(true); // Block player movement
+              setIsCraftingSearchFocused(true);
             }}
             onBlur={(e) => {
               e.target.style.borderColor = 'rgba(255, 215, 0, 0.3)';
               e.target.style.boxShadow = 'none';
-              onSearchFocusChange?.(false); // Unblock player movement
+              setIsCraftingSearchFocused(false);
             }}
             onKeyDown={(e) => {
               // Block game control keys from bubbling up to the game

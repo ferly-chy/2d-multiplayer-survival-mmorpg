@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import SpeechBubble from './SpeechBubble';
 import { Message as SpacetimeDBMessage, Player as SpacetimeDBPlayer } from '../generated/types';
+import { useSpeechBubbleRuntimeData } from '../engine/selectors';
 
 interface SpeechBubbleData {
   id: string;
@@ -10,11 +11,8 @@ interface SpeechBubbleData {
 }
 
 interface SpeechBubbleManagerProps {
-  messages: Map<string, SpacetimeDBMessage>; // Only global chat messages (whispers use PrivateMessage table)
-  players: Map<string, SpacetimeDBPlayer>;
   cameraOffsetX: number;
   cameraOffsetY: number;
-  localPlayerId?: string;
   localBubbles?: SpeechBubbleData[]; // Local-only bubbles (e.g., from /s command)
   predictedPosition?: { x: number; y: number } | null; // Local player's predicted position for smooth tracking
   remotePlayerInterpolation?: {
@@ -23,15 +21,13 @@ interface SpeechBubbleManagerProps {
 }
 
 const SpeechBubbleManager: React.FC<SpeechBubbleManagerProps> = ({
-  messages,
-  players,
   cameraOffsetX,
   cameraOffsetY,
-  localPlayerId,
   localBubbles = [],
   predictedPosition,
   remotePlayerInterpolation,
 }) => {
+  const { messages, players, localPlayerId } = useSpeechBubbleRuntimeData();
   const [activeBubbles, setActiveBubbles] = useState<SpeechBubbleData[]>([]);
   const [lastMessageCount, setLastMessageCount] = useState<number>(0);
   const [processedMessageIds] = useState<Set<string>>(new Set());

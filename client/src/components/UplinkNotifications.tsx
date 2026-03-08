@@ -11,6 +11,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import type { LevelUpNotification, AchievementUnlockNotification, AchievementDefinition } from '../generated/types';
 import { queueNotificationSound } from '../utils/notificationSoundQueue';
+import { useNotificationLists, useWorldTable } from '../engine/selectors';
 
 // Style constants - matching DayNightCycleTracker exactly
 const UI_BG_COLOR = 'linear-gradient(180deg, rgba(15, 25, 20, 0.98) 0%, rgba(20, 35, 30, 0.95) 100%)';
@@ -58,12 +59,6 @@ function saveSeenIds(key: string, ids: Set<string>): void {
 }
 
 interface UplinkNotificationsProps {
-  // Level up notifications
-  levelUpNotifications: LevelUpNotification[];
-  // Achievement notifications
-  achievementNotifications: AchievementUnlockNotification[];
-  // Achievement definitions (for looking up descriptions)
-  achievementDefinitions?: Map<string, AchievementDefinition>;
   // Quest completion (from useQuestNotifications)
   questCompletionNotification: {
     id: string;
@@ -86,15 +81,14 @@ const FADE_OUT_MS = 400;
 const CLICK_GUARD_MS = 800;
 
 const UplinkNotifications: React.FC<UplinkNotificationsProps> = ({
-  levelUpNotifications,
-  achievementNotifications,
-  achievementDefinitions,
   questCompletionNotification,
   onDismissQuestCompletion,
   isTrackerMinimized = false,
   onOpenAchievements,
   onOpenQuests,
 }) => {
+  const { levelUpNotificationsList: levelUpNotifications, achievementUnlockNotificationsList: achievementNotifications } = useNotificationLists();
+  const achievementDefinitions = useWorldTable<Map<string, AchievementDefinition>>('achievementDefinitions');
   // Queue of notifications to display (one at a time)
   const [activeNotification, setActiveNotification] = useState<UplinkNotification | null>(null);
   const [isFadingOut, setIsFadingOut] = useState(false);

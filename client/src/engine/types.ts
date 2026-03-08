@@ -29,11 +29,15 @@ export interface EngineInputSnapshot {
   sprinting: boolean;
   isAutoWalking: boolean;
   isAutoAttacking: boolean;
+  isFishing: boolean;
   isActivelyHolding: boolean;
   isCrouching: boolean;
   currentJumpOffsetY: number;
   interactionProgress: unknown | null;
   optimisticProjectiles: Map<string, unknown>;
+  tapTarget: { x: number; y: number } | null;
+  tapAnimation: { x: number; y: number; startTime: number } | null;
+  mobileSprintOverride: boolean | undefined;
   processInputsAndActions: (() => void) | null;
 }
 

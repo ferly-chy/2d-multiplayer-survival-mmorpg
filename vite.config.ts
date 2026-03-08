@@ -45,6 +45,10 @@ export default defineConfig(({ command, mode }) => {
     },
     server: {
       port: 3008,
+      hmr: {
+        clientPort: 3008,
+        host: 'localhost',
+      },
     },
     root: '.',
     publicDir: 'public',

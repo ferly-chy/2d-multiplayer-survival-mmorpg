@@ -4,19 +4,19 @@ overview: Finish the runtime migration by removing the remaining React-owned gam
 todos:
   - id: shrink-app-shell
     content: Replace App-level gameplay fan-out with selector hooks and remove App as the primary runtime router.
-    status: pending
+    status: completed
   - id: collapse-gamescreen-props
     content: Move read-only runtime/UI slices out of GameScreen props and into direct selector-based consumers.
-    status: pending
+    status: completed
   - id: split-spacetime-hook
     content: Break useSpacetimeTables into engine/runtime domain modules and thin compatibility selectors; remove dead legacy hook paths.
-    status: pending
+    status: completed
   - id: migrate-input-prediction
     content: Move remaining input and prediction ownership out of App into runtime-owned modules while keeping React as the DOM input bridge.
-    status: pending
+    status: completed
   - id: extract-frame-assembly
     content: Isolate frame assembly from GameCanvas in stages so canvas becomes a thin host over engine-prepared frame data.
-    status: pending
+    status: completed
 isProject: false
 ---
 

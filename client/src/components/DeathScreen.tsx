@@ -1,38 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Player as SpacetimeDBPlayer, SleepingBag, Tree, Stone, Barrel, PlayerPin, Campfire, PlayerCorpse as SpacetimeDBPlayerCorpse, WorldState, DeathMarker as SpacetimeDBDeathMarker, MinimapCache, RuneStone, LivingCoral } from '../generated/types'; // Corrected import
+import { SleepingBag } from '../generated/types';
 import { drawMinimapOntoCanvas, MINIMAP_DIMENSIONS, worldToMinimapCoords, calculateMinimapViewport } from './Minimap'; // Import Minimap drawing and helpers
 import { gameConfig } from '../config/gameConfig'; // Import gameConfig
+import { useGameScreenWorldTables } from '../engine/selectors';
 
 interface DeathScreenProps {
-  // Remove old props
-  // respawnAt: number;
-  // onRespawn: () => void;
-
-  // Add new props
   onRespawnRandomly: () => void | Promise<void>;
   onRespawnAtBag: (bagId: number) => void | Promise<void>;
   localPlayerIdentity: string | null;
-  sleepingBags: Map<number, SleepingBag>;
-  players: Map<string, SpacetimeDBPlayer>;
-  trees: Map<string, Tree>;
-  stones: Map<string, Stone>;
-  runeStones: Map<string, RuneStone>; // Add rune stones
-  barrels: Map<string, Barrel>;
-  campfires: Map<string, Campfire>; // Use corrected type
-  playerPin: PlayerPin | null;
   sleepingBagImage?: HTMLImageElement | null;
-  // Add new props for death marker
-  localPlayerDeathMarker?: SpacetimeDBDeathMarker | null;
   deathMarkerImage?: HTMLImageElement | null;
-  worldState: WorldState | null; // <-- Fix type here
-  minimapCache: MinimapCache | null; // Add minimapCache prop
-  // Add new minimap icon image props
   pinMarkerImage?: HTMLImageElement | null;
   campfireWarmthImage?: HTMLImageElement | null;
   torchOnImage?: HTMLImageElement | null;
-  monumentParts?: Map<string, any>; // Unified monument parts (all monument types)
-  largeQuarries?: Map<string, any>; // Large quarry locations with types for minimap labels
-  livingCorals?: Map<string, LivingCoral>; // Living coral reefs for minimap
 }
 
 // Helper function to format death cause messages
@@ -71,35 +51,31 @@ const DeathScreen: React.FC<DeathScreenProps> = ({
   onRespawnRandomly,
   onRespawnAtBag,
   localPlayerIdentity,
-  sleepingBags,
-  players,
-  trees,
-  stones,
-  runeStones, // Add rune stones
-  barrels,
-  campfires,
-  playerPin,
   sleepingBagImage,
-  monumentParts, // Unified monument parts (all monument types)
-  largeQuarries, // Large quarry locations with types for minimap labels
-  livingCorals, // Living coral reefs for minimap
-  // Destructure new props
-  localPlayerDeathMarker,
   deathMarkerImage,
-  worldState, // <-- Correct type
-  minimapCache, // <-- Correct type
-  // Destructure new minimap icon image props
   pinMarkerImage,
   campfireWarmthImage,
   torchOnImage,
 }) => {
-  // Add debug logging
-  // console.log('[DeathScreen] Rendering with props:', {
-  //   localPlayerIdentity,
-  //   localPlayerDeathMarker: localPlayerDeathMarker ? 'present' : 'null',
-  //   deathMarkerImage: deathMarkerImage ? 'loaded' : 'null',
-  //   sleepingBagsSize: sleepingBags.size
-  // });
+  const worldTables = useGameScreenWorldTables();
+  const sleepingBags = worldTables.sleepingBags;
+  const players = worldTables.players;
+  const trees = worldTables.trees;
+  const stones = worldTables.stones;
+  const runeStones = worldTables.runeStones;
+  const barrels = worldTables.barrels;
+  const campfires = worldTables.campfires;
+  const worldState = worldTables.worldState;
+  const minimapCache = worldTables.minimapCache as any;
+  const monumentParts = worldTables.monumentParts;
+  const largeQuarries = worldTables.largeQuarries;
+  const livingCorals = worldTables.livingCorals;
+  const localPlayerDeathMarker = useMemo(() => {
+    if (!localPlayerIdentity) {
+      return null;
+    }
+    return worldTables.deathMarkers.get(localPlayerIdentity) || null;
+  }, [localPlayerIdentity, worldTables.deathMarkers]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Keep full canvas dimensions for proper coordinate mapping, scale with CSS
@@ -117,9 +93,6 @@ const DeathScreen: React.FC<DeathScreenProps> = ({
   const minimapZoom = 1;
   // No panning on death screen
   const viewCenterOffset = { x: 0, y: 0 };
-  // Player data is not strictly needed if we center the world
-  const localPlayer = localPlayerIdentity ? players.get(localPlayerIdentity) : undefined;
-
   // --- Convert sleepingBags Map to use string keys for compatibility with drawMinimapOntoCanvas ---
   const sleepingBagsStringKeys = useMemo(() => {
     const converted: Map<string, SleepingBag> = new Map();
@@ -277,7 +250,7 @@ const DeathScreen: React.FC<DeathScreenProps> = ({
 
   }, [
     players, trees, stones, runeStones, sleepingBagsStringKeys, ownedSleepingBagIds, hoveredBagId,
-    canvasSize.width, canvasSize.height, localPlayer, localPlayerIdentity, minimapZoom, viewCenterOffset, sleepingBagImage,
+    canvasSize.width, canvasSize.height, localPlayerIdentity, minimapZoom, viewCenterOffset, sleepingBagImage,
     campfires,
     localPlayerDeathMarker,
     deathMarkerImage,

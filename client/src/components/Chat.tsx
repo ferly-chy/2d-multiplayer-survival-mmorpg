@@ -13,34 +13,17 @@ import { kokoroService } from '../services/kokoroService';
 import { parseCraftIntent, resolveRecipeByName, getCraftFeedback } from '../utils/craftIntentParser';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGear } from '@fortawesome/free-solid-svg-icons';
+import { useGameUI } from '../contexts/GameUIContext';
+import { useChatRuntimeData } from '../engine/selectors';
 
 interface ChatProps {
   connection: DbConnection | null;
-  messages: Map<string, SpacetimeDBMessage>; // Receive messages map
-  players: Map<string, SpacetimeDBPlayer>; // Receive players map
-  isChatting: boolean; // Receive chat state
-  setIsChatting: (isChatting: boolean) => void; // Receive state setter
-  localPlayerIdentity: string | undefined; // Changed from string | null
   onSOVAMessageAdderReady?: (addMessage: (message: { id: string; text: string; isUser: boolean; timestamp: Date; flashTab?: boolean }) => void) => void;
-  // Game context props for SOVA
-  worldState?: any;
-  localPlayer?: any;
-  itemDefinitions?: Map<string, any>;
-  activeEquipments?: Map<string, any>;
-  inventoryItems?: Map<string, any>;
-  recipes?: Map<string, Recipe>;
-  playerIdentity?: Identity | null;
   // Mobile support - when true, chat visibility is controlled externally
   isMobile?: boolean;
   isMobileChatOpen?: boolean; // Controls visibility on mobile instead of internal isMinimized
-  // Matronage system for chat tags
-  matronageMembers?: Map<string, any>;
-  matronages?: Map<string, any>;
   // Callback for /s (say) command - emits local speech bubble
   onSayCommand?: (message: string) => void;
-  playerStats?: Map<string, any>;
-  playerAchievements?: Map<string, any>;
-  achievementDefinitions?: Map<string, any>;
   onTitleSelect?: (titleId: string | null) => void;
 }
 
@@ -64,7 +47,25 @@ const SOVAMessage: React.FC<{message: {id: string, text: string, isUser: boolean
   </div>
 ));
 
-const Chat: React.FC<ChatProps> = ({ connection, messages, players, isChatting, setIsChatting, localPlayerIdentity, onSOVAMessageAdderReady, worldState, localPlayer, itemDefinitions, activeEquipments, inventoryItems, recipes, playerIdentity, isMobile = false, isMobileChatOpen = false, matronageMembers, matronages, onSayCommand, playerStats, playerAchievements, achievementDefinitions, onTitleSelect }) => {
+const Chat: React.FC<ChatProps> = ({ connection, onSOVAMessageAdderReady, isMobile = false, isMobileChatOpen = false, onSayCommand, onTitleSelect }) => {
+  const { isChatting, setIsChatting } = useGameUI();
+  const localPlayerIdentity = connection?.identity?.toHexString();
+  const playerIdentity = connection?.identity ?? null;
+  const {
+    messages,
+    players,
+    worldState,
+    localPlayer,
+    itemDefinitions,
+    activeEquipments,
+    inventoryItems,
+    recipes,
+    matronageMembers,
+    matronages,
+    playerStats,
+    playerAchievements,
+    achievementDefinitions,
+  } = useChatRuntimeData(localPlayerIdentity ?? null);
   // console.log("[Chat Component Render] Props - Connection:", !!connection, "LocalPlayerIdentity:", localPlayerIdentity);
   const [inputValue, setInputValue] = useState('');
   const [privateMessages, setPrivateMessages] = useState<Map<string, SpacetimeDBPrivateMessage>>(new Map());

@@ -14,6 +14,7 @@ import {
     ShowSovaSoundBoxFn,
     SovaMessageAdderFn
 } from '../hooks/useSovaTutorials';
+import { useQuestUiTables } from '../engine/selectors';
 
 // Helper: get human-readable label for quest objective (e.g. "Beach Lyme Grass", "Plant Fiber", "Wood")
 function getObjectiveLabel(quest: TutorialQuestDefinition, which: 'primary' | 'secondary'): string {
@@ -40,10 +41,6 @@ const GLOW_CYAN = '0 0 15px rgba(0, 255, 255, 0.6)';
 interface QuestsPanelProps {
     isOpen: boolean;
     onClose: () => void;
-    tutorialQuestDefinitions: Map<string, TutorialQuestDefinition>;
-    dailyQuestDefinitions: Map<string, DailyQuestDefinition>;
-    playerTutorialProgress: Map<string, PlayerTutorialProgress>;
-    playerDailyQuests: Map<string, PlayerDailyQuest>;
     localPlayerId: Identity | undefined;
     isMobile?: boolean;
     // Audio tutorials replay functionality
@@ -56,16 +53,18 @@ interface QuestsPanelProps {
 const QuestsPanel: React.FC<QuestsPanelProps> = ({
     isOpen,
     onClose,
-    tutorialQuestDefinitions,
-    dailyQuestDefinitions,
-    playerTutorialProgress,
-    playerDailyQuests,
     localPlayerId,
     isMobile = false,
     showSovaSoundBox,
     addSOVAMessage,
     seenTutorialIds,
 }) => {
+    const {
+        tutorialQuestDefinitions,
+        dailyQuestDefinitions,
+        playerTutorialProgress,
+        playerDailyQuests,
+    } = useQuestUiTables();
     // Get tutorial progress
     const tutorialProgress = useMemo(() => {
         if (!localPlayerId) return null;

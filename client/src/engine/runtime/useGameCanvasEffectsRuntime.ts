@@ -1,0 +1,196 @@
+import { useMemo, useRef, useCallback } from 'react';
+import { useCampfireParticles } from '../../hooks/useCampfireParticles';
+import { useTorchParticles } from '../../hooks/useTorchParticles';
+import { useWardParticles } from '../../hooks/useWardParticles';
+import { useResourceSparkleParticles } from '../../hooks/useResourceSparkleParticles';
+import { useHostileDeathEffects } from '../../hooks/useHostileDeathEffects';
+import { useImpactParticles } from '../../hooks/useImpactParticles';
+import { useStructureImpactParticles } from '../../hooks/useStructureImpactParticles';
+import { useFireArrowParticles } from '../../hooks/useFireArrowParticles';
+import { useFirePatchParticles } from '../../hooks/useFirePatchParticles';
+import { useFurnaceParticles } from '../../hooks/useFurnaceParticles';
+import { useBarbecueParticles } from '../../hooks/useBarbecueParticles';
+import { useGameCanvasEnvironmentRuntime } from './useGameCanvasEnvironmentRuntime';
+import { useGameCanvasRuntimeEffects } from './useGameCanvasRuntimeEffects';
+import { renderParticlesToCanvas } from '../../utils/renderers/particleRenderingUtils';
+
+interface UseGameCanvasEffectsRuntimeOptions {
+  connection: any | null;
+  localPlayer: any;
+  localPlayerId?: string;
+  predictedPosition: { x: number; y: number } | null;
+  worldMousePos: { x: number | null; y: number | null };
+  sceneRuntime: any;
+  cameraOffsetX: number;
+  cameraOffsetY: number;
+  canvasSize: { width: number; height: number };
+  environmentalVolume: number;
+  isAutoAttacking: boolean;
+  onAutoActionStatesChange?: (isAutoAttacking: boolean) => void;
+  showError: (message: string) => void;
+}
+
+export function useGameCanvasEffectsRuntime({
+  connection,
+  localPlayer,
+  localPlayerId,
+  predictedPosition,
+  worldMousePos,
+  sceneRuntime,
+  cameraOffsetX,
+  cameraOffsetY,
+  canvasSize,
+  environmentalVolume,
+  isAutoAttacking,
+  onAutoActionStatesChange,
+  showError,
+}: UseGameCanvasEffectsRuntimeOptions) {
+  const memoryParticleGradientCacheRef = useRef<Map<string, CanvasGradient>>(new Map());
+  const particleBucketsRef = useRef<{
+    fire: any[];
+    ember: any[];
+    spark: any[];
+    other: any[];
+    memory: any[];
+    regularSmoke: any[];
+  }>({
+    fire: [],
+    ember: [],
+    spark: [],
+    other: [],
+    memory: [],
+    regularSmoke: [],
+  });
+
+  useGameCanvasRuntimeEffects({
+    connection,
+    localPlayer,
+    predictedPosition,
+    worldMousePos,
+    localPlayerId,
+    activeConsumableEffects: sceneRuntime.activeConsumableEffects,
+    isAutoAttacking,
+    onAutoActionStatesChange,
+    showError,
+  });
+
+  const villageCampfirePositions = useMemo(() => {
+    const monumentParts = sceneRuntime.monumentParts;
+    if (!monumentParts || monumentParts.size === 0) {
+      return [];
+    }
+
+    const positions: { id: string; posX: number; posY: number }[] = [];
+    monumentParts.forEach((part: any) => {
+      const tag = part.monumentType?.tag ?? '';
+      const isFishingVillageCampfire = tag === 'FishingVillage' && part.isCenter;
+      const isHuntingVillageCampfire = tag === 'HuntingVillage' && part.partType === 'campfire';
+
+      if ((isFishingVillageCampfire || isHuntingVillageCampfire) && part.imagePath === 'fv_campfire.png') {
+        positions.push({ id: part.id.toString(), posX: part.worldX, posY: part.worldY });
+      }
+    });
+    return positions;
+  }, [sceneRuntime.monumentParts]);
+
+  const campfireParticles = useCampfireParticles({
+    visibleCampfiresMap: sceneRuntime.visibleCampfiresMap,
+    deltaTime: 0,
+    staticCampfires: villageCampfirePositions,
+  });
+
+  const torchParticles = useTorchParticles({
+    players: sceneRuntime.players,
+    activeEquipments: sceneRuntime.activeEquipments,
+    itemDefinitions: sceneRuntime.itemDefinitions,
+    deltaTime: 0,
+  });
+
+  const fireArrowParticles = useFireArrowParticles({
+    players: sceneRuntime.players,
+    activeEquipments: sceneRuntime.activeEquipments,
+    itemDefinitions: sceneRuntime.itemDefinitions,
+    projectiles: sceneRuntime.renderableProjectiles,
+    deltaTime: 0,
+  });
+
+  const furnaceParticles = useFurnaceParticles({
+    visibleFurnacesMap: sceneRuntime.visibleFurnacesMap,
+  });
+
+  const barbecueParticles = useBarbecueParticles({
+    visibleBarbecuesMap: sceneRuntime.visibleBarbecuesMap,
+  });
+
+  const firePatchParticles = useFirePatchParticles({
+    visibleFirePatchesMap: sceneRuntime.firePatches,
+    localPlayer: localPlayer ?? null,
+  });
+
+  const wardParticles = useWardParticles({
+    visibleLanternsMap: sceneRuntime.visibleLanternsMap,
+    deltaTime: 0,
+  });
+
+  const resourceSparkleParticles = useResourceSparkleParticles({
+    harvestableResources: sceneRuntime.visibleHarvestableResourcesMap,
+    cycleProgress: sceneRuntime.worldState?.cycleProgress ?? 0.5,
+  });
+
+  const hostileDeathParticles = useHostileDeathEffects({
+    hostileDeathEvents: sceneRuntime.hostileDeathEvents,
+  });
+
+  const impactParticles = useImpactParticles({
+    wildAnimals: sceneRuntime.wildAnimals,
+    animalCorpses: sceneRuntime.animalCorpses,
+    localPlayer,
+  });
+
+  const structureImpactParticles = useStructureImpactParticles({
+    walls: sceneRuntime.wallCells,
+    doors: sceneRuntime.doors,
+    shelters: sceneRuntime.shelters,
+  });
+
+  useGameCanvasEnvironmentRuntime({
+    connection,
+    cameraX: cameraOffsetX,
+    cameraY: cameraOffsetY,
+    canvasWidth: canvasSize.width,
+    canvasHeight: canvasSize.height,
+    localPlayer,
+    chunkWeather: sceneRuntime.chunkWeather,
+    activeConsumableEffects: sceneRuntime.activeConsumableEffects,
+    localPlayerId,
+    worldState: sceneRuntime.worldState,
+    distanceToShore: sceneRuntime.distanceToShore,
+    distanceToMapEdge: sceneRuntime.distanceToMapEdge,
+    visibleWildAnimalsMap: sceneRuntime.visibleWildAnimalsMap,
+    environmentalVolume,
+  });
+
+  const renderParticles = useCallback((ctx: CanvasRenderingContext2D, particles: any[]) => {
+    renderParticlesToCanvas(
+      ctx,
+      particles,
+      particleBucketsRef.current,
+      memoryParticleGradientCacheRef.current,
+    );
+  }, []);
+
+  return {
+    renderParticles,
+    campfireParticles,
+    torchParticles,
+    fireArrowParticles,
+    furnaceParticles,
+    barbecueParticles,
+    firePatchParticles,
+    wardParticles,
+    resourceSparkleParticles,
+    hostileDeathParticles,
+    impactParticles,
+    structureImpactParticles,
+  };
+}

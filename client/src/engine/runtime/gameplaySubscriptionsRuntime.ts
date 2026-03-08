@@ -19,7 +19,6 @@ interface GameplaySubscriptionsController {
   subscribeGrassForChunk: (chunkIndex: number) => SubscriptionHandle[];
   clearGrassData: () => void;
   resetDataState: () => void;
-  setViewport: (viewport: Viewport) => void;
 }
 
 class GameplaySubscriptionsRuntime {
@@ -106,8 +105,6 @@ class GameplaySubscriptionsRuntime {
     } else {
       this.clearSpatialSubscriptions();
     }
-
-    controller.setViewport(controller.viewport);
     this.previousGrassEnabled = controller.grassEnabled;
   }
 

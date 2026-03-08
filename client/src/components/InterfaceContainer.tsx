@@ -10,23 +10,15 @@ import PlantEncyclopedia from './PlantEncyclopedia';
 import { MemoryGridNode } from './MemoryGridData';
 import { MINIMAP_DIMENSIONS } from './Minimap';
 import { useGameConnection } from '../contexts/GameConnectionContext';
+import { useGameUI } from '../contexts/GameUIContext';
+import { useGameplaySession } from '../contexts/GameplaySessionContext';
+import { useGameplayMovement } from '../contexts/GameplayMovementContext';
 import { playImmediateSound } from '../hooks/useSoundSystem';
-import {
-  AlkState,
-  AlkStation,
-  AlkContract,
-  AlkPlayerContract,
-  PlayerShardBalance,
-  WorldState,
-  ItemDefinition,
-  Cairn,
-  PlayerDiscoveredCairn,
-  AchievementDefinition,
-  PlayerAchievement,
-  PlantConfigDefinition,
-} from '../generated/types';
-import { Identity } from 'spacetimedb';
+import { useGameScreenWorldTables, useLocalPlayer, useUITable } from '../engine/selectors';
 import './InterfaceContainer.css';
+
+/** Cairns tab is hidden for now - graphical placeholders only. Set false to re-enable. */
+const HIDE_CAIRNS = true;
 
 type InterfaceView = 'minimap' | 'encyclopedia' | 'memory-grid' | 'alk' | 'cairns' | 'matronage' | 'leaderboard' | 'achievements';
 
@@ -40,42 +32,6 @@ interface InterfaceContainerProps {
   onToggleWeatherOverlay?: (checked: boolean) => void;
   showNames?: boolean;
   onToggleShowNames?: (checked: boolean) => void;
-  // Initial view to open to (defaults to 'minimap')
-  initialView?: InterfaceView;
-  // ALK Panel data props
-  alkContracts?: Map<string, AlkContract>;
-  alkPlayerContracts?: Map<string, AlkPlayerContract>;
-  alkStations?: Map<string, AlkStation>;
-  alkState?: AlkState | null;
-  playerShardBalance?: PlayerShardBalance | null;
-  worldState?: WorldState | null;
-  itemDefinitions?: Map<string, ItemDefinition>;
-  inventoryItems?: Map<string, any>; // For counting Memory Shards
-  // Player position for ALK station proximity checking
-  playerPosition?: { x: number; y: number } | null;
-  // Initial tab for ALK Panel (e.g., 'buy-orders' when coming from delivery panel)
-  alkInitialTab?: 'seasonal' | 'materials' | 'arms' | 'armor' | 'tools' | 'provisions' | 'bonus' | 'buy-orders' | 'my-contracts';
-  // Cairns Panel data props
-  cairns?: Map<string, Cairn>;
-  playerDiscoveredCairns?: Map<string, PlayerDiscoveredCairn>;
-  // Matronage Panel data props
-  matronages?: Map<string, any>;
-  matronageMembers?: Map<string, any>;
-  matronageInvitations?: Map<string, any>;
-  matronageOwedShards?: Map<string, any>;
-  players?: Map<string, any>;
-  playerUsername?: string;
-  // Leaderboard Panel data props
-  leaderboardEntries?: Map<string, any>;
-  // Achievements Panel data props
-  achievementDefinitions?: Map<string, AchievementDefinition>;
-  playerAchievements?: Map<string, PlayerAchievement>;
-  // Plant Encyclopedia data props
-  plantConfigs?: Map<string, PlantConfigDefinition>;
-  // Plants discovered by current player (for encyclopedia filtering)
-  discoveredPlants?: Map<string, any>;
-  // Callback for when search inputs gain/lose focus (blocks player movement)
-  onSearchFocusChange?: (isFocused: boolean) => void;
 }
 
 const InterfaceContainer: React.FC<InterfaceContainerProps> = ({
@@ -88,48 +44,26 @@ const InterfaceContainer: React.FC<InterfaceContainerProps> = ({
   onToggleWeatherOverlay: externalToggleWeatherOverlay,
   showNames: externalShowNames,
   onToggleShowNames: externalToggleShowNames,
-  initialView,
-  // ALK Panel data props
-  alkContracts,
-  alkPlayerContracts,
-  alkStations,
-  alkState,
-  playerShardBalance,
-  worldState,
-  itemDefinitions,
-  inventoryItems,
-  playerPosition,
-  alkInitialTab,
-  // Cairns Panel data props
-  cairns,
-  playerDiscoveredCairns,
-  // Matronage Panel data props
-  matronages,
-  matronageMembers,
-  matronageInvitations,
-  matronageOwedShards,
-  players,
-  playerUsername = '',
-  leaderboardEntries,
-  // Achievements Panel data props
-  achievementDefinitions,
-  playerAchievements,
-  // Plant Encyclopedia data props
-  plantConfigs,
-  // Plants discovered by current player (for encyclopedia filtering)
-  discoveredPlants,
-  // Callback for when search inputs gain/lose focus (blocks player movement)
-  onSearchFocusChange,
 }) => {
+  const gameUI = useGameUI();
+  const { alkInitialTab } = useGameplaySession();
+  const { predictedPosition } = useGameplayMovement();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [currentView, setCurrentView] = useState<InterfaceView>(initialView || 'minimap');
+  const [currentView, setCurrentView] = useState<InterfaceView>(gameUI.interfaceInitialView || 'minimap');
   const [isMinimapLoading, setIsMinimapLoading] = useState(false);
+  const worldTables = useGameScreenWorldTables();
+  const matronages = useUITable<Map<string, any>>('matronages');
+  const matronageMembers = useUITable<Map<string, any>>('matronageMembers');
+  const matronageInvitations = useUITable<Map<string, any>>('matronageInvitations');
+  const matronageOwedShards = useUITable<Map<string, any>>('matronageOwedShards');
   
   // Update currentView when initialView changes (e.g., reopening to a specific tab)
   useEffect(() => {
     // If initialView is set, use it; if undefined/null, default to 'minimap'
-    setCurrentView(initialView || 'minimap');
-  }, [initialView]);
+    // Cairns tab is hidden, so redirect 'cairns' to 'minimap'
+    const view = gameUI.interfaceInitialView || 'minimap';
+    setCurrentView(view === 'cairns' && HIDE_CAIRNS ? 'minimap' : view);
+  }, [gameUI.interfaceInitialView]);
   
   // Grid coordinates visibility preference (stored in localStorage)
   const [showGridCoordinates, setShowGridCoordinates] = useState<boolean>(() => {
@@ -182,6 +116,8 @@ const InterfaceContainer: React.FC<InterfaceContainerProps> = ({
   
   // Get SpacetimeDB connection
   const connection = useGameConnection();
+  const localPlayer = useLocalPlayer(connection.dbIdentity?.toHexString() ?? null);
+  const playerPosition = predictedPosition ?? (localPlayer ? { x: localPlayer.positionX, y: localPlayer.positionY } : null);
   
   // Memory Grid server state
   const [playerShards, setPlayerShards] = useState(0);
@@ -848,8 +784,8 @@ const InterfaceContainer: React.FC<InterfaceContainerProps> = ({
             position: 'relative',
           }}>
             <PlantEncyclopedia
-              plantConfigs={plantConfigs || new Map()}
-              discoveredPlants={discoveredPlants || new Map()}
+              plantConfigs={worldTables.plantConfigDefinitions || new Map()}
+              discoveredPlants={worldTables.discoveredPlants || new Map()}
             />
           </div>
         );
@@ -924,22 +860,12 @@ const InterfaceContainer: React.FC<InterfaceContainerProps> = ({
             position: 'relative',
           }}>
             <AlkPanel
-              playerIdentity={connection.dbIdentity || null}
               onClose={onClose}
-              alkState={alkState || null}
-              alkStations={alkStations || new Map()}
-              alkContracts={alkContracts || new Map()}
-              alkPlayerContracts={alkPlayerContracts || new Map()}
-              playerShardBalance={playerShardBalance || null}
-              worldState={worldState || null}
-              itemDefinitions={itemDefinitions || new Map()}
-              inventoryItems={inventoryItems || new Map()}
-              playerPosition={playerPosition}
-              initialTab={alkInitialTab}
             />
           </div>
         );
       case 'cairns':
+        if (HIDE_CAIRNS) return null;
         return (
           <div className="cairns-content" style={{
             ...contentContainerStyle,
@@ -949,8 +875,8 @@ const InterfaceContainer: React.FC<InterfaceContainerProps> = ({
             position: 'relative',
           }}>
             <CairnsPanel
-              cairns={cairns || new Map()}
-              playerDiscoveredCairns={playerDiscoveredCairns || new Map()}
+              cairns={worldTables.cairns || new Map()}
+              playerDiscoveredCairns={worldTables.playerDiscoveredCairns || new Map()}
               currentPlayerIdentity={connection.dbIdentity || null}
             />
           </div>
@@ -965,14 +891,6 @@ const InterfaceContainer: React.FC<InterfaceContainerProps> = ({
             position: 'relative',
           }}>
             <MatronagePanel
-              playerIdentity={connection.dbIdentity || null}
-              playerUsername={playerUsername}
-              onClose={onClose}
-              matronages={matronages || new Map()}
-              matronageMembers={matronageMembers || new Map()}
-              matronageInvitations={matronageInvitations || new Map()}
-              matronageOwedShards={matronageOwedShards || new Map()}
-              players={players || new Map()}
             />
           </div>
         );
@@ -987,7 +905,7 @@ const InterfaceContainer: React.FC<InterfaceContainerProps> = ({
           }}>
             <LeaderboardPanel
               playerIdentity={connection.dbIdentity || null}
-              leaderboardEntries={leaderboardEntries || new Map()}
+              leaderboardEntries={worldTables.leaderboardEntries || new Map()}
               onClose={onClose}
             />
           </div>
@@ -1001,13 +919,7 @@ const InterfaceContainer: React.FC<InterfaceContainerProps> = ({
             border: 'none',
             position: 'relative',
           }}>
-            <AchievementsPanel
-              playerIdentity={connection.dbIdentity || null}
-              achievementDefinitions={achievementDefinitions || new Map()}
-              playerAchievements={playerAchievements || new Map()}
-              onClose={onClose}
-              onSearchFocusChange={onSearchFocusChange}
-            />
+            <AchievementsPanel />
           </div>
         );
       default:
@@ -1058,7 +970,7 @@ const InterfaceContainer: React.FC<InterfaceContainerProps> = ({
         onViewChange={handleViewChange}
         className="interface-tabs"
         hideEncyclopedia={false}
-        hideCairns={false}
+        hideCairns={HIDE_CAIRNS}
       />
       
       <div className="interface-content">

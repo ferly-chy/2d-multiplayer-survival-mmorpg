@@ -18,6 +18,7 @@ import {
     ItemDefinition,
     InventoryItem,
 } from '../generated/types';
+import { useAlkPanelRuntimeData } from '../engine/selectors';
 
 // Module-level flag to prevent immediate reopening after E key close
 // This is shared across all instances and persists briefly after panel closes
@@ -46,15 +47,6 @@ interface AlkDeliveryPanelProps {
     playerIdentity: Identity | null;
     onClose: () => void;
     stationId: number;
-    alkStations: Map<string, AlkStation>;
-    alkContracts: Map<string, AlkContract>;
-    alkPlayerContracts: Map<string, AlkPlayerContract>;
-    playerShardBalance: PlayerShardBalance | null;
-    itemDefinitions: Map<string, ItemDefinition>;
-    inventoryItems: Map<string, InventoryItem>;
-    // Matronage system - optional, only passed if player might be in a matronage
-    matronageMembers?: Map<string, any>;
-    matronages?: Map<string, any>;
     // Callback when a matronage is created - opens matronage page
     onMatronageCreated?: () => void;
     // Callback to open ALK provisioning board (G menu) to a specific tab
@@ -65,18 +57,20 @@ export const AlkDeliveryPanel: React.FC<AlkDeliveryPanelProps> = ({
     playerIdentity,
     onClose,
     stationId,
-    alkStations,
-    alkContracts,
-    alkPlayerContracts,
-    playerShardBalance,
-    itemDefinitions,
-    inventoryItems,
-    matronageMembers,
-    matronages,
     onMatronageCreated,
     onOpenAlkBoard,
 }) => {
     const { connection } = useGameConnection();
+    const {
+        alkStations,
+        alkContracts,
+        alkPlayerContracts,
+        playerShardBalance,
+        itemDefinitions,
+        inventoryItems,
+        matronageMembers,
+        matronages,
+    } = useAlkPanelRuntimeData();
     const [deliveryStatus, setDeliveryStatus] = useState<string | null>(null);
     const [isDelivering, setIsDelivering] = useState(false);
     // Matronage creation state

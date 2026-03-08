@@ -14,12 +14,11 @@
  * - Explore tab: Browse all matronages
  */
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Identity } from 'spacetimedb';
-import { useGameConnection } from '../contexts/GameConnectionContext';
+import React from 'react';
 import { getItemIcon } from '../utils/itemIconUtils';
 import matronsMarkIcon from '../assets/ui/matrons_mark.png';
 import './MatronagePanel.css';
+import { useMatronagePanelController } from '../hooks/useMatronagePanelController';
 
 // Memory shard icon for rewards display
 const memoryShardIcon = getItemIcon('memory_shard.png');
@@ -58,22 +57,6 @@ const getIconSymbol = (iconId: string): string => {
     const icon = MATRONAGE_ICONS.find(i => i.id === iconId);
     return icon?.symbol || '👥';
 };
-
-// Props interface
-interface MatronagePanelProps {
-    playerIdentity: Identity | null;
-    playerUsername: string;
-    onClose: () => void;
-    // Data from subscriptions
-    matronages: Map<string, any>;
-    matronageMembers: Map<string, any>;
-    matronageInvitations: Map<string, any>;
-    matronageOwedShards: Map<string, any>;
-    players: Map<string, any>; // For username lookups
-}
-
-// Tab types - added 'explore'
-type MatronageTab = 'overview' | 'members' | 'invitations' | 'management' | 'explore';
 
 // Helper to format BigInt values
 const formatBigInt = (value: any): string => {
@@ -123,323 +106,50 @@ const getTimeUntilNextPayout = (lastPayoutAt: any): string => {
     }
 };
 
-const MatronagePanel: React.FC<MatronagePanelProps> = ({
-    playerIdentity,
-    playerUsername,
-    onClose,
-    matronages,
-    matronageMembers,
-    matronageInvitations,
-    matronageOwedShards,
-    players,
-}) => {
-    const { connection, isConnected } = useGameConnection();
-    const [activeTab, setActiveTab] = useState<MatronageTab>('overview');
-    const [newName, setNewName] = useState('');
-    const [newDescription, setNewDescription] = useState('');
-    const [selectedIcon, setSelectedIcon] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [isInputFocused, setIsInputFocused] = useState(false);
-
-    // Success feedback states
-    const [renameSuccess, setRenameSuccess] = useState(false);
-    const [descriptionSuccess, setDescriptionSuccess] = useState(false);
-    const [iconSuccess, setIconSuccess] = useState(false);
-    const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
-
-    // Dissolve confirmation dialog
-    const [showDissolveDialog, setShowDissolveDialog] = useState(false);
-
-    // Unified search/invite field for invite tab
-    const [playerSearchFilter, setPlayerSearchFilter] = useState('');
-
-    // Keyboard blocking when input is focused - prevents WASD/arrows/game hotkeys from triggering game actions
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            // Block movement and game hotkeys when input is focused
-            if (isInputFocused) {
-                // Block WASD and arrow keys from moving player
-                if (e.key === 'w' || e.key === 'W' || e.key === 'a' || e.key === 'A' ||
-                    e.key === 's' || e.key === 'S' || e.key === 'd' || e.key === 'D' ||
-                    e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
-                    e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                    e.stopPropagation();
-                }
-                // Block game hotkeys (Y, G, E, R, F, Q, Tab) to prevent tab switching and game actions
-                if (e.key === 'y' || e.key === 'Y' || e.key === 'g' || e.key === 'G' ||
-                    e.key === 'e' || e.key === 'E' || e.key === 'r' || e.key === 'R' ||
-                    e.key === 'f' || e.key === 'F' || e.key === 'q' || e.key === 'Q' ||
-                    e.key === 'Tab') {
-                    e.stopPropagation();
-                }
-                // Spacebar needs special handling - stop propagation but don't prevent default
-                // so the space character still gets typed
-                if (e.key === ' ') {
-                    e.stopPropagation();
-                    e.stopImmediatePropagation();
-                }
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown, true); // Use capture phase
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown, true);
-        };
-    }, [isInputFocused]);
-
-    // Get player's membership
-    const playerMembership = useMemo(() => {
-        if (!playerIdentity) return null;
-        return matronageMembers.get(playerIdentity.toHexString()) || null;
-    }, [playerIdentity, matronageMembers]);
-
-    // Get player's matronage
-    const playerMatronage = useMemo(() => {
-        if (!playerMembership) return null;
-        return Array.from(matronages.values()).find(
-            (m: any) => m.id?.toString() === playerMembership.matronageId?.toString()
-        ) || null;
-    }, [playerMembership, matronages]);
-
-    // Check if player is Pra Matron
-    const isPraMatron = useMemo(() => {
-        if (!playerMembership) return false;
-        return playerMembership.role?.tag === 'PraMatron';
-    }, [playerMembership]);
-
-    // Get all members of player's matronage
-    const matronageAllMembers = useMemo(() => {
-        if (!playerMatronage) return [];
-        const matronageId = playerMatronage.id?.toString();
-        return Array.from(matronageMembers.values()).filter(
-            (m: any) => m.matronageId?.toString() === matronageId
-        );
-    }, [playerMatronage, matronageMembers]);
-
-    // Get player's owed shards
-    const owedShards = useMemo(() => {
-        if (!playerIdentity) return 0n;
-        const owed = matronageOwedShards.get(playerIdentity.toHexString());
-        return owed?.owedBalance ?? 0n;
-    }, [playerIdentity, matronageOwedShards]);
-
-    // Get pending invitations for the player
-    const pendingInvitations = useMemo(() => {
-        const usernameLower = playerUsername.toLowerCase();
-        return Array.from(matronageInvitations.values()).filter(
-            (inv: any) => inv.targetUsername?.toLowerCase() === usernameLower
-        );
-    }, [playerUsername, matronageInvitations]);
-
-    // Get all players for invite list (excluding current matronage members)
-    const invitablePlayers = useMemo(() => {
-        const memberIdentities = new Set(matronageAllMembers.map((m: any) => m.playerId?.toHexString()));
-        const pendingInviteUsernames = new Set(
-            Array.from(matronageInvitations.values())
-                .filter((inv: any) => inv.matronageId?.toString() === playerMatronage?.id?.toString())
-                .map((inv: any) => inv.targetUsername?.toLowerCase())
-        );
-        
-        return Array.from(players.values())
-            .filter((p: any) => {
-                // Exclude current members
-                if (memberIdentities.has(p.identity?.toHexString())) return false;
-                // Exclude already invited
-                if (pendingInviteUsernames.has(p.username?.toLowerCase())) return false;
-                // Apply search filter
-                if (playerSearchFilter) {
-                    return p.username?.toLowerCase().includes(playerSearchFilter.toLowerCase());
-                }
-                return true;
-            })
-            .sort((a: any, b: any) => a.username?.localeCompare(b.username));
-    }, [players, matronageAllMembers, matronageInvitations, playerMatronage, playerSearchFilter]);
-
-    // Get all matronages with member counts for explore tab
-    const allMatronagesWithInfo = useMemo(() => {
-        return Array.from(matronages.values()).map((m: any) => {
-            const memberCount = Array.from(matronageMembers.values()).filter(
-                (member: any) => member.matronageId?.toString() === m.id?.toString()
-            ).length;
-            return { ...m, memberCount };
-        }).sort((a, b) => b.memberCount - a.memberCount); // Sort by member count
-    }, [matronages, matronageMembers]);
-
-    // Helper to get username from identity
-    const getUsernameForIdentity = useCallback((identity: any): string => {
-        const identityStr = identity?.toHexString?.() || identity?.toString?.() || '';
-        const player = Array.from(players.values()).find(
-            (p: any) => p.identity?.toHexString?.() === identityStr || p.identity?.toString?.() === identityStr
-        );
-        return player?.username || identityStr.substring(0, 8) + '...';
-    }, [players]);
-
-    // Get matronage name for an invitation
-    const getMatronageNameForInvitation = useCallback((matronageId: any): string => {
-        const idStr = matronageId?.toString();
-        const matronage = Array.from(matronages.values()).find(
-            (m: any) => m.id?.toString() === idStr
-        );
-        return matronage?.name || 'Unknown Matronage';
-    }, [matronages]);
-
-    // Action handlers
-    const handleWithdrawShards = useCallback(async () => {
-        if (!connection || !isConnected) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-            await connection.reducers.withdrawMatronageShards({});
-        } catch (e: any) {
-            setError(e.message || 'Failed to withdraw shards');
-        }
-        setIsLoading(false);
-    }, [connection, isConnected]);
-
-    const handleAcceptInvitation = useCallback(async (invitationId: bigint) => {
-        if (!connection || !isConnected) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-            await connection.reducers.acceptMatronageInvitation({ invitationId });
-        } catch (e: any) {
-            setError(e.message || 'Failed to accept invitation');
-        }
-        setIsLoading(false);
-    }, [connection, isConnected]);
-
-    const handleDeclineInvitation = useCallback(async (invitationId: bigint) => {
-        if (!connection || !isConnected) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-            await connection.reducers.declineMatronageInvitation({ invitationId });
-        } catch (e: any) {
-            setError(e.message || 'Failed to decline invitation');
-        }
-        setIsLoading(false);
-    }, [connection, isConnected]);
-
-    const handleInvitePlayer = useCallback(async (username?: string) => {
-        const targetUsername = username || playerSearchFilter.trim();
-        if (!connection || !isConnected || !targetUsername) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-            await connection.reducers.inviteToMatronage({ targetUsername });
-            // Only clear the search field if inviting from the direct input (not from quick invite button)
-            if (!username) {
-                setPlayerSearchFilter('');
-            }
-            setInviteSuccess(targetUsername);
-            setTimeout(() => setInviteSuccess(null), 2000);
-        } catch (e: any) {
-            setError(e.message || 'Failed to invite player');
-        }
-        setIsLoading(false);
-    }, [connection, isConnected, playerSearchFilter]);
-
-    const handleRemoveMember = useCallback(async (targetIdentity: Identity) => {
-        if (!connection || !isConnected) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-            await connection.reducers.removeFromMatronage({ targetPlayerId: targetIdentity });
-        } catch (e: any) {
-            setError(e.message || 'Failed to remove member');
-        }
-        setIsLoading(false);
-    }, [connection, isConnected]);
-
-    const handlePromoteToPraMatron = useCallback(async (targetIdentity: Identity) => {
-        if (!connection || !isConnected) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-            await connection.reducers.promoteToPraMatron({ targetPlayerId: targetIdentity });
-        } catch (e: any) {
-            setError(e.message || 'Failed to promote member');
-        }
-        setIsLoading(false);
-    }, [connection, isConnected]);
-
-    const handleRenameMatronage = useCallback(async () => {
-        if (!connection || !isConnected || !newName.trim()) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-            await connection.reducers.renameMatronage({ newName: newName.trim() });
-            setNewName('');
-            setRenameSuccess(true);
-            setTimeout(() => setRenameSuccess(false), 2000);
-        } catch (e: any) {
-            setError(e.message || 'Failed to rename matronage');
-        }
-        setIsLoading(false);
-    }, [connection, isConnected, newName]);
-
-    const handleUpdateDescription = useCallback(async () => {
-        if (!connection || !isConnected) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-            await connection.reducers.updateMatronageDescription({ newDescription: newDescription.trim() });
-            setDescriptionSuccess(true);
-            setTimeout(() => setDescriptionSuccess(false), 2000);
-        } catch (e: any) {
-            setError(e.message || 'Failed to update description');
-        }
-        setIsLoading(false);
-    }, [connection, isConnected, newDescription]);
-
-    const handleUpdateIcon = useCallback(async (iconId: string) => {
-        if (!connection || !isConnected) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-            await connection.reducers.updateMatronageIcon({ newIcon: iconId });
-            setSelectedIcon(iconId);
-            setIconSuccess(true);
-            setTimeout(() => setIconSuccess(false), 2000);
-        } catch (e: any) {
-            setError(e.message || 'Failed to update icon');
-        }
-        setIsLoading(false);
-    }, [connection, isConnected]);
-
-    const handleLeaveMatronage = useCallback(async () => {
-        if (!connection || !isConnected) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-            await connection.reducers.leaveMatronage({});
-        } catch (e: any) {
-            setError(e.message || 'Failed to leave matronage');
-        }
-        setIsLoading(false);
-    }, [connection, isConnected]);
-
-    const handleDissolveMatronage = useCallback(async () => {
-        if (!connection || !isConnected) return;
-        setShowDissolveDialog(false);
-        setIsLoading(true);
-        setError(null);
-        try {
-            await connection.reducers.dissolveMatronage({});
-        } catch (e: any) {
-            setError(e.message || 'Failed to dissolve matronage');
-        }
-        setIsLoading(false);
-    }, [connection, isConnected]);
-
-    // Initialize selected icon and description from matronage data
-    useEffect(() => {
-        if (playerMatronage) {
-            setSelectedIcon(playerMatronage.icon || 'fa-users');
-            setNewDescription(playerMatronage.description || '');
-        }
-    }, [playerMatronage]);
+const MatronagePanel: React.FC = () => {
+    const {
+        playerIdentity,
+        matronages,
+        activeTab,
+        setActiveTab,
+        newName,
+        setNewName,
+        newDescription,
+        setNewDescription,
+        selectedIcon,
+        isLoading,
+        error,
+        setError,
+        setIsInputFocused,
+        renameSuccess,
+        descriptionSuccess,
+        iconSuccess,
+        inviteSuccess,
+        showDissolveDialog,
+        setShowDissolveDialog,
+        playerSearchFilter,
+        setPlayerSearchFilter,
+        playerMatronage,
+        isPraMatron,
+        matronageAllMembers,
+        owedShards,
+        pendingInvitations,
+        invitablePlayers,
+        allMatronagesWithInfo,
+        getUsernameForIdentity,
+        getMatronageNameForInvitation,
+        handleWithdrawShards,
+        handleAcceptInvitation,
+        handleDeclineInvitation,
+        handleInvitePlayer,
+        handleRemoveMember,
+        handlePromoteToPraMatron,
+        handleRenameMatronage,
+        handleUpdateDescription,
+        handleUpdateIcon,
+        handleLeaveMatronage,
+        handleDissolveMatronage,
+    } = useMatronagePanelController();
 
     // Render dissolve confirmation dialog
     const renderDissolveDialog = () => (

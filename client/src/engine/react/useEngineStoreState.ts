@@ -61,6 +61,28 @@ export function useEngineUiTableState<T>(
   return [value, setValue];
 }
 
+export function useEngineUiState<T>(
+  key: string,
+  createInitialValue: () => T
+): [T, Dispatch<SetStateAction<T>>] {
+  const initialValueRef = useRef<T | null>(null);
+  if (initialValueRef.current === null) {
+    initialValueRef.current = createInitialValue();
+  }
+
+  const value = useEngineSnapshot(
+    (snapshot) => (snapshot.ui.state[key] as T | undefined) ?? (initialValueRef.current as T)
+  );
+
+  const setValue = useCallback<Dispatch<SetStateAction<T>>>((action) => {
+    runtimeEngine.updateUiState<T>(key, (current) =>
+      resolveStateAction(action, current ?? (initialValueRef.current as T))
+    );
+  }, [key]);
+
+  return [value, setValue];
+}
+
 export function useEngineWorldRuntimeState<T>(
   key: string,
   createInitialValue: () => T
