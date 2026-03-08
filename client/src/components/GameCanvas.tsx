@@ -7,14 +7,13 @@
  * boundary, but it still assembles a large amount of canvas-specific runtime input.
  */
 
-import React, { useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 
 import type {
   Player as SpacetimeDBPlayer,
 } from '../generated/types';
 
 // --- Core Hooks ---
-import { useWalkingAnimationCycle, useSprintAnimationCycle, useIdleAnimationCycle } from '../hooks/useAnimationCycle';
 import { useAssetLoader } from '../hooks/useAssetLoader';
 import { useDoodadImages } from '../hooks/useDoodadImages';
 import { useGameViewport } from '../hooks/useGameViewport';
@@ -22,14 +21,6 @@ import type { GameLoopMetrics } from '../hooks/useGameLoop';
 import { usePlayerHover } from '../hooks/usePlayerHover';
 import { usePlantedSeedHover } from '../hooks/usePlantedSeedHover';
 import { useTamedAnimalHover } from '../hooks/useTamedAnimalHover';
-import { useRuneStoneHover } from '../hooks/useRuneStoneHover';
-import { useGameCanvasLagDiagnostics } from '../hooks/useGameCanvasLagDiagnostics';
-import { renderGameCanvasFrame } from '../engine/frame/renderGameCanvasFrame';
-import { renderLateFramePasses } from '../engine/frame/renderLateFramePasses';
-import { renderWorldPreparationPasses } from '../engine/frame/renderWorldPreparationPasses';
-import { renderEntityWorldPasses } from '../engine/frame/renderEntityWorldPasses';
-import { renderTranslatedWorldExtras } from '../engine/frame/renderTranslatedWorldExtras';
-import { renderScreenSpaceWorldEffects } from '../engine/frame/renderScreenSpaceWorldEffects';
 import { useDamageEffects } from '../hooks/useDamageEffects';
 import { useSettings } from '../contexts/SettingsContext';
 import { useErrorDisplay } from '../contexts/ErrorDisplayContext';
@@ -45,16 +36,13 @@ import { setWaterOverlayIntensity } from '../utils/renderers/waterOverlayUtils';
 // --- Other Components & Utils ---
 import GameCanvasOverlayUI from './GameCanvasOverlayUI';
 import type { PlacementItemInfo, PlacementActions } from '../hooks/usePlacementManager';
-import { gameConfig } from '../config/gameConfig';
 // V2 system removed due to performance issues
 import { useGameCanvasAssetPreload } from '../hooks/useGameCanvasAssetPreload';
 import { useGameCanvasFramePipeline } from '../engine/runtime/useGameCanvasFramePipeline';
 import { useGameCanvasSceneRuntime } from '../engine/runtime/useGameCanvasSceneRuntime';
 import { useGameCanvasEffectsRuntime } from '../engine/runtime/useGameCanvasEffectsRuntime';
 import { useGameCanvasControllerRuntime } from '../engine/runtime/useGameCanvasControllerRuntime';
-
-// Stable empty Map fallback to avoid per-render allocations.
-const EMPTY_MAP = new Map();
+import { useGameCanvasRenderRuntime } from '../engine/runtime/useGameCanvasRenderRuntime';
 
 // --- Prop Interface ---
 interface GameCanvasProps {
@@ -84,13 +72,6 @@ interface GameCanvasProps {
   onAutoActionStatesChange?: (isAutoAttacking: boolean) => void;
 }
 
-/**
- * GameCanvas Component
- *
- * The main component responsible for rendering the game world, entities, UI elements,
- * and handling the game loop orchestration. It integrates various custom hooks
- * to manage specific aspects like input, viewport, assets, day/night cycle, etc.
- */
 const GameCanvas: React.FC<GameCanvasProps> = ({
   localPlayerId,
   connection,
@@ -256,11 +237,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   } = useGameCanvasAssetPreload({
     itemImagesRef,
   });
-
-  // These hooks advance the shared animation refs consumed by the frame renderer.
-  useWalkingAnimationCycle();
-  useSprintAnimationCycle();
-  useIdleAnimationCycle();
 
   const sceneRuntime = useGameCanvasSceneRuntime({
     connection,
@@ -466,25 +442,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     worldMousePos.y
   );
 
-  // Define camera and canvas dimensions for rendering
-  const localPlayerX = predictedPosition?.x ?? localPlayer?.positionX ?? 0;
-  const localPlayerY = predictedPosition?.y ?? localPlayer?.positionY ?? 0;
-
-
-  const {
-    renderParticles,
-    campfireParticles,
-    torchParticles,
-    fireArrowParticles,
-    furnaceParticles,
-    barbecueParticles,
-    firePatchParticles,
-    wardParticles,
-    resourceSparkleParticles,
-    hostileDeathParticles,
-    impactParticles,
-    structureImpactParticles,
-  } = useGameCanvasEffectsRuntime({
+  // --- Effects Runtime ---
+  const effectsRuntime = useGameCanvasEffectsRuntime({
     connection,
     localPlayer,
     localPlayerId,
@@ -500,264 +459,93 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     showError,
   });
 
-  // Helper function to convert shelter data for shadow clipping
-  const shelterClippingData = useMemo(() => {
-    if (!shelters) return [];
-    return Array.from(shelters.values()).map(shelter => ({
-      posX: shelter.posX,
-      posY: shelter.posY,
-      isDestroyed: shelter.isDestroyed,
-    }));
-  }, [shelters]);
-
-  // === PERFORMANCE PROFILING ===
-  // 🔧 SET TO true TO ENABLE LAG DIAGNOSTICS IN CONSOLE
-  const ENABLE_LAG_DIAGNOSTICS = false;
-  const LAG_DIAGNOSTIC_INTERVAL_MS = 5000; // Log every 5 seconds
-  const PLAYER_SORT_FEET_OFFSET_PX = gameConfig.tileSize;
-  // 🔧 SET TO true TO ENABLE Y-SORT DEBUG LOGGING (throttled to 400ms; adds findIndex + loop overhead)
-  const ENABLE_YSORT_DEBUG = false;
-  const YSORT_DEBUG_INTERVAL_MS = 400;
-  const {
-    ySortDebugRef,
-    perfProfilingRef,
-    fpsProfilerRef,
-    checkPerformance,
-  } = useGameCanvasLagDiagnostics({
+  const { renderFrame } = useGameCanvasRenderRuntime({
+    localPlayerId,
     localPlayer,
-    enabled: ENABLE_LAG_DIAGNOSTICS,
-  });
-
-  const renderGame = useCallback((renderAlpha: number = 1) => {
-    renderGameCanvasFrame({
-      ENABLE_LAG_DIAGNOSTICS,
-      ENABLE_YSORT_DEBUG,
-      YSORT_DEBUG_INTERVAL_MS,
-      PLAYER_SORT_FEET_OFFSET_PX,
-      LAG_DIAGNOSTIC_INTERVAL_MS,
-      perfProfilingRef,
-      gameCanvasRef,
-      resolvedMaskCanvas,
+    predictedPosition,
+    connection,
+    gameCanvasRef,
+    canvasSize,
+    placementInfo,
+    placementError,
+    placementActions,
+    setPlacementWarning,
+    showFpsProfiler,
+    isProfilerRecording,
+    showAutotileDebug,
+    showChunkBoundaries,
+    showInteriorDebug,
+    showCollisionDebug,
+    showAttackRangeDebug,
+    showYSortDebug,
+    showShipwreckDebug,
+    allShadowsEnabled,
+    alwaysShowPlayerNames,
+    waterSurfaceEffectsEnabled,
+    footprintsEnabled,
+    worldParticlesQuality,
+    cloudsEnabled,
+    showPrecipitation,
+    stormAtmosphereEnabled,
+    showStatusOverlays,
+    isSearchingCraftRecipes,
+    showInventory,
+    isMobile,
+    tapAnimation,
+    localPlayerIsCrouching,
+    isAutoAttacking,
+    isAutoWalking,
+    hoveredPlayerIds,
+    handlePlayerHover,
+    getCurrentDodgeRollVisualNow,
+    sceneRuntime,
+    controllerRuntime: {
+      worldMousePos,
+      buildingState,
+      hasRepairHammer,
+      hasStoneTiller,
+      targetedFoundation,
+      targetedWall,
+      targetedFence,
+      localOptimisticDodgeRollStartMsRef,
       worldMousePosRef,
       cameraOffsetRef,
       predictedPositionRef,
       localFacingDirectionRef,
-      getCurrentDodgeRollVisualNow,
       interpolatedCloudsRef,
       cycleProgressRef,
       ySortedEntitiesRef,
       swimmingPlayersForBottomHalfRef,
-      localSwimTransitionRef,
-      ySortDebugRef,
-      localPlayerId,
-      localPlayer,
-      canvasSize,
-      currentCanvasWidth: canvasSize.width,
-      currentCanvasHeight: canvasSize.height,
       renderGameDepsRef,
-      seaTransitionTileLookup,
-      waterTileLookup,
-      showFpsProfiler,
-      allShadowsEnabled,
-      shelterClippingData,
-      visibleWorldTiles,
-      showAutotileDebug,
-      waterPatches,
-      fertilizerPatches,
-      firePatches,
-      placedExplosives,
-      placementInfo,
-      visibleCampfires,
-      visibleBarbecues,
-      visibleSeaStacks,
-      visibleBarrels,
+    },
+    effectsRuntime,
+    assets: {
       doodadImagesRef,
-      deltaTimeRef,
-      players,
-      remotePlayerInterpolation,
-      lastPositionsRef,
-      swimmingPlayerScratchRef,
-      localPlayerScratchRef,
       heroImageRef,
       heroSprintImageRef,
       heroIdleImageRef,
       heroWaterImageRef,
       heroCrouchImageRef,
       heroDodgeImageRef,
-      activeConnections,
-      worldMousePos,
-      activeConsumableEffects,
-      alwaysShowPlayerNames,
-      localPlayerIsCrouching,
-      waterSurfaceEffectsEnabled,
-      footprintsEnabled,
-      renderWorldPreparationPasses,
-      renderEntityWorldPasses,
-      renderTranslatedWorldExtras,
-      renderScreenSpaceWorldEffects,
-      renderLateFramePasses,
-      hoveredPlayerIds,
-      handlePlayerHover,
-      localOptimisticDodgeRollStartMsRef,
-      playerDodgeRollStates,
-      foundationTileImagesRef,
-      wallCells,
-      foundationCells,
-      visibleFences,
-      resolvedBuildingClusters,
-      playerBuildingClusterId,
-      connection,
-      isTreeFalling,
-      getFallProgress,
-      playerStats,
-      largeQuarries,
-      detectedHotSprings,
-      detectedQuarries,
-      caribouBreedingData,
-      walrusBreedingData,
-      chunkWeather,
-      visibleTrees,
-      worldState,
-      targetedFoundation,
-      targetedWall,
-      targetedFence,
-      hasRepairHammer,
-      worldParticlesQuality,
-      renderParticles,
-      campfireParticles,
-      fireArrowParticles,
-      torchParticles,
-      furnaceParticles,
-      barbecueParticles,
-      firePatchParticles,
-      wardParticles,
-      resourceSparkleParticles,
-      impactParticles,
-      structureImpactParticles,
-      hostileDeathParticles,
-      visibleHarvestableResourcesMap,
-      visibleCampfiresMap,
-      visibleFurnacesMap,
-      visibleBarbecuesMap,
-      fumaroles,
-      visibleDroppedItemsMap,
-      visibleBoxesMap,
-      visiblePlayerCorpsesMap,
-      stashes,
-      visibleSleepingBagsMap,
-      itemDefinitions,
-      buildingState,
       itemImagesRef,
-      shelterImageRef,
-      placementError,
-      placementActions,
-      localPlayerX,
-      localPlayerY,
-      inventoryItems,
-      lastPlacementWarningRef,
-      setPlacementWarning,
-      cloudsEnabled,
-      clouds,
       cloudImagesRef,
-      droneEvents,
       droneImageRef,
-      showChunkBoundaries,
-      showInteriorDebug,
-      showCollisionDebug,
-      trees,
-      stones,
-      runeStones,
-      cairns,
-      woodenStorageBoxes,
-      furnaces,
-      barbecues,
-      shelters,
-      wildAnimals,
-      visibleAnimalCorpsesMap,
-      barrels,
-      roadLampposts,
-      seaStacks,
-      homesteadHearths,
-      basaltColumns,
-      doors,
-      lanterns,
-      turrets,
-      monumentParts,
-      showYSortDebug,
-      hasStoneTiller,
-      showAttackRangeDebug,
-      activeEquipments,
-      campfires,
-      sleepingBags,
-      interpolatedGrass,
-      showPrecipitation,
-      stormAtmosphereEnabled,
-      resolvedOverlayRgba,
-      redrawMask,
-      visibleLanterns,
-      showStatusOverlays,
-      visibleRoadLamppostsMap,
-      visibleBarrelsMap,
-      visibleRuneStonesMap,
-      shipwreckPartsMap,
-      showShipwreckDebug,
-      isMobile,
-      tapAnimation,
-      fpsProfilerRef,
-      isProfilerRecording,
-      visibleGrassMap,
-      visibleSeaStacksMap,
-      visibleBoxesMapSizeSource: visibleBoxesMap,
-      visibleLanternsMap,
-      visibleTurretsMap,
-      visibleHomesteadHearthsMap,
-      visibleDoorsMap,
-      rainCollectors,
-      brothPots,
-      alkStations,
-      EMPTY_MAP,
-      isAutoAttacking,
-      isAutoWalking,
+      shelterImageRef,
+      foundationTileImagesRef,
+    },
+    renderRefs: {
+      deltaTimeRef,
+      lastPositionsRef,
+      localSwimTransitionRef,
+      swimmingPlayerScratchRef,
       swimmingPlayerTopHalfScratchRef,
-      renderAlpha,
-      checkPerformance,
-    });
-  }, [checkPerformance,
-    visibleHarvestableResources,
-    visibleHarvestableResourcesMap,
-    visibleDroppedItems, visibleCampfires, visibleSleepingBags,
-    visibleCampfiresMap, visibleDroppedItemsMap, visibleBoxesMap,
-    players, itemDefinitions, inventoryItems, trees, stones,
-    worldState, localPlayerId, localPlayer, activeEquipments,
-    itemImagesRef, heroImageRef, heroSprintImageRef, heroWaterImageRef, heroCrouchImageRef, heroDodgeImageRef, cloudImagesRef,
-    canvasSize.width, canvasSize.height,
-    placementInfo, placementError, resolvedOverlayRgba, resolvedMaskCanvas, redrawMask,
-    // Phase 4b: messages, projectiles, holdInteractionProgress, closestInteractable* moved to renderGameDepsRef
-    hoveredPlayerIds, handlePlayerHover,
-    activeConnections,
-    activeConsumableEffects,
-    visiblePlayerCorpses,
-    visibleStashes,
-    visibleSleepingBags,
-    isSearchingCraftRecipes,
-    visibleTrees,
-    visibleTreesMap,
-    playerCorpses,
-    showInventory,
-    gameCanvasRef,
-    deathMarkerImg,
-    shelters,
-    visibleShelters,
-    visibleSheltersMap,
-    shelterImageRef,
-    chunkWeather,
-    clouds, // Only need clouds prop for the size check, interpolation is via ref
-    droneImageRef,
-    showFpsProfiler,
-  ]);
+      localPlayerScratchRef,
+      lastPlacementWarningRef,
+    },
+  });
 
   useGameCanvasFramePipeline({
-    renderGame,
+    renderGame: renderFrame,
     processInputsAndActions,
     stepPredictedMovement,
     fixedSimulationEnabled,
