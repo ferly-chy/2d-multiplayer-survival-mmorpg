@@ -13,7 +13,7 @@ import { useGameScreenWorldTables, useLocalPlayer } from '../engine/selectors';
 
 const EMPTY_MAP = new Map();
 
-interface GameCanvasOverlayUIProps {
+export interface GameCanvasOverlayUIProps {
   connection: any;
   localPlayerId?: string;
   itemImagesRef: any;

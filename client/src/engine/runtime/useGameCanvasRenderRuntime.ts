@@ -1,17 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { gameConfig } from '../../config/gameConfig';
 import { useWalkingAnimationCycle, useSprintAnimationCycle, useIdleAnimationCycle } from '../../hooks/useAnimationCycle';
 import { useGameCanvasLagDiagnostics } from '../../hooks/useGameCanvasLagDiagnostics';
-import { renderGameCanvasFrame } from '../frame/renderGameCanvasFrame';
 import { renderLateFramePasses } from '../frame/renderLateFramePasses';
 import { renderWorldPreparationPasses } from '../frame/renderWorldPreparationPasses';
 import { renderEntityWorldPasses } from '../frame/renderEntityWorldPasses';
 import { renderTranslatedWorldExtras } from '../frame/renderTranslatedWorldExtras';
 import { renderScreenSpaceWorldEffects } from '../frame/renderScreenSpaceWorldEffects';
+import type {
+  GameCanvasRuntimeControllerSnapshot,
+  GameCanvasRuntimeHost,
+  GameCanvasRuntimeParticleSnapshot,
+  GameCanvasRuntimeSceneSnapshot,
+} from './GameCanvasRuntimeHost';
 
 const EMPTY_MAP = new Map();
 
 interface UseGameCanvasRenderRuntimeOptions {
+  host: GameCanvasRuntimeHost;
   localPlayerId?: string;
   localPlayer: any;
   predictedPosition: { x: number; y: number } | null;
@@ -50,9 +56,6 @@ interface UseGameCanvasRenderRuntimeOptions {
   hoveredPlayerIds: Set<string>;
   handlePlayerHover: (...args: any[]) => void;
   getCurrentDodgeRollVisualNow?: () => any;
-  sceneRuntime: any;
-  controllerRuntime: any;
-  effectsRuntime: any;
   assets: {
     doodadImagesRef: any;
     heroImageRef: any;
@@ -79,6 +82,7 @@ interface UseGameCanvasRenderRuntimeOptions {
 }
 
 export function useGameCanvasRenderRuntime({
+  host,
   localPlayerId,
   localPlayer,
   predictedPosition,
@@ -117,9 +121,6 @@ export function useGameCanvasRenderRuntime({
   hoveredPlayerIds,
   handlePlayerHover,
   getCurrentDodgeRollVisualNow,
-  sceneRuntime,
-  controllerRuntime,
-  effectsRuntime,
   assets,
   renderRefs,
 }: UseGameCanvasRenderRuntimeOptions) {
@@ -144,19 +145,28 @@ export function useGameCanvasRenderRuntime({
     enabled: ENABLE_LAG_DIAGNOSTICS,
   });
 
+  const sceneRuntime = host.getSceneSnapshot() as GameCanvasRuntimeSceneSnapshot | null;
+  const controllerRuntime = host.getControllerSnapshot() as GameCanvasRuntimeControllerSnapshot | null;
+  const effectsRuntime = host.getParticleSnapshot() as GameCanvasRuntimeParticleSnapshot | null;
+
   const shelterClippingData = useMemo(() => {
-    if (!sceneRuntime.shelters) return [];
+    if (!sceneRuntime?.shelters) return [];
     return Array.from(sceneRuntime.shelters.values()).map((shelter: any) => ({
       posX: shelter.posX,
       posY: shelter.posY,
       isDestroyed: shelter.isDestroyed,
     }));
-  }, [sceneRuntime.shelters]);
+  }, [sceneRuntime?.shelters]);
 
   const localPlayerX = predictedPosition?.x ?? localPlayer?.positionX ?? 0;
   const localPlayerY = predictedPosition?.y ?? localPlayer?.positionY ?? 0;
 
-  const renderContext = useMemo(() => ({
+  const renderContext = useMemo(() => {
+    if (!sceneRuntime || !controllerRuntime || !effectsRuntime) {
+      return null;
+    }
+
+    return {
     ENABLE_LAG_DIAGNOSTICS,
     ENABLE_YSORT_DEBUG,
     YSORT_DEBUG_INTERVAL_MS,
@@ -346,8 +356,9 @@ export function useGameCanvasRenderRuntime({
     isAutoAttacking,
     isAutoWalking,
     swimmingPlayerTopHalfScratchRef: renderRefs.swimmingPlayerTopHalfScratchRef,
-    checkPerformance,
-  }), [
+      checkPerformance,
+    };
+  }, [
     ENABLE_LAG_DIAGNOSTICS,
     ENABLE_YSORT_DEBUG,
     YSORT_DEBUG_INTERVAL_MS,
@@ -401,21 +412,10 @@ export function useGameCanvasRenderRuntime({
     getCurrentDodgeRollVisualNow,
   ]);
 
-  const renderContextRef = useRef<any>(renderContext);
-
   useEffect(() => {
-    renderContextRef.current = renderContext;
-  }, [renderContext]);
-
-  const renderFrame = useCallback((renderAlpha: number = 1) => {
-    const currentContext = renderContextRef.current;
-    if (!currentContext) return;
-
-    renderGameCanvasFrame({
-      ...currentContext,
-      renderAlpha,
-    });
-  }, []);
-
-  return { renderFrame };
+    if (!renderContext) {
+      return;
+    }
+    host.configureRenderContext(renderContext);
+  }, [host, renderContext]);
 }

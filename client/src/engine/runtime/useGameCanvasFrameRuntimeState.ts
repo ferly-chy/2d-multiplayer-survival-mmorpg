@@ -1,24 +1,18 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import type { Projectile as SpacetimeDBProjectile } from '../../generated/types';
+import type { GameCanvasRuntimeHost } from './GameCanvasRuntimeHost';
 
 interface UseGameCanvasFrameRuntimeStateOptions {
+  host: GameCanvasRuntimeHost;
   worldMousePos: { x: number | null; y: number | null };
-  worldMousePosRef: React.MutableRefObject<{ x: number | null; y: number | null }>;
   cameraOffsetX: number;
   cameraOffsetY: number;
-  cameraOffsetRef: React.MutableRefObject<{ x: number; y: number }>;
   predictedPosition: { x: number; y: number } | null;
-  predictedPositionRef: React.MutableRefObject<{ x: number; y: number } | null>;
   localFacingDirection: string | undefined;
-  localFacingDirectionRef: React.MutableRefObject<string | undefined>;
   interpolatedClouds: Map<string, any>;
-  interpolatedCloudsRef: React.MutableRefObject<Map<string, any>>;
   cycleProgress: number;
-  cycleProgressRef: React.MutableRefObject<number>;
   ySortedEntities: any[];
-  ySortedEntitiesRef: React.MutableRefObject<any[]>;
   swimmingPlayersForBottomHalf: any[];
-  swimmingPlayersForBottomHalfRef: React.MutableRefObject<any[]>;
   messages: any;
   renderableProjectiles: Map<string, SpacetimeDBProjectile>;
   holdInteractionProgress: { targetId: string | number | bigint | null; targetType: string; startTime: number } | null;
@@ -42,23 +36,16 @@ interface UseGameCanvasFrameRuntimeStateOptions {
 }
 
 export function useGameCanvasFrameRuntimeState({
+  host,
   worldMousePos,
-  worldMousePosRef,
   cameraOffsetX,
   cameraOffsetY,
-  cameraOffsetRef,
   predictedPosition,
-  predictedPositionRef,
   localFacingDirection,
-  localFacingDirectionRef,
   interpolatedClouds,
-  interpolatedCloudsRef,
   cycleProgress,
-  cycleProgressRef,
   ySortedEntities,
-  ySortedEntitiesRef,
   swimmingPlayersForBottomHalf,
-  swimmingPlayersForBottomHalfRef,
   messages,
   renderableProjectiles,
   holdInteractionProgress,
@@ -80,31 +67,17 @@ export function useGameCanvasFrameRuntimeState({
   closestInteractableCairnId,
   closestInteractableMilkableAnimalId,
 }: UseGameCanvasFrameRuntimeStateOptions) {
-  const renderGameDepsRef = useRef({
-    messages: new Map(),
-    projectiles: new Map<string, SpacetimeDBProjectile>(),
-    holdInteractionProgress: null as { targetId: string | number | bigint | null; targetType: string; startTime: number } | null,
-    isActivelyHolding: false,
-    closestInteractableHarvestableResourceId: null as bigint | null,
-    closestInteractableCampfireId: null as number | bigint | null,
-    closestInteractableDroppedItemId: null as number | bigint | null,
-    closestInteractableBoxId: null as number | bigint | null,
-    isClosestInteractableBoxEmpty: false,
-    closestInteractableWaterPosition: null as { x: number; y: number } | null,
-    closestInteractableStashId: null as number | bigint | null,
-    closestInteractableSleepingBagId: null as number | bigint | null,
-    closestInteractableDoorId: null as number | bigint | null,
-    closestInteractableTarget: null as any,
-    unifiedInteractableTarget: null as any,
-    closestInteractableKnockedOutPlayerId: null as string | null,
-    closestInteractableCorpseId: null as number | bigint | null,
-    closestInteractableAlkStationId: null as number | bigint | null,
-    closestInteractableCairnId: null as number | bigint | null,
-    closestInteractableMilkableAnimalId: null as number | bigint | null,
-  });
-
-  ySortedEntitiesRef.current = ySortedEntities;
-  swimmingPlayersForBottomHalfRef.current = swimmingPlayersForBottomHalf;
+  const {
+    worldMousePosRef,
+    cameraOffsetRef,
+    predictedPositionRef,
+    localFacingDirectionRef,
+    interpolatedCloudsRef,
+    cycleProgressRef,
+    ySortedEntitiesRef,
+    swimmingPlayersForBottomHalfRef,
+    renderGameDepsRef,
+  } = host.getControllerRefs();
 
   useEffect(() => {
     worldMousePosRef.current = worldMousePos;

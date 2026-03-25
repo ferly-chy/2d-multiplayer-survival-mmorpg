@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useEngineSnapshot } from '../react/useEngineSnapshot';
 import { useUITable } from '../selectors';
 import { useGameScreenWorldTables } from '../selectors/useGameScreenWorldTables';
@@ -8,7 +7,16 @@ import { useCloudInterpolation } from '../../hooks/useCloudInterpolation';
 import { useGrassInterpolation } from '../../hooks/useGrassInterpolation';
 import { useFallingTreeAnimations } from '../../hooks/useFallingTreeAnimations';
 import { useMousePosition } from '../../hooks/useMousePosition';
+import { assembleGameCanvasSceneSnapshot } from './assembleGameCanvasSceneSnapshot';
+import type { GameCanvasRuntimeSceneSnapshot } from './GameCanvasRuntimeHost';
 
+/**
+ * Temporary React adapter for canvas scene state.
+ *
+ * This still owns hook-bound subscription and interpolation reads, but it now
+ * feeds a non-React `GameCanvasRuntimeHost`. The next extraction step is to
+ * split this into a React data adapter plus a pure scene snapshot assembler.
+ */
 const EMPTY_MAP = new Map();
 
 interface UseGameCanvasSceneRuntimeOptions {
@@ -33,7 +41,7 @@ export function useGameCanvasSceneRuntime({
   cameraOffsetY,
   canvasSize,
   deltaTime,
-}: UseGameCanvasSceneRuntimeOptions) {
+}: UseGameCanvasSceneRuntimeOptions): GameCanvasRuntimeSceneSnapshot {
   const tables = useGameScreenWorldTables();
   const messages = useUITable<Map<string, any>>('messages');
   const playerPins = useUITable<Map<string, any>>('playerPins');
@@ -141,44 +149,27 @@ export function useGameCanvasSceneRuntime({
     barrelsAll: tables.barrels ?? EMPTY_MAP,
   });
 
-  const shipwreckPartsMap = useMemo(() => {
-    const monumentParts = tables.monumentParts;
-    if (!monumentParts) {
-      return EMPTY_MAP;
-    }
-
-    const filtered = new Map();
-    monumentParts.forEach((part: any, id: string) => {
-      if (part.monumentType?.tag === 'Shipwreck') {
-        filtered.set(id, part);
-      }
-    });
-    return filtered;
-  }, [tables.monumentParts]);
-
-  return {
-    ...tables,
-    messages,
-    playerPins,
-    activeConnections,
-    matronages,
-    matronageMembers,
-    matronageInvitations,
-    matronageOwedShards,
-    beaconDropEvents,
+  return assembleGameCanvasSceneSnapshot({
+    tables,
+    uiTables: {
+      messages,
+      playerPins,
+      activeConnections,
+      matronages,
+      matronageMembers,
+      matronageInvitations,
+      matronageOwedShards,
+      beaconDropEvents,
+    },
     worldChunkDataMap,
     interpolatedClouds,
     interpolatedGrass,
-    shipwreckPartsMap,
-    isTreeFalling,
-    getFallProgress,
-    TREE_FALL_DURATION_MS,
-    ...worldLookups,
-    ...frameAssembly,
-    resolvedOverlayRgba: frameAssembly.overlayRgba,
-    resolvedBuildingClusters: frameAssembly.buildingClusters,
-    resolvedYSortedEntities: frameAssembly.ySortedEntities,
-    resolvedSwimmingPlayersForBottomHalf: frameAssembly.swimmingPlayersForBottomHalf,
-    resolvedMaskCanvas: frameAssembly.maskCanvasRef.current,
-  };
+    worldLookups,
+    frameAssembly,
+    treeAnimation: {
+      isTreeFalling,
+      getFallProgress,
+      TREE_FALL_DURATION_MS,
+    },
+  });
 }

@@ -1,12 +1,23 @@
-import { useRef, type MutableRefObject } from 'react';
+import type { MutableRefObject } from 'react';
 import type { GameLoopMetrics } from '../../hooks/useGameLoop';
 import { useGameCanvasBuildState } from './useGameCanvasBuildState';
 import { useGameCanvasInteractionRuntime } from './useGameCanvasInteractionRuntime';
 import { useGameCanvasFrameRuntimeState } from './useGameCanvasFrameRuntimeState';
 import { useGameCanvasUpgradeMenuState } from '../../hooks/useGameCanvasUpgradeMenuState';
 import { useGameCanvasHostState } from '../../hooks/useGameCanvasHostState';
+import type { GameCanvasRuntimeControllerSnapshot, GameCanvasRuntimeHost } from './GameCanvasRuntimeHost';
+import { assembleGameCanvasControllerSnapshot } from './assembleGameCanvasControllerSnapshot';
 
+/**
+ * Temporary React adapter for canvas controller state.
+ *
+ * `GameCanvasRuntimeHost` now owns the mutable frame-state refs consumed by the
+ * render and frame pipeline. Build/interaction logic is still hook-bound here,
+ * so this adapter currently synchronizes React hook outputs into host-owned
+ * controller state while the remaining controller services are extracted.
+ */
 interface UseGameCanvasControllerRuntimeOptions {
+  host: GameCanvasRuntimeHost;
   gameCanvasRef: React.RefObject<HTMLCanvasElement | null>;
   sceneRuntime: any;
   localPlayer: any;
@@ -51,6 +62,7 @@ interface UseGameCanvasControllerRuntimeOptions {
 }
 
 export function useGameCanvasControllerRuntime({
+  host,
   gameCanvasRef,
   sceneRuntime,
   localPlayer,
@@ -92,16 +104,18 @@ export function useGameCanvasControllerRuntime({
   onMobileInteractInfoChange,
   mobileInteractTrigger,
   showError,
-}: UseGameCanvasControllerRuntimeOptions) {
-  const worldMousePosRef = useRef<{ x: number | null; y: number | null }>({ x: 0, y: 0 });
-  const cameraOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const predictedPositionRef = useRef<{ x: number; y: number } | null>(null);
-  const localFacingDirectionRef = useRef<string | undefined>(localFacingDirection);
-  const localOptimisticDodgeRollStartMsRef = useRef<number>(0);
-  const interpolatedCloudsRef = useRef<Map<string, any>>(new Map());
-  const cycleProgressRef = useRef<number>(0.375);
-  const ySortedEntitiesRef = useRef<any[]>([]);
-  const swimmingPlayersForBottomHalfRef = useRef<any[]>([]);
+}: UseGameCanvasControllerRuntimeOptions): GameCanvasRuntimeControllerSnapshot {
+  const {
+    worldMousePosRef,
+    cameraOffsetRef,
+    predictedPositionRef,
+    localFacingDirectionRef,
+    localOptimisticDodgeRollStartMsRef,
+    interpolatedCloudsRef,
+    cycleProgressRef,
+    ySortedEntitiesRef,
+    swimmingPlayersForBottomHalfRef,
+  } = host.getControllerRefs();
 
   const buildState = useGameCanvasBuildState({
     canvasRef: gameCanvasRef,
@@ -199,23 +213,16 @@ export function useGameCanvasControllerRuntime({
   });
 
   const { renderGameDepsRef } = useGameCanvasFrameRuntimeState({
+    host,
     worldMousePos: buildState.worldMousePos,
-    worldMousePosRef,
     cameraOffsetX,
     cameraOffsetY,
-    cameraOffsetRef,
     predictedPosition,
-    predictedPositionRef,
     localFacingDirection,
-    localFacingDirectionRef,
     interpolatedClouds: sceneRuntime.interpolatedClouds,
-    interpolatedCloudsRef,
     cycleProgress: sceneRuntime.worldState?.cycleProgress ?? 0.375,
-    cycleProgressRef,
     ySortedEntities: sceneRuntime.resolvedYSortedEntities,
-    ySortedEntitiesRef,
     swimmingPlayersForBottomHalf: sceneRuntime.resolvedSwimmingPlayersForBottomHalf,
-    swimmingPlayersForBottomHalfRef,
     messages: sceneRuntime.messages,
     renderableProjectiles: sceneRuntime.renderableProjectiles,
     holdInteractionProgress: interactionRuntime.interactionProgress,
@@ -254,20 +261,13 @@ export function useGameCanvasControllerRuntime({
     sleepingBags: sceneRuntime.sleepingBags,
   });
 
-  return {
-    ...buildState,
-    ...interactionRuntime,
-    ...upgradeMenuState,
-    ...hostState,
-    worldMousePosRef,
-    cameraOffsetRef,
-    predictedPositionRef,
-    localFacingDirectionRef,
-    localOptimisticDodgeRollStartMsRef,
-    interpolatedCloudsRef,
-    cycleProgressRef,
-    ySortedEntitiesRef,
-    swimmingPlayersForBottomHalfRef,
-    renderGameDepsRef,
-  };
+  const controllerSnapshot = assembleGameCanvasControllerSnapshot({
+    host,
+    buildState,
+    interactionRuntime,
+    upgradeMenuState,
+    hostState,
+  });
+
+  return controllerSnapshot;
 }

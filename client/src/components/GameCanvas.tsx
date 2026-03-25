@@ -18,9 +18,6 @@ import { useAssetLoader } from '../hooks/useAssetLoader';
 import { useDoodadImages } from '../hooks/useDoodadImages';
 import { useGameViewport } from '../hooks/useGameViewport';
 import type { GameLoopMetrics } from '../hooks/useGameLoop';
-import { usePlayerHover } from '../hooks/usePlayerHover';
-import { usePlantedSeedHover } from '../hooks/usePlantedSeedHover';
-import { useTamedAnimalHover } from '../hooks/useTamedAnimalHover';
 import { useDamageEffects } from '../hooks/useDamageEffects';
 import { useSettings } from '../contexts/SettingsContext';
 import { useErrorDisplay } from '../contexts/ErrorDisplayContext';
@@ -41,8 +38,13 @@ import { useGameCanvasAssetPreload } from '../hooks/useGameCanvasAssetPreload';
 import { useGameCanvasFramePipeline } from '../engine/runtime/useGameCanvasFramePipeline';
 import { useGameCanvasSceneRuntime } from '../engine/runtime/useGameCanvasSceneRuntime';
 import { useGameCanvasEffectsRuntime } from '../engine/runtime/useGameCanvasEffectsRuntime';
+import { useGameCanvasParticleRuntime } from '../engine/runtime/useGameCanvasParticleRuntime';
 import { useGameCanvasControllerRuntime } from '../engine/runtime/useGameCanvasControllerRuntime';
+import { useGameCanvasControllerBridgeRuntime } from '../engine/runtime/useGameCanvasControllerBridgeRuntime';
+import { useGameCanvasHostSyncRuntime } from '../engine/runtime/useGameCanvasHostSyncRuntime';
+import { useGameCanvasOverlayRuntime } from '../engine/runtime/useGameCanvasOverlayRuntime';
 import { useGameCanvasRenderRuntime } from '../engine/runtime/useGameCanvasRenderRuntime';
+import { GameCanvasRuntimeHost } from '../engine/runtime/GameCanvasRuntimeHost';
 
 // --- Prop Interface ---
 interface GameCanvasProps {
@@ -98,6 +100,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   showSovaSoundBox,
   onCairnNotification,
 }) => {
+  const runtimeHostRef = useRef<GameCanvasRuntimeHost | null>(null);
+  if (!runtimeHostRef.current) {
+    runtimeHostRef.current = new GameCanvasRuntimeHost();
+  }
+  const runtimeHost = runtimeHostRef.current;
+
   // --- Settings from context (audio + visual) ---
   const {
     environmentalVolume,
@@ -349,41 +357,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     remotePlayerInterpolation,
   } = sceneRuntime;
 
-  const {
-    worldMousePos,
-    canvasMousePos,
-    buildingState,
-    buildingActions,
-    hasRepairHammer,
-    hasStoneTiller,
-    targetedFoundation,
-    targetedWall,
-    targetedFence,
-    updateInteractionResult,
-    isAutoAttacking,
-    isCrouching: localPlayerIsCrouching,
-    showBuildingRadialMenu,
-    radialMenuMouseX,
-    radialMenuMouseY,
-    setShowBuildingRadialMenu,
-    showUpgradeRadialMenu,
-    setShowUpgradeRadialMenu,
-    processInputsAndActions,
-    upgradeMenuFoundationRef,
-    upgradeMenuWallRef,
-    upgradeMenuFenceRef,
-    cursorStyle,
-    worldMousePosRef,
-    cameraOffsetRef,
-    predictedPositionRef,
-    localFacingDirectionRef,
-    localOptimisticDodgeRollStartMsRef,
-    interpolatedCloudsRef,
-    cycleProgressRef,
-    ySortedEntitiesRef,
-    swimmingPlayersForBottomHalfRef,
-    renderGameDepsRef,
-  } = useGameCanvasControllerRuntime({
+  const controllerRuntime = useGameCanvasControllerRuntime({
+    host: runtimeHost,
     gameCanvasRef,
     sceneRuntime,
     localPlayer,
@@ -427,39 +402,70 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     showError,
   });
 
-  // --- UI State ---
-  const { hoveredPlayerIds, handlePlayerHover } = usePlayerHover();
-
-  const { hoveredSeed, hoveredSeedId } = usePlantedSeedHover(
-    plantedSeeds,
-    worldMousePos.x,
-    worldMousePos.y
-  );
-
-  const { hoveredTamedAnimal, hoveredAnimalId } = useTamedAnimalHover(
-    wildAnimals,
-    worldMousePos.x,
-    worldMousePos.y
-  );
-
-  // --- Effects Runtime ---
-  const effectsRuntime = useGameCanvasEffectsRuntime({
-    connection,
-    localPlayer,
-    localPlayerId,
-    predictedPosition,
-    worldMousePos,
-    sceneRuntime,
-    cameraOffsetX,
-    cameraOffsetY,
-    canvasSize,
-    environmentalVolume,
+  const {
+    frameBindings,
+    cursorStyle,
+    localPlayerIsCrouching,
     isAutoAttacking,
-    onAutoActionStatesChange,
-    showError,
+  } = useGameCanvasControllerBridgeRuntime({
+    controllerRuntime,
+    stepPredictedMovement,
+    fixedSimulationEnabled,
+    getCurrentPositionNow,
+    getCurrentFacingDirectionNow,
+    localPlayer,
+    isAutoWalking,
+    canvasSize,
+    gameLoopMetricsRef,
+    deltaTimeRef,
+    interactionScanFrameSkipRef,
   });
 
-  const { renderFrame } = useGameCanvasRenderRuntime({
+  const { hoveredPlayerIds, handlePlayerHover, overlayProps } = useGameCanvasOverlayRuntime({
+    connection,
+    localPlayerId,
+    itemImagesRef,
+    deathMarkerImg,
+    pinMarkerImg,
+    campfireWarmthImg,
+    torchOnImg,
+    canvasSize,
+    controllerRuntime,
+    plantedSeeds,
+    wildAnimals,
+  });
+
+  const particleRuntime = useGameCanvasParticleRuntime({
+    localPlayer,
+    sceneRuntime,
+  });
+
+  useGameCanvasHostSyncRuntime({
+    host: runtimeHost,
+    sceneSnapshot: sceneRuntime,
+    controllerSnapshot: controllerRuntime,
+    particleSnapshot: particleRuntime,
+    ambientEffectsSnapshot: {
+      connection,
+      localPlayer,
+      localPlayerId,
+      predictedPosition,
+      cameraOffsetX,
+      cameraOffsetY,
+      canvasSize,
+      environmentalVolume,
+      onAutoActionStatesChange,
+      showError,
+    },
+    frameBindings,
+  });
+
+  useGameCanvasEffectsRuntime({
+    host: runtimeHost,
+  });
+
+  useGameCanvasRenderRuntime({
+    host: runtimeHost,
     localPlayerId,
     localPlayer,
     predictedPosition,
@@ -498,27 +504,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     hoveredPlayerIds,
     handlePlayerHover,
     getCurrentDodgeRollVisualNow,
-    sceneRuntime,
-    controllerRuntime: {
-      worldMousePos,
-      buildingState,
-      hasRepairHammer,
-      hasStoneTiller,
-      targetedFoundation,
-      targetedWall,
-      targetedFence,
-      localOptimisticDodgeRollStartMsRef,
-      worldMousePosRef,
-      cameraOffsetRef,
-      predictedPositionRef,
-      localFacingDirectionRef,
-      interpolatedCloudsRef,
-      cycleProgressRef,
-      ySortedEntitiesRef,
-      swimmingPlayersForBottomHalfRef,
-      renderGameDepsRef,
-    },
-    effectsRuntime,
     assets: {
       doodadImagesRef,
       heroImageRef,
@@ -545,24 +530,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   });
 
   useGameCanvasFramePipeline({
-    renderGame: renderFrame,
-    processInputsAndActions,
-    stepPredictedMovement,
-    fixedSimulationEnabled,
-    getCurrentPositionNow,
-    predictedPositionRef,
-    getCurrentFacingDirectionNow,
-    localFacingDirectionRef,
-    localPlayer,
-    updateInteractionResult,
-    isAutoWalking,
-    canvasWidth: canvasSize.width,
-    canvasHeight: canvasSize.height,
+    host: runtimeHost,
     showFpsProfiler,
-    gameLoopMetricsRef,
-    deltaTimeRef,
-    interactionScanFrameSkipRef,
-    cameraOffsetRef,
   });
 
   return (
@@ -653,29 +622,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         />
       )}
 
-      <GameCanvasOverlayUI
-        connection={connection}
-        localPlayerId={localPlayerId}
-        itemImagesRef={itemImagesRef}
-        deathMarkerImg={deathMarkerImg}
-        pinMarkerImg={pinMarkerImg}
-        campfireWarmthImg={campfireWarmthImg}
-        torchOnImg={torchOnImg}
-        canvasSize={canvasSize}
-        showBuildingRadialMenu={showBuildingRadialMenu}
-        radialMenuMouseX={radialMenuMouseX}
-        radialMenuMouseY={radialMenuMouseY}
-        buildingActions={buildingActions}
-        setShowBuildingRadialMenu={setShowBuildingRadialMenu}
-        showUpgradeRadialMenu={showUpgradeRadialMenu}
-        setShowUpgradeRadialMenu={setShowUpgradeRadialMenu}
-        upgradeMenuFoundationRef={upgradeMenuFoundationRef}
-        upgradeMenuWallRef={upgradeMenuWallRef}
-        upgradeMenuFenceRef={upgradeMenuFenceRef}
-        hoveredSeed={hoveredSeed}
-        canvasMousePos={canvasMousePos}
-        hoveredTamedAnimal={hoveredTamedAnimal}
-      />
+      <GameCanvasOverlayUI {...overlayProps} />
     </div>
   );
 };
