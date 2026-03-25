@@ -16,6 +16,7 @@ import {
     getBuildingWorldPosition 
 } from '../../config/compoundBuildings';
 import { drawDynamicGroundShadow } from './shadowUtils';
+import { SEA_BARREL_WATER_CONFIG } from './barrelRenderingUtils';
 
 /** Isometric hut/lodge doodads: footprint extends down-right; shadow needs R(45° CW) * S(1, 0.5).
  * Alpine village buildings (av_lodge, av_hut, av_banya) excluded - they use normal dynamic shadows. */
@@ -347,6 +348,131 @@ const MONUMENT_WATER_LINE = {
     WAVE_SECONDARY_FREQUENCY: 0.005,
 };
 
+/** Per-sprite waterline: fraction from sprite top; line drawn between width fractions (narrow for thin radar mast). */
+function getMonumentWaterLineLayout(imagePath: string): { fraction: number; lineStartFrac: number; lineEndFrac: number } {
+    if (imagePath === 'ws_radar.png') {
+        // Tall lattice legs: line near feet only; narrow segment matches tower width (not full 512px canvas)
+        return { fraction: 0.9, lineStartFrac: 0.38, lineEndFrac: 0.62 };
+    }
+    if (imagePath === 'av_weather_station_mast.png') {
+        return { fraction: 0.84, lineStartFrac: 0.22, lineEndFrac: 0.78 };
+    }
+    return { fraction: 0.78, lineStartFrac: 0.15, lineEndFrac: 0.85 };
+}
+
+let monumentWaterOffscreen: OffscreenCanvas | HTMLCanvasElement | null = null;
+let monumentWaterOffscreenCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null;
+
+function getMonumentWaterOffscreenCanvas(
+    width: number,
+    height: number
+): { canvas: OffscreenCanvas | HTMLCanvasElement; ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D } {
+    if (!monumentWaterOffscreen || monumentWaterOffscreen.width < width || monumentWaterOffscreen.height < height) {
+        if (monumentWaterOffscreen) {
+            monumentWaterOffscreen.width = 0;
+            monumentWaterOffscreen.height = 0;
+        }
+        try {
+            monumentWaterOffscreen = new OffscreenCanvas(width, height);
+        } catch {
+            monumentWaterOffscreen = document.createElement('canvas');
+            monumentWaterOffscreen.width = width;
+            monumentWaterOffscreen.height = height;
+        }
+        monumentWaterOffscreenCtx = monumentWaterOffscreen.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+    }
+    return { canvas: monumentWaterOffscreen, ctx: monumentWaterOffscreenCtx! };
+}
+
+/**
+ * Sea-barrel-style water: tinted + darkened below a wavy line, then normal above (respects PNG alpha).
+ * Static monuments only (no sway); must be called with the same transform as drawImage (typically unrotated).
+ */
+function drawMonumentWithSeaWaterEffects(
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement,
+    drawX: number,
+    drawY: number,
+    drawWidth: number,
+    drawHeight: number,
+    worldX: number,
+    worldY: number,
+    nowMs: number,
+    imagePath: string
+): void {
+    const { fraction: waterLineFraction, lineStartFrac, lineEndFrac } = getMonumentWaterLineLayout(imagePath);
+    const waterLineWorldY = drawY + drawHeight * waterLineFraction;
+
+    const getWaveOffset = (x: number) =>
+        Math.sin(nowMs * MONUMENT_WATER_LINE.WAVE_FREQUENCY + x * 0.02) * MONUMENT_WATER_LINE.WAVE_AMPLITUDE
+        + Math.sin(nowMs * MONUMENT_WATER_LINE.WAVE_SECONDARY_FREQUENCY + x * 0.03 + Math.PI * 0.3)
+        * MONUMENT_WATER_LINE.WAVE_SECONDARY_AMPLITUDE;
+
+    const { canvas: offscreen, ctx: offCtx } = getMonumentWaterOffscreenCanvas(drawWidth + 4, drawHeight + 4);
+    offCtx.clearRect(0, 0, offscreen.width, offscreen.height);
+    offCtx.drawImage(img, 2, 2, drawWidth, drawHeight);
+    offCtx.globalCompositeOperation = 'source-atop';
+    const { r, g, b } = SEA_BARREL_WATER_CONFIG.UNDERWATER_TINT_COLOR;
+    const tintIntensity = SEA_BARREL_WATER_CONFIG.UNDERWATER_TINT_INTENSITY;
+    offCtx.fillStyle = `rgba(${r}, ${g}, ${b}, ${tintIntensity})`;
+    offCtx.fillRect(0, 0, offscreen.width, offscreen.height);
+    offCtx.fillStyle = 'rgba(0, 20, 40, 0.2)';
+    offCtx.fillRect(0, 0, offscreen.width, offscreen.height);
+    offCtx.globalCompositeOperation = 'source-over';
+
+    const clipPad = Math.max(drawWidth, drawHeight) + 20;
+    const clipLeft = worldX - clipPad;
+    const clipRight = worldX + clipPad;
+    const waveSegments = 16;
+    const clipSegmentWidth = (clipRight - clipLeft) / waveSegments;
+    const underwaterBottomY = Math.max(drawY + drawHeight + 120, worldY + 200);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(clipLeft, underwaterBottomY);
+    ctx.lineTo(clipLeft, waterLineWorldY);
+    for (let i = 0; i <= waveSegments; i++) {
+        const segX = clipLeft + i * clipSegmentWidth;
+        ctx.lineTo(segX, waterLineWorldY + getWaveOffset(segX));
+    }
+    ctx.lineTo(clipRight, underwaterBottomY);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(offscreen, drawX - 2, drawY - 2);
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(clipLeft, drawY - 5);
+    ctx.lineTo(clipRight, drawY - 5);
+    ctx.lineTo(clipRight, waterLineWorldY);
+    for (let i = waveSegments; i >= 0; i--) {
+        const segX = clipLeft + i * clipSegmentWidth;
+        ctx.lineTo(segX, waterLineWorldY + getWaveOffset(segX));
+    }
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+    ctx.restore();
+
+    const lineStartX = drawX + drawWidth * lineStartFrac;
+    const lineEndX = drawX + drawWidth * lineEndFrac;
+    const lineSegments = 8;
+    const lineSegmentWidth = (lineEndX - lineStartX) / lineSegments;
+
+    ctx.strokeStyle = 'rgba(150, 180, 200, 0.5)';
+    ctx.lineWidth = 1.2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let i = 0; i <= lineSegments; i++) {
+        const segX = lineStartX + i * lineSegmentWidth;
+        const waveOffset = getWaveOffset(segX);
+        if (i === 0) ctx.moveTo(segX, waterLineWorldY + waveOffset);
+        else ctx.lineTo(segX, waterLineWorldY + waveOffset);
+    }
+    ctx.stroke();
+}
+
 /**
  * Render a single monument (compound building or shipwreck part)
  */
@@ -478,35 +604,56 @@ export function renderMonument(
         ctx.rotate(rotationRad);
         ctx.translate(-worldX, -worldY);
     }
-    
-    // Draw the building (transparency already applied if needed)
-    ctx.drawImage(img, drawX, drawY, building.width, building.height);
 
-    // Weather station radar or alpine village weather pole in water: draw water line low on the image (like barrels)
-    const isPoleOrRadarInWater = (building.imagePath === 'ws_radar.png' || building.imagePath === 'av_weather_station_mast.png' || building.id.startsWith('weather_station_'))
-        && isOnSeaTile?.(worldX, worldY) && nowMs !== undefined;
-    if (isPoleOrRadarInWater) {
-        const waterLineFraction = 0.78; // Low on image - radar base in water
-        const waterLineWorldY = drawY + building.height * waterLineFraction;
-        const lineStartX = drawX + building.width * 0.15;
-        const lineEndX = drawX + building.width * 0.85;
-        const lineSegments = 8;
-        const lineSegmentWidth = (lineEndX - lineStartX) / lineSegments;
-        const getWaveOffset = (x: number) =>
-            Math.sin(nowMs * MONUMENT_WATER_LINE.WAVE_FREQUENCY + x * 0.02) * MONUMENT_WATER_LINE.WAVE_AMPLITUDE
-            + Math.sin(nowMs * MONUMENT_WATER_LINE.WAVE_SECONDARY_FREQUENCY + x * 0.03 + Math.PI * 0.3) * MONUMENT_WATER_LINE.WAVE_SECONDARY_AMPLITUDE;
+    const isPoleOrRadarInWater =
+        (building.imagePath === 'ws_radar.png'
+            || building.imagePath === 'av_weather_station_mast.png'
+            || building.id.startsWith('weather_station_'))
+        && isOnSeaTile?.(worldX, worldY)
+        && nowMs !== undefined;
 
-        ctx.strokeStyle = 'rgba(150, 180, 200, 0.5)';
-        ctx.lineWidth = 1.2;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        for (let i = 0; i <= lineSegments; i++) {
-            const segX = lineStartX + i * lineSegmentWidth;
-            const waveOffset = getWaveOffset(segX);
-            if (i === 0) ctx.moveTo(segX, waterLineWorldY + waveOffset);
-            else ctx.lineTo(segX, waterLineWorldY + waveOffset);
+    // Barrel-style underwater tint + wavy line (axis-aligned only; radars/masts are unrotated)
+    const useSeaWaterComposite = isPoleOrRadarInWater && Math.abs(rotationRad) < 0.001;
+
+    if (useSeaWaterComposite) {
+        drawMonumentWithSeaWaterEffects(
+            ctx,
+            img,
+            drawX,
+            drawY,
+            building.width,
+            building.height,
+            worldX,
+            worldY,
+            nowMs!,
+            building.imagePath
+        );
+    } else {
+        ctx.drawImage(img, drawX, drawY, building.width, building.height);
+        if (isPoleOrRadarInWater) {
+            const { fraction: waterLineFraction, lineStartFrac, lineEndFrac } = getMonumentWaterLineLayout(building.imagePath);
+            const waterLineWorldY = drawY + building.height * waterLineFraction;
+            const lineStartX = drawX + building.width * lineStartFrac;
+            const lineEndX = drawX + building.width * lineEndFrac;
+            const lineSegments = 8;
+            const lineSegmentWidth = (lineEndX - lineStartX) / lineSegments;
+            const getWaveOffset = (x: number) =>
+                Math.sin(nowMs! * MONUMENT_WATER_LINE.WAVE_FREQUENCY + x * 0.02) * MONUMENT_WATER_LINE.WAVE_AMPLITUDE
+                + Math.sin(nowMs! * MONUMENT_WATER_LINE.WAVE_SECONDARY_FREQUENCY + x * 0.03 + Math.PI * 0.3)
+                * MONUMENT_WATER_LINE.WAVE_SECONDARY_AMPLITUDE;
+
+            ctx.strokeStyle = 'rgba(150, 180, 200, 0.5)';
+            ctx.lineWidth = 1.2;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            for (let i = 0; i <= lineSegments; i++) {
+                const segX = lineStartX + i * lineSegmentWidth;
+                const waveOffset = getWaveOffset(segX);
+                if (i === 0) ctx.moveTo(segX, waterLineWorldY + waveOffset);
+                else ctx.lineTo(segX, waterLineWorldY + waveOffset);
+            }
+            ctx.stroke();
         }
-        ctx.stroke();
     }
 
     ctx.restore();

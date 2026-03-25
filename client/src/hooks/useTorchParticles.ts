@@ -44,6 +44,8 @@ interface UseTorchParticlesProps {
     activeEquipments: Map<string, SpacetimeDBActiveEquipment>;
     itemDefinitions: Map<string, SpacetimeDBItemDefinition>;
     deltaTime: number; // Delta time in milliseconds
+    localPlayerId?: string;
+    localFacingDirectionRef?: MutableRefObject<string | undefined>;
 }
 
 export function useTorchParticles({

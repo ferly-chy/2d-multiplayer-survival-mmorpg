@@ -2,6 +2,7 @@
  * Selector hook that returns all world tables needed by GameScreen and its children.
  * Reads from engine store; useSpacetimeTables remains the writer.
  */
+import type { WorldState } from '../../generated/types';
 import { useEngineSnapshot } from '../react/useEngineSnapshot';
 
 const emptyMap = () => new Map();
@@ -49,7 +50,7 @@ export function useGameScreenWorldTables() {
       livingCorals: get('livingCorals', emptyMap()),
       inventoryItems: get('inventoryItems', emptyMap()),
       itemDefinitions: get('itemDefinitions', emptyMap()),
-      worldState: get('worldState', null),
+      worldState: get<WorldState | null>('worldState', null),
       activeEquipments: get('activeEquipments', emptyMap()),
       recipes: get('recipes', emptyMap()),
       craftingQueueItems: get('craftingQueueItems', emptyMap()),
