@@ -26,8 +26,8 @@ import grassAlpine4TextureUrl from '../../assets/doodads/grass_alpine4.png';
 import tallGrassAlpineATextureUrl from '../../assets/doodads/tall_grass_alpine_a.png';
 import tallGrassAlpineBTextureUrl from '../../assets/doodads/tall_grass_alpine_b.png';
 
-// Beach grass assets
-import tallGrassBeachATextureUrl from '../../assets/doodads/tall_grass_beach_a.png';
+// Beach grass — 8-frame horizontal strip (2048×256, 256×256 per frame)
+import animTallGrassBeachATextureUrl from '../../assets/doodads/anim_tall_grass_beach_a.png';
 
 // =============================================================================
 // GRASS RENDERING CONSTANTS
@@ -126,7 +126,6 @@ const SWAYING_GRASS_TYPES = new Set<string>([
     'AlpinePatchD', // Will be available after bindings regeneration
     'TallGrassAlpineA', // Will be available after bindings regeneration
     'TallGrassAlpineB', // Will be available after bindings regeneration
-    'BeachGrassA', // Beach dune grass - sways in coastal wind
 ]);
 
 // Grass types that should NOT have static rotation
@@ -148,13 +147,21 @@ const DEFAULT_SWAY_MULT = 0.15;
 const SWAY_CACHE_MAX_SIZE = 64; // Limit growth when traveling across many chunks
 let swayCacheChunkWeatherRef: Map<string, unknown> | undefined;
 const swayMultiplierCache = new Map<number, number>();
+const weatherAnimSpeedCache = new Map<number, number>();
 
-function getWeatherSwayMultiplier(chunkWeather: Map<string, { currentWeather?: { tag?: string } }> | undefined, chunkIndex: number): number {
-    if (!chunkWeather) return 1.0;
+type ChunkWeatherMap = Map<string, { currentWeather?: { tag?: string } }>;
+
+function syncChunkWeatherCaches(chunkWeather: ChunkWeatherMap): void {
     if (swayCacheChunkWeatherRef !== chunkWeather) {
         swayCacheChunkWeatherRef = chunkWeather;
         swayMultiplierCache.clear();
+        weatherAnimSpeedCache.clear();
     }
+}
+
+function getWeatherSwayMultiplier(chunkWeather: ChunkWeatherMap | undefined, chunkIndex: number): number {
+    if (!chunkWeather) return 1.0;
+    syncChunkWeatherCaches(chunkWeather);
     const cached = swayMultiplierCache.get(chunkIndex);
     if (cached !== undefined) return cached;
     if (swayMultiplierCache.size >= SWAY_CACHE_MAX_SIZE) swayMultiplierCache.clear();
@@ -163,6 +170,49 @@ function getWeatherSwayMultiplier(chunkWeather: Map<string, { currentWeather?: {
     const mult = SWAY_BY_TAG[tag] ?? DEFAULT_SWAY_MULT;
     swayMultiplierCache.set(chunkIndex, mult);
     return mult;
+}
+
+// Beach grass strip animation: faster playback in rain/storm (replaces rotational sway)
+const ANIM_SPEED_BY_TAG: Record<string, number> = {
+    Clear: 0.85,
+    LightRain: 1.05,
+    ModerateRain: 1.3,
+    HeavyRain: 1.65,
+    HeavyStorm: 2.35,
+};
+const DEFAULT_ANIM_SPEED_MULT = 0.85;
+
+const BEACH_GRASS_TAG = GrassAppearanceType.BeachGrassA.tag;
+const BEACH_GRASS_FRAME_COUNT = 8;
+const BEACH_GRASS_FRAME_W = 256;
+const BEACH_GRASS_FRAME_H = 256;
+/** Base filmstrip frame advances per second at anim speed multiplier 1.0 */
+const BEACH_GRASS_BASE_FPS = 9.5;
+
+function getWeatherAnimSpeedMultiplier(chunkWeather: ChunkWeatherMap | undefined, chunkIndex: number): number {
+    if (!chunkWeather) return 1.0;
+    syncChunkWeatherCaches(chunkWeather);
+    const cached = weatherAnimSpeedCache.get(chunkIndex);
+    if (cached !== undefined) return cached;
+    if (weatherAnimSpeedCache.size >= SWAY_CACHE_MAX_SIZE) weatherAnimSpeedCache.clear();
+    const weather = chunkWeather.get(String(chunkIndex));
+    const wtag = weather?.currentWeather?.tag ?? 'Clear';
+    const mult = ANIM_SPEED_BY_TAG[wtag] ?? DEFAULT_ANIM_SPEED_MULT;
+    weatherAnimSpeedCache.set(chunkIndex, mult);
+    return mult;
+}
+
+function beachGrassFrameIndex(
+    nowMs: number,
+    swayOffsetSeed: number,
+    chunkWeather: ChunkWeatherMap | undefined,
+    chunkIndex: number
+): number {
+    const weatherMult = getWeatherAnimSpeedMultiplier(chunkWeather, chunkIndex);
+    const fps = BEACH_GRASS_BASE_FPS * weatherMult;
+    const startFrame = Math.abs(swayOffsetSeed) % BEACH_GRASS_FRAME_COUNT;
+    const globalFrame = Math.floor((nowMs / 1000) * fps);
+    return (globalFrame + startFrame) % BEACH_GRASS_FRAME_COUNT;
 }
 
 // =============================================================================
@@ -190,8 +240,8 @@ const grassAssetPaths: Record<string, string> = {
     'AlpinePatchD': grassAlpine4TextureUrl,
     'TallGrassAlpineA': tallGrassAlpineATextureUrl,
     'TallGrassAlpineB': tallGrassAlpineBTextureUrl,
-    // Beach grass variants
-    'BeachGrassA': tallGrassBeachATextureUrl,
+    // Beach grass variants (animated strip)
+    [GrassAppearanceType.BeachGrassA.tag]: animTallGrassBeachATextureUrl,
 };
 
 const grassTargetWidths: Record<string, number> = {
@@ -222,8 +272,8 @@ const grassTargetWidths: Record<string, number> = {
     'TallGrassAlpineA': 64,     // Smaller variant - rendered at half size
     'TallGrassAlpineB': 64,     // Smaller variant - rendered at half size
 
-    // Beach grass variants - rendered larger for better visibility
-    'BeachGrassA': 256,
+    // Beach grass variants - rendered larger for better visibility (square frame from strip)
+    [GrassAppearanceType.BeachGrassA.tag]: 256,
 };
 const DEFAULT_GRASS_WIDTH = 72; // Default for any unmapped types
 
@@ -268,8 +318,8 @@ function isInViewport(
 
 /**
  * Renders a single grass entity with LOD-based optimizations.
- * Sway amplitude scales with chunk weather: Clear = minimal, storms = dramatic.
- * @param chunkWeather - Optional map of chunk weather for weather-dependent sway (chunkIndex -> weather)
+ * Sway amplitude scales with chunk weather for swaying types. Beach grass uses strip animation instead of sway; animation speed scales with chunk weather.
+ * @param chunkWeather - Optional map of chunk weather (chunkIndex -> weather)
  */
 export function renderGrass(
     ctx: CanvasRenderingContext2D,
@@ -279,7 +329,7 @@ export function renderGrass(
     onlyDrawShadow?: boolean,
     _skipDrawingShadow?: boolean,
     lodLevel: LODLevel = 'near',
-    chunkWeather?: Map<string, { currentWeather?: { tag?: string } }>
+    chunkWeather?: ChunkWeatherMap
 ) {
     // Early exits
     if (grass.health <= 0 || onlyDrawShadow || lodLevel === 'cull') return;
@@ -300,11 +350,18 @@ export function renderGrass(
         return;
     }
 
-    // Calculate dimensions
+    const isBeachGrassStrip = tag === BEACH_GRASS_TAG;
+    const beachFrame = isBeachGrassStrip
+        ? beachGrassFrameIndex(nowMs, grass.swayOffsetSeed, chunkWeather, grass.chunkIndex)
+        : 0;
+
+    // Calculate dimensions (beach uses one square frame from the horizontal strip)
     const baseWidth = grassTargetWidths[tag] || DEFAULT_GRASS_WIDTH;
     const scaleFactor = lodLevel === 'far' ? 0.8 : 1.0;
     const targetWidth = baseWidth * scaleFactor;
-    const targetHeight = img.naturalHeight * (targetWidth / img.naturalWidth);
+    const targetHeight = isBeachGrassStrip
+        ? targetWidth * (BEACH_GRASS_FRAME_H / BEACH_GRASS_FRAME_W)
+        : img.naturalHeight * (targetWidth / img.naturalWidth);
 
     // Seed-based deterministic offsets
     const seed = grass.swayOffsetSeed;
@@ -313,10 +370,28 @@ export function renderGrass(
     // Per-instance Y offsets make identical grass types sort differently.
     const offsetY = 0;
 
+    const drawGrassSprite = (dx: number, dy: number, dw: number, dh: number) => {
+        if (isBeachGrassStrip) {
+            const sx = beachFrame * BEACH_GRASS_FRAME_W;
+            ctx.drawImage(
+                img,
+                sx,
+                0,
+                BEACH_GRASS_FRAME_W,
+                BEACH_GRASS_FRAME_H,
+                dx,
+                dy,
+                dw,
+                dh
+            );
+        } else {
+            ctx.drawImage(img, dx, dy, dw, dh);
+        }
+    };
+
     // For FAR LOD: direct draw without transforms
     if (lodLevel === 'far') {
-        ctx.drawImage(
-            img,
+        drawGrassSprite(
             grass.serverPosX - targetWidth * 0.5 + offsetX,
             grass.serverPosY - targetHeight + Y_SORT_OFFSET_GRASS + offsetY,
             targetWidth,
@@ -331,8 +406,7 @@ export function renderGrass(
     
     // PERFORMANCE MODE: Skip all transforms for maximum performance
     if (!ENABLE_GRASS_SWAY_TRANSFORMS) {
-        // Direct draw - fastest path, no transforms at all
-        ctx.drawImage(img, anchorX - targetWidth * 0.5, anchorY - targetHeight, targetWidth, targetHeight);
+        drawGrassSprite(anchorX - targetWidth * 0.5, anchorY - targetHeight, targetWidth, targetHeight);
         return;
     }
 
@@ -380,15 +454,13 @@ export function renderGrass(
     const needsTransform = Math.abs(totalRotationDeg) > 0.1 || Math.abs(scale - 1) > 0.01;
     
     if (!needsTransform) {
-        // Direct draw - most common fast path
-        ctx.drawImage(img, anchorX - targetWidth * 0.5, anchorY - targetHeight, targetWidth, targetHeight);
+        drawGrassSprite(anchorX - targetWidth * 0.5, anchorY - targetHeight, targetWidth, targetHeight);
     } else {
-        // Full transform path
         ctx.save();
         ctx.translate(anchorX, anchorY);
         if (totalRotationDeg !== 0) ctx.rotate(totalRotationDeg * DEG_TO_RAD);
         if (scale !== 1) ctx.scale(scale, scale);
-        ctx.drawImage(img, -targetWidth * 0.5, -targetHeight, targetWidth, targetHeight);
+        drawGrassSprite(-targetWidth * 0.5, -targetHeight, targetWidth, targetHeight);
         ctx.restore();
     }
 }
@@ -419,7 +491,7 @@ export function renderGrassEntities(
     viewportHeight: number,
     onlyDrawShadow?: boolean,
     _skipDrawingShadow?: boolean,
-    chunkWeather?: Map<string, { currentWeather?: { tag?: string } }>
+    chunkWeather?: ChunkWeatherMap
 ) {
     // Update frame counter (single increment per batch)
     frameCounter++;
@@ -575,7 +647,7 @@ export function renderGrassFromInterpolation(
     cameraY?: number,
     _viewportWidth?: number,
     _viewportHeight?: number,
-    chunkWeather?: Map<string, { currentWeather?: { tag?: string } }>
+    chunkWeather?: ChunkWeatherMap
 ) {
     // Calculate LOD if camera position provided
     let lodLevel: LODLevel = 'near';

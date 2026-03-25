@@ -53,6 +53,7 @@ interface UseGameCanvasInteractionRuntimeOptions {
   onProfilerCopied?: () => void;
   onDodgeRollStart?: (moveX: number, moveY: number) => void;
   localOptimisticDodgeRollStartMsRef: MutableRefObject<number>;
+  localOptimisticJumpPressMsRef: MutableRefObject<number>;
   canvasRef: RefObject<HTMLCanvasElement | null>;
   activeEquipments: Map<string, any>;
   placementInfo: any;
@@ -197,6 +198,7 @@ export function useGameCanvasInteractionRuntime(options: UseGameCanvasInteractio
     predictedPosition: options.predictedPosition,
     getCurrentPositionNow: options.getCurrentPositionNow,
     onDodgeRollStart: handleDodgeRollStart,
+    localOptimisticJumpPressMsRef: options.localOptimisticJumpPressMsRef,
     activeEquipments: options.activeEquipments,
     itemDefinitions: options.itemDefinitions,
     inventoryItems: options.inventoryItems,

@@ -72,7 +72,8 @@ const networkMonitor = new NetworkPerformanceMonitor();
 interface PlayerActionsContextState {
     // Movement actions
     updatePlayerPosition: (moveX: number, moveY: number) => void;
-    jump: () => void;
+    /** Returns true if a jump reducer was dispatched (not throttled / not disconnected). */
+    jump: () => boolean;
     setSprinting: (isSprinting: boolean) => void;
     
     // Auto-walking state and controls - RESTORED
@@ -94,7 +95,9 @@ const PlayerActionsContext = createContext<PlayerActionsContextState | undefined
 // Throttling constants for performance
 const MOVEMENT_THROTTLE_MS = 16; // ~60fps max for movement updates
 const VIEWPORT_THROTTLE_MS = 200; // Slower viewport updates
-const JUMP_THROTTLE_MS = 500; // Prevent jump spam
+// Must match server `JUMP_COOLDOWN_MS` (300ms in player_stats.rs). Lower values let a second
+// `jump` reducer fire before the server accepts it → optimistic arc plays but authority rejects → "double hop".
+const JUMP_THROTTLE_MS = 310;
 const AUTO_ACTION_THROTTLE_MS = 1000; // Prevent auto-action spam
 
 export const PlayerActionsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -156,13 +159,12 @@ export const PlayerActionsProvider: React.FC<{ children: ReactNode }> = ({ child
     }, [connection]);
 
     // Performance-monitored jump action
-    const jump = useCallback(() => {
+    const jump = useCallback((): boolean => {
         const callStartTime = performance.now();
-        
         try {
             if (!connection?.isConnected) {
                 console.warn(`⚠️ [PlayerActions] Jump called but connection not ready`);
-                return;
+                return false;
             }
 
             const now = Date.now();
@@ -170,14 +172,15 @@ export const PlayerActionsProvider: React.FC<{ children: ReactNode }> = ({ child
             // Throttle rapid jump calls
             if (now - lastJumpCall.current < JUMP_THROTTLE_MS) {
                 networkMonitor.logThrottledCall('jump');
-                return;
+                return false;
             }
 
             lastJumpCall.current = now;
             connection.connection?.reducers.jump({});
-
+            return true;
         } catch (error) {
             console.error(`❌ [PlayerActions] Error in jump:`, error);
+            return false;
         } finally {
             const callTime = performance.now() - callStartTime;
             networkMonitor.logNetworkCall(callTime, 'jump');
@@ -376,7 +379,7 @@ export const PlayerActionsProvider: React.FC<{ children: ReactNode }> = ({ child
 // Fallback singleton to avoid creating new objects on every call when context is unavailable
 const FALLBACK_ACTIONS: PlayerActionsContextState = {
     updatePlayerPosition: (_x: number, _y: number) => {},
-    jump: () => {},
+    jump: () => false,
     setSprinting: (_isSprinting: boolean) => {},
     isAutoWalking: false,
     toggleAutoWalk: () => {},

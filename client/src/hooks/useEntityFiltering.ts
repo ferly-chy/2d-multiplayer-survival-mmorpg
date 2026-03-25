@@ -2076,10 +2076,23 @@ export function useEntityFiltering(
         cachedEntity._ySortKey = latestAnimal.posY;
       }
 
+      // Split-render: bottom-half list must stay aligned with who is actually emitted as
+      // `swimmingPlayerTopHalf` in the cached entity list. Stale `swimmingPlayersForBottomHalf`
+      // while entities still carry swim markers caused legs to never draw in the prep pass.
+      const swimBottomFromCachedEntities: SpacetimeDBPlayer[] = [];
+      for (const ent of ySortedCache.entities as YSortedEntityWithKey[]) {
+        if (ent.type === 'swimmingPlayerTopHalf' && ent.entity) {
+          swimBottomFromCachedEntities.push(ent.entity as SpacetimeDBPlayer);
+        }
+      }
+
       // Use cached result - huge performance gain!
       return {
         entities: ySortedCache.entities as YSortedEntityType[],
-        swimmingPlayersForBottomHalf: ySortedCache.swimmingPlayersForBottomHalf
+        swimmingPlayersForBottomHalf:
+          swimBottomFromCachedEntities.length > 0
+            ? swimBottomFromCachedEntities
+            : ySortedCache.swimmingPlayersForBottomHalf,
       };
     }
     

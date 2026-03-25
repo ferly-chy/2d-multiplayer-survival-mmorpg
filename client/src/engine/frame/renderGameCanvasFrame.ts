@@ -21,6 +21,25 @@ import {
   renderTranslatedWorldExtrasOverCampfireOverlay,
 } from './renderTranslatedWorldExtras';
 
+/**
+ * Prep-pass bottom halves must match every `swimmingPlayerTopHalf` in the Y-sort list.
+ * Merges with the ref list so a one-frame ref/sort mismatch still draws legs.
+ */
+function resolveSwimmingPlayersForBottomHalf(ySortedEntities: any[], refList: any[]): any[] {
+  const map = new Map<string, any>();
+  for (const item of ySortedEntities) {
+    if (item?.type === 'swimmingPlayerTopHalf' && item.entity?.identity) {
+      map.set(item.entity.identity.toHexString(), item.entity);
+    }
+  }
+  for (const p of refList) {
+    if (!p?.identity) continue;
+    const id = p.identity.toHexString();
+    if (!map.has(id)) map.set(id, p);
+  }
+  return Array.from(map.values());
+}
+
 export function renderGameCanvasFrame(args: any): void {
   const frameStartTime = performance.now();
   const {
@@ -85,6 +104,7 @@ export function renderGameCanvasFrame(args: any): void {
     hoveredPlayerIds,
     handlePlayerHover,
     localOptimisticDodgeRollStartMsRef,
+    localOptimisticJumpPressMsRef,
     playerDodgeRollStates,
     foundationTileImagesRef,
     wallCells,
@@ -317,7 +337,10 @@ export function renderGameCanvasFrame(args: any): void {
     }
   }
 
-  const swimmingPlayersForBottomHalf = args.swimmingPlayersForBottomHalfRef.current;
+  const swimmingPlayersForBottomHalf = resolveSwimmingPlayersForBottomHalf(
+    currentYSortedEntities as any[],
+    args.swimmingPlayersForBottomHalfRef.current,
+  );
   const {
     t0: _t0,
     t1: _t1,
@@ -372,6 +395,7 @@ export function renderGameCanvasFrame(args: any): void {
     heroCrouchImage: heroCrouchImageRef.current,
     heroDodgeImage: heroDodgeImageRef.current,
     currentIdleAnimationFrame,
+    currentWalkingAnimationFrame: currentAnimationFrame,
     activeConnections,
     worldMousePos,
     activeConsumableEffects,
@@ -421,6 +445,7 @@ export function renderGameCanvasFrame(args: any): void {
     currentCycleProgress,
     localPredictedDodgeRollVisualState,
     localOptimisticDodgeRollStartMs: localOptimisticDodgeRollStartMsRef.current,
+    localOptimisticJumpPressMsRef,
     renderPlayerCorpseFn: (props: any) => renderPlayerCorpse({ ...props, cycleProgress: currentCycleProgress, heroImageRef, heroWaterImageRef, heroCrouchImageRef }),
     localPlayer,
     currentPredictedPosition,
@@ -454,7 +479,7 @@ export function renderGameCanvasFrame(args: any): void {
     chunkWeather,
     seaTransitionTileLookup,
     waterTileLookup,
-    swimmingPlayersForBottomHalf: args.swimmingPlayersForBottomHalfRef.current,
+    swimmingPlayersForBottomHalf,
     swimmingPlayerScratchRef,
     swimmingPlayerTopHalfScratchRef: args.swimmingPlayerTopHalfScratchRef,
     visibleTrees,

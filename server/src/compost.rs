@@ -29,8 +29,22 @@ pub const COMPOST_MAX_HEALTH: f32 = 500.0;
 // Composting timing constants
 pub const COMPOST_PROCESS_INTERVAL_SECS: u64 = 60; // Process every minute
 pub const COMPOST_CONVERSION_TIME_SECS: u64 = 300; // 5 minutes to convert items to fertilizer
-pub const COMPOST_FERTILIZER_PER_ITEM: u32 = 1; // Each compostable item produces 1 fertilizer
-pub const COMPOST_FERTILIZER_SPOILED_MULTIPLIER: u32 = 3; // Spoiled items give 3x fertilizer (already breaking down)
+pub const COMPOST_FERTILIZER_PER_ITEM: u32 = 1; // Baseline: each compostable unit produces this much fertilizer
+/// Spoiled food is already breaking down — highest yield.
+pub const COMPOST_FERTILIZER_SPOILED_MULTIPLIER: u32 = 3;
+/// Burnt (but not fully ashed) organic matter is carbon-rich — better than fresh/cooked for compost, but below spoiled.
+pub const COMPOST_FERTILIZER_BURNT_MULTIPLIER: u32 = 2;
+
+/// Fertilizer units produced per composted stack unit (Charcoal is not compostable — use burnt food for this path).
+fn compost_fertilizer_units_per_converted_item(item_def: &ItemDefinition) -> u32 {
+    if item_def.name.starts_with("Spoiled ") {
+        COMPOST_FERTILIZER_PER_ITEM.saturating_mul(COMPOST_FERTILIZER_SPOILED_MULTIPLIER)
+    } else if item_def.name.starts_with("Burnt ") {
+        COMPOST_FERTILIZER_PER_ITEM.saturating_mul(COMPOST_FERTILIZER_BURNT_MULTIPLIER)
+    } else {
+        COMPOST_FERTILIZER_PER_ITEM
+    }
+}
 
 // --- Compost Schedule Table ---
 #[spacetimedb::table(accessor = compost_process_schedule, scheduled(process_compost_conversion))]
@@ -90,7 +104,7 @@ fn get_compost_timestamp(item: &InventoryItem) -> Option<Timestamp> {
 
 /// Checks if an item can be composted
 /// Allowed items: food (raw, cooked, burnt), plant fiber, plants (seeds, consumables with plant names)
-/// Excluded: Fertilizer (output of composting - cannot be re-composted)
+/// Excluded: Fertilizer (output of composting - cannot be re-composted); Charcoal is Material, not food — not compostable (burnt food is the high-yield compost path before full char).
 pub fn is_item_compostable(item_def: &ItemDefinition, item_instance: Option<&InventoryItem>) -> bool {
     // Explicitly exclude Fertilizer - it's the output of composting, not an input!
     if item_def.name == "Fertilizer" {
@@ -411,12 +425,7 @@ fn process_single_compost_box(
                             let elapsed_secs: u64 = elapsed_micros / 1_000_000;
                             if elapsed_secs >= COMPOST_CONVERSION_TIME_SECS {
                                 // Convert ONE unit at a time, not the entire stack
-                                // Spoiled items give higher fertilizer yield (already breaking down)
-                                let fertilizer_per_unit = if item_def.name.starts_with("Spoiled ") {
-                                    COMPOST_FERTILIZER_PER_ITEM * COMPOST_FERTILIZER_SPOILED_MULTIPLIER
-                                } else {
-                                    COMPOST_FERTILIZER_PER_ITEM
-                                };
+                                let fertilizer_per_unit = compost_fertilizer_units_per_converted_item(&item_def);
                                 fertilizer_to_add += fertilizer_per_unit;
                                 
                                 // Reduce quantity by 1

@@ -614,12 +614,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .respawn_time(240)
             .build(),
 
-        ItemBuilder::new("Burnt Human Flesh", "Overcooked human flesh. Charred and inedible.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Human Flesh", "Overcooked human flesh. Charred and inedible. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_human_meat.png")
             .stackable(10)
             .consumable(-5.0, 5.0, -15.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(14, 0)
+            .cookable(50.0, "Charcoal")
             .respawn_time(30)
             .build(),
 
@@ -640,12 +641,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(30.0, "Burnt Twigfish")
             .build(),
 
-        ItemBuilder::new("Burnt Twigfish", "A badly overcooked twigfish. Not very appetizing.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Twigfish", "A badly overcooked twigfish. Not very appetizing. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_twigfish.png")
             .stackable(10)
             .consumable(2.0, 5.0, 0.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(8, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // --- TIER 1: SMALL FISH (Common) ---
@@ -666,12 +668,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(25.0, "Burnt Herring")
             .build(),
 
-        ItemBuilder::new("Burnt Herring", "Overcooked herring. The oils have turned rancid and bitter.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Herring", "Overcooked herring. The oils have turned rancid and bitter. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_herring.png")
             .stackable(15)
             .consumable(3.0, 6.0, -3.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(6, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         ItemBuilder::new("Raw Smelt", "A small, oily fish also known as 'candlefish' because it's so fatty it can be lit like a candle. Best caught at night.", ItemCategory::Consumable)
@@ -690,12 +693,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(22.0, "Burnt Smelt")
             .build(),
 
-        ItemBuilder::new("Burnt Smelt", "Overcooked smelt. The excessive oil has caused it to char badly.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Smelt", "Overcooked smelt. The excessive oil has caused it to char badly. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_smelt.png")
             .stackable(15)
             .consumable(2.0, 8.0, -4.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(5, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // --- TIER 2: MEDIUM FISH (Uncommon) ---
@@ -716,12 +720,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(28.0, "Burnt Greenling")
             .build(),
 
-        ItemBuilder::new("Burnt Greenling", "Overcooked greenling. Dry and tough, but still edible in a pinch.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Greenling", "Overcooked greenling. Dry and tough, but still edible in a pinch. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_greenling.png")
             .stackable(10)
             .consumable(4.0, 10.0, -6.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(9, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         ItemBuilder::new("Raw Sculpin", "An ugly, spiny bottom-dweller found in deeper waters at night. Careful preparation required to avoid the venomous spines.", ItemCategory::Consumable)
@@ -740,12 +745,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(30.0, "Burnt Sculpin")
             .build(),
 
-        ItemBuilder::new("Burnt Sculpin", "Overcooked sculpin. The delicate flavor has been destroyed by excessive heat.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Sculpin", "Overcooked sculpin. The delicate flavor has been destroyed by excessive heat. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_sculpin.png")
             .stackable(10)
             .consumable(3.0, 8.0, -8.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(8, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         ItemBuilder::new("Raw Pacific Cod", "A large, flaky white fish and staple of northern fishing communities. Excellent nutrition when properly cooked.", ItemCategory::Consumable)
@@ -764,12 +770,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(32.0, "Burnt Pacific Cod")
             .build(),
 
-        ItemBuilder::new("Burnt Pacific Cod", "Overcooked cod. Dried out and tough, losing most of its appeal.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Pacific Cod", "Overcooked cod. Dried out and tough, losing most of its appeal. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_pacific_cod.png")
             .stackable(8)
             .consumable(5.0, 12.0, -5.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(12, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // --- TIER 3: LARGE FISH (Rare) ---
@@ -790,12 +797,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(30.0, "Burnt Dolly Varden")
             .build(),
 
-        ItemBuilder::new("Burnt Dolly Varden", "Overcooked char. What a waste of such a beautiful fish.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Dolly Varden", "Overcooked char. What a waste of such a beautiful fish. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_dolly_varden.png")
             .stackable(8)
             .consumable(6.0, 14.0, -4.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(11, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         ItemBuilder::new("Raw Rockfish", "A large, deep-water fish with striking red and orange coloring. Best caught at night when they rise from the depths.", ItemCategory::Consumable)
@@ -814,12 +822,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(32.0, "Burnt Rockfish")
             .build(),
 
-        ItemBuilder::new("Burnt Rockfish", "Overcooked rockfish. The firm flesh has become rubbery and unappetizing.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Rockfish", "Overcooked rockfish. The firm flesh has become rubbery and unappetizing. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_rockfish.png")
             .stackable(6)
             .consumable(6.0, 15.0, -6.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(14, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         ItemBuilder::new("Raw Steelhead", "A magnificent sea-run rainbow trout, prized for its fighting spirit. Most active at dawn and dusk.", ItemCategory::Consumable)
@@ -838,12 +847,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(30.0, "Burnt Steelhead")
             .build(),
 
-        ItemBuilder::new("Burnt Steelhead", "Overcooked steelhead. A tragic waste of such a magnificent fish.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Steelhead", "Overcooked steelhead. A tragic waste of such a magnificent fish. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_steelhead.png")
             .stackable(6)
             .consumable(7.0, 16.0, -5.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(13, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // --- TIER 4: PREMIUM FISH (Very Rare) ---
@@ -864,12 +874,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(32.0, "Burnt Pink Salmon")
             .build(),
 
-        ItemBuilder::new("Burnt Pink Salmon", "Overcooked salmon. Dry and lacking the delicate flavor it once had.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Pink Salmon", "Overcooked salmon. Dry and lacking the delicate flavor it once had. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_pink_salmon.png")
             .stackable(5)
             .consumable(8.0, 18.0, -4.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(15, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         ItemBuilder::new("Raw Sockeye Salmon", "A prized Pacific salmon with brilliant red flesh, rich in oils and nutrients. Caught during twilight hours.", ItemCategory::Consumable)
@@ -888,12 +899,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(35.0, "Burnt Sockeye Salmon")
             .build(),
 
-        ItemBuilder::new("Burnt Sockeye Salmon", "Overcooked sockeye. The beautiful red color has turned grey and the flesh is dry.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Sockeye Salmon", "Overcooked sockeye. The beautiful red color has turned grey and the flesh is dry. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_sockeye_salmon.png")
             .stackable(5)
             .consumable(9.0, 20.0, -3.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(16, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         ItemBuilder::new("Raw King Salmon", "The legendary Chinook salmon, largest of all Pacific salmon. An extremely rare and prized catch, best found at dawn.", ItemCategory::Consumable)
@@ -912,12 +924,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(38.0, "Burnt King Salmon")
             .build(),
 
-        ItemBuilder::new("Burnt King Salmon", "Overcooked king salmon. Even burnt, remnants of its exceptional quality remain.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt King Salmon", "Overcooked king salmon. Even burnt, remnants of its exceptional quality remain. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_king_salmon.png")
             .stackable(3)
             .consumable(12.0, 25.0, -2.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(18, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         ItemBuilder::new("Raw Halibut", "A massive flatfish from the deep ocean floor. Can grow to enormous sizes. Requires deep water fishing.", ItemCategory::Consumable)
@@ -936,12 +949,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(36.0, "Burnt Halibut")
             .build(),
 
-        ItemBuilder::new("Burnt Halibut", "Overcooked halibut. The thick flesh has dried out completely.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Halibut", "Overcooked halibut. The thick flesh has dried out completely. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_halibut.png")
             .stackable(3)
             .consumable(10.0, 22.0, -4.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(17, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // === SHELLFISH & INVERTEBRATES ===
@@ -962,12 +976,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(28.0, "Burnt Black Katy Chiton")
             .build(),
 
-        ItemBuilder::new("Burnt Black Katy Chiton", "Overcooked chiton. The tough meat has become rubbery and unappetizing.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Black Katy Chiton", "Overcooked chiton. The tough meat has become rubbery and unappetizing. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_black_katy_chiton.png")
             .stackable(15)
             .consumable(2.0, 5.0, -2.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(4, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         ItemBuilder::new("Raw Sea Urchin", "A spiny echinoderm found in rocky coastal areas. The orange roe inside is considered a delicacy, but requires careful handling.", ItemCategory::Consumable)
@@ -986,12 +1001,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(25.0, "Burnt Sea Urchin")
             .build(),
 
-        ItemBuilder::new("Burnt Sea Urchin", "Overcooked sea urchin. The delicate roe has been destroyed by excessive heat.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Sea Urchin", "Overcooked sea urchin. The delicate roe has been destroyed by excessive heat. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_sea_urchin.png")
             .stackable(15)
             .consumable(2.0, 6.0, -3.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(5, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         ItemBuilder::new("Raw Blue Mussel", "A common bivalve mollusk found attached to rocks and pilings. Filter-feeding mussels are abundant in coastal waters.", ItemCategory::Consumable)
@@ -1010,12 +1026,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(22.0, "Burnt Blue Mussel")
             .build(),
 
-        ItemBuilder::new("Burnt Blue Mussel", "Overcooked mussel. The tender meat has shriveled and become tough.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Blue Mussel", "Overcooked mussel. The tender meat has shriveled and become tough. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_blue_mussel.png")
             .stackable(20)
             .consumable(1.0, 3.0, -1.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(3, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // === ANIMAL MEAT ===
@@ -1033,12 +1050,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(25.0, "Burnt Fox Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Fox Meat", "Overcooked fox meat. Tough and charred.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Fox Meat", "Overcooked fox meat. Tough and charred. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_fox_meat.png")
             .stackable(15)
             .consumable(-4.0, 8.0, -12.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(10, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         ItemBuilder::new("Raw Wolf Meat", "Dense, dark meat from a wolf. Tough and gamy, but provides substantial nutrition even when raw.", ItemCategory::Consumable)
@@ -1055,12 +1073,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(30.0, "Burnt Wolf Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Wolf Meat", "Charred wolf meat. Ruined by overcooking.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Wolf Meat", "Charred wolf meat. Ruined by overcooking. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_wolf_meat.png")
             .stackable(12)
             .consumable(-6.0, 12.0, -18.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(16, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         ItemBuilder::new("Raw Viper Meat", "Stringy snake meat. Lean and nutritious, though it's much better when cooked.", ItemCategory::Consumable)
@@ -1077,12 +1096,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(20.0, "Burnt Viper Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Viper Meat", "Overcooked snake meat. Tough and unappetizing.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Viper Meat", "Overcooked snake meat. Tough and unappetizing. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_viper_meat.png")
             .stackable(20)
             .consumable(-3.0, 5.0, -10.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(8, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // === CRAB MEAT ===
@@ -1100,12 +1120,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(25.0, "Burnt Crab Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Crab Meat", "Overcooked crab meat. Rubbery and unappetizing.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Crab Meat", "Overcooked crab meat. Rubbery and unappetizing, but can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_crab_meat.png")
             .stackable(20)
             .consumable(-3.0, 8.0, -8.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(8, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // === BIRD MEAT ===
@@ -1123,12 +1144,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(25.0, "Burnt Tern Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Tern Meat", "Overcooked tern meat. Dry and tasteless.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Tern Meat", "Overcooked tern meat. Dry and tasteless. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_tern_meat.png")
             .stackable(20)
             .consumable(-2.0, 6.0, -6.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(6, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         ItemBuilder::new("Raw Crow Meat", "Dark, gamey meat from a crow. Has a strong, earthy flavor that cooking helps mellow.", ItemCategory::Consumable)
@@ -1145,12 +1167,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(25.0, "Burnt Crow Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Crow Meat", "Charred crow meat. Nearly inedible.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Crow Meat", "Charred crow meat. Nearly inedible. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_crow_meat.png")
             .stackable(20)
             .consumable(-3.0, 5.0, -7.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(5, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // === VOLE MEAT ===
@@ -1168,12 +1191,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(15.0, "Burnt Vole Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Vole Meat", "Charred vole scraps. Barely recognizable and not worth eating.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Vole Meat", "Charred vole scraps. Barely recognizable and not worth eating. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_vole_meat.png")
             .stackable(30)
             .consumable(-1.0, 2.0, -4.0)
             .preserved() // Burnt items are shelf-stable
             .crafting_output(3, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // === WOLVERINE MEAT ===
@@ -1191,12 +1215,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(35.0, "Burnt Wolverine Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Wolverine Meat", "Overcooked wolverine meat. The tough flesh has become even more leathery and unpleasant.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Wolverine Meat", "Overcooked wolverine meat. The tough flesh has become even more leathery and unpleasant. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_wolverine_meat.png")
             .stackable(10)
             .consumable(-8.0, 15.0, -20.0) // Harsh penalty for burning such valuable meat
             .preserved() // Burnt items are shelf-stable
             .crafting_output(18, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // === CARIBOU MEAT ===
@@ -1214,12 +1239,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(30.0, "Burnt Caribou Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Caribou Meat", "Overcooked caribou meat. The once-tender venison has become dry and charred.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Caribou Meat", "Overcooked caribou meat. The once-tender venison has become dry and charred. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_caribou_meat.png")
             .stackable(10)
             .consumable(-6.0, 18.0, -18.0) // Penalty for burning good meat
             .preserved() // Burnt items are shelf-stable
             .crafting_output(15, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // === WALRUS MEAT ===
@@ -1237,12 +1263,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(35.0, "Burnt Walrus Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Walrus Meat", "Overcooked walrus meat. The fatty meat has become greasy and unappetizing.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Walrus Meat", "Overcooked walrus meat. The fatty meat has become greasy and unappetizing. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_walrus_meat.png")
             .stackable(10)
             .consumable(-8.0, 20.0, -20.0) // Penalty for burning fatty meat
             .preserved() // Burnt items are shelf-stable
             .crafting_output(15, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // === BEAR MEAT (Alpine) ===
@@ -1260,12 +1287,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(35.0, "Burnt Bear Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Bear Meat", "Charred polar bear meat. The once-rich meat has become dry and bitter.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Bear Meat", "Charred polar bear meat. The once-rich meat has become dry and bitter. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_bear_meat.png")
             .stackable(10)
             .consumable(-8.0, 22.0, -22.0) // Penalty for burning premium meat
             .preserved() // Burnt items are shelf-stable
             .crafting_output(15, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // === HARE MEAT (Alpine) ===
@@ -1283,12 +1311,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(25.0, "Burnt Hare Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Hare Meat", "Overcooked hare meat. The delicate flesh has dried out completely.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Hare Meat", "Overcooked hare meat. The delicate flesh has dried out completely. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_hare_meat.png")
             .stackable(10)
             .consumable(-4.0, 12.0, -12.0) // Mild penalty - small portion
             .preserved() // Burnt items are shelf-stable
             .crafting_output(15, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // === OWL MEAT (Alpine) ===
@@ -1306,12 +1335,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(25.0, "Burnt Owl Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Owl Meat", "Charred owl meat. The lean bird meat has become tough and bitter.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Owl Meat", "Charred owl meat. The lean bird meat has become tough and bitter. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_owl_meat.png")
             .stackable(10)
             .consumable(-5.0, 10.0, -14.0) // Penalty for burning
             .preserved() // Burnt items are shelf-stable
             .crafting_output(15, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // === SHARK MEAT (Aquatic) ===
@@ -1329,12 +1359,13 @@ pub fn get_consumable_definitions() -> Vec<ItemDefinition> {
             .cookable(35.0, "Burnt Shark Meat")
             .build(),
 
-        ItemBuilder::new("Burnt Shark Meat", "Overcooked shark meat. The once-firm flesh has become rubbery and unpleasant.", ItemCategory::Consumable)
+        ItemBuilder::new("Burnt Shark Meat", "Overcooked shark meat. The once-firm flesh has become rubbery and unpleasant. Can be processed into charcoal.", ItemCategory::Consumable)
             .icon("burnt_shark_meat.png")
             .stackable(10)
             .consumable(-6.0, 15.0, -18.0) // Penalty for burning
             .preserved() // Burnt items are shelf-stable
             .crafting_output(15, 0)
+            .cookable(50.0, "Charcoal")
             .build(),
 
         // === JELLYFISH ITEMS (Aquatic) ===

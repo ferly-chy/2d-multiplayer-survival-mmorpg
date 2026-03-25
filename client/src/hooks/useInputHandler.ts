@@ -23,7 +23,7 @@
  * interaction check. Tap-to-walk and mobile controls supported.
  */
 
-import { useEffect, useRef, useState, useCallback, useMemo, RefObject } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, RefObject, MutableRefObject } from 'react';
 import { useLatest } from './useLatest';
 import { DbConnection } from '../generated';
 import {
@@ -151,6 +151,8 @@ interface InputHandlerProps {
     movementDirection: { x: number; y: number };
     isAutoWalking: boolean; // Auto-walk state for dodge roll detection
     onDodgeRollStart?: (moveX: number, moveY: number) => boolean | void; // Optional optimistic local dodge start hook; returns false to skip reducer call
+    /** Shared with canvas render (same pattern as dodge); immediate jump arc for local player. */
+    localOptimisticJumpPressMsRef?: MutableRefObject<number>;
     targetedFoundation: any | null; // ADDED: Targeted foundation for upgrade menu
     targetedWall: any | null; // ADDED: Targeted wall for upgrade menu
     targetedFence: any | null; // ADDED: Targeted fence for repair/demolish
@@ -270,6 +272,7 @@ export const useInputHandler = ({
     movementDirection,
     isAutoWalking, // Auto-walk state for dodge roll detection
     onDodgeRollStart,
+    localOptimisticJumpPressMsRef,
     targetedFoundation, // ADDED: Targeted foundation
     targetedWall, // ADDED: Targeted wall
     targetedFence, // ADDED: Targeted fence
@@ -297,6 +300,10 @@ export const useInputHandler = ({
     const isMouseDownRef = useRef<boolean>(false);
     const lastClientSwingAttemptRef = useRef<number>(0);
     const lastRangedFireTimeRef = useRef<number>(0); // ADDED: Track last ranged weapon fire time for auto-fire
+    /** Skip one game-loop melee tick after mousedown (mousedown + processInputs both used to swing). */
+    const suppressMeleeHeldTickAfterMouseDownRef = useRef<boolean>(false);
+    /** After a successful jump, ignore space for jump until keyup (avoids bounce / chord duplicates). */
+    const spaceJumpNeedsReleaseRef = useRef<boolean>(false);
     const eKeyDownTimestampRef = useRef<number>(0);
     const eKeyHoldTimerRef = useRef<NodeJS.Timeout | number | null>(null); // Use number for browser timeout ID
     const tapActionTriggeredOnKeyDownRef = useRef<boolean>(false); // Track if tap action was already triggered on keyDown
@@ -305,6 +312,8 @@ export const useInputHandler = ({
     // Use ref for jump offset to avoid re-renders every frame
     const currentJumpOffsetYRef = useRef<number>(0);
     const lastSyncedJumpOffsetYRef = useRef<number>(0);
+    const internalJumpOptFallbackRef = useRef<number>(0);
+    const jumpOptRef = localOptimisticJumpPressMsRef ?? internalJumpOptFallbackRef;
 
     const lastMovementDirectionRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 1 });
     const movementDirectionRef = useLatest(movementDirection);
@@ -768,11 +777,12 @@ export const useInputHandler = ({
             const nowUnarmed = Date.now();
             if (nowUnarmed - lastClientSwingAttemptRef.current < SWING_COOLDOWN_MS) return;
             if (nowUnarmed - Number(localEquipment?.swingStartTimeMs || 0) < SWING_COOLDOWN_MS) return;
+            lastClientSwingAttemptRef.current = nowUnarmed;
+            suppressMeleeHeldTickAfterMouseDownRef.current = true;
             try {
                 // 🎬 CLIENT-AUTHORITATIVE ANIMATION: Register swing immediately for smooth visuals
                 registerLocalPlayerSwing();
                 connectionRef.current.reducers.useEquippedItem({});
-                lastClientSwingAttemptRef.current = nowUnarmed;
             } catch (err) {
                 console.error("[attemptSwing Unarmed] Error calling useEquippedItem reducer:", err);
             }
@@ -787,6 +797,8 @@ export const useInputHandler = ({
             const attackIntervalMs = itemDef.attackIntervalSecs ? itemDef.attackIntervalSecs * 1000 : SWING_COOLDOWN_MS;
             if (now - lastClientSwingAttemptRef.current < attackIntervalMs) return;
             if (now - Number(localEquipment.swingStartTimeMs) < attackIntervalMs) return;
+            lastClientSwingAttemptRef.current = now;
+            suppressMeleeHeldTickAfterMouseDownRef.current = true;
             try {
                 // 🎬 CLIENT-AUTHORITATIVE ANIMATION: Register swing immediately for smooth visuals
                 registerLocalPlayerSwing();
@@ -874,7 +886,6 @@ export const useInputHandler = ({
                     (best as { trigger: () => void } | null)?.trigger();
                 }
                 connectionRef.current.reducers.useEquippedItem({});
-                lastClientSwingAttemptRef.current = now;
             } catch (err) {
                 console.error("[attemptSwing Armed] Error calling useEquippedItem reducer:", err);
             }
@@ -1066,6 +1077,7 @@ export const useInputHandler = ({
                     const isMoving = Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01 || isAutoWalkingRef.current;
 
                     if (isMoving) {
+                        spaceJumpNeedsReleaseRef.current = false;
                         if (localPlayerRef.current.isOnWater) {
                             console.log('[Input] Dodge roll blocked - player is on water');
                             return;
@@ -1087,10 +1099,18 @@ export const useInputHandler = ({
                         }
                     } else {
                         // Jump (only when truly stationary - no manual input AND no auto-walk)
+                        if (spaceJumpNeedsReleaseRef.current) {
+                            return;
+                        }
                         try {
-                            jump();
-                            console.log('[Input] Jump triggered (stationary)');
+                            // Optimistic ref only after reducer is actually sent (jump() applies server-aligned throttle).
+                            if (jump()) {
+                                jumpOptRef.current = Date.now();
+                                spaceJumpNeedsReleaseRef.current = true;
+                                console.log('[Input] Jump triggered (stationary)');
+                            }
                         } catch (err) {
+                            jumpOptRef.current = 0;
                             console.error("[InputHandler] Error calling jump:", err);
                         }
                     }
@@ -1432,6 +1452,10 @@ export const useInputHandler = ({
 
             // Movement key handling is now done by useMovementInput hook
             // Only handle non-movement keys here to avoid conflicts
+
+            if (event.code === 'Space') {
+                spaceJumpNeedsReleaseRef.current = false;
+            }
 
             if (key === 'e') {
                 if (isEHeldDownRef.current) { // Check if E was being held for an interaction
@@ -2081,25 +2105,24 @@ export const useInputHandler = ({
             if (isActivelyHolding) return;
             if (event.target !== canvasRef?.current) return;
 
-            // Use existing refs directly
+            // Use existing refs directly — skip canvas `click` for weapons/tools (same as ranged):
+            // `mousedown` already calls attemptSwing / attemptRangedFire, and the game loop repeats while held.
             if (connectionRef.current?.reducers && localPlayerId && localPlayerRef.current && activeEquipmentsRef.current && itemDefinitionsRef.current && worldMousePosRefInternal.current.x !== null && worldMousePosRefInternal.current.y !== null) {
                 const localEquipment = activeEquipmentsRef.current.get(localPlayerId);
                 const currentPlayer = localPlayerRef.current;
-                // CRITICAL: Use getCurrentPositionNow() for EXACT position at this moment
-                const exactPos = getCurrentPositionNowRef.current?.();
-                const fallbackPos = predictedPositionRef.current;
                 if (localEquipment?.equippedItemDefId && currentPlayer) {
                     const itemDef = itemDefinitionsRef.current.get(String(localEquipment.equippedItemDefId));
 
                     if (itemDef && (itemDef.name === "Hunting Bow" || itemDef.category === ItemCategory.RangedWeapon)) {
-                        // Ranged fire is handled in mousedown (and auto-fire loop) to avoid
-                        // click+mousedown double-shots on desktop.
                         return;
                     }
+                    // Any melee / tool / torch etc.: avoid click+mousedown duplicate reducer + double SFX/shake.
+                    return;
                 }
+                // Unarmed: mousedown path already swings; skip duplicate click dispatch.
+                return;
             }
 
-            // Unified melee dispatch: canvas click uses same path as mousedown/auto-attack
             attemptSwing();
         };
 
@@ -2282,7 +2305,8 @@ export const useInputHandler = ({
             // keysPressed.current.clear(); // Keep this commented out
             isMouseDownRef.current = false;
             isRightMouseDownRef.current = false; // Reset right mouse state
-            
+            spaceJumpNeedsReleaseRef.current = false;
+
             isEHeldDownRef.current = false;
             if (eKeyHoldTimerRef.current) clearTimeout(eKeyHoldTimerRef.current);
             eKeyHoldTimerRef.current = null;
@@ -2398,7 +2422,13 @@ export const useInputHandler = ({
         }
 
         // Fast idle path: skip heavy action checks when there is no active input/action state.
-        const hasJumpAnimation = currentLocalPlayer.jumpStartTimeMs > 0;
+        const isLocalPlayerForJump =
+            !!localPlayerId &&
+            currentLocalPlayer.identity.toHexString() === localPlayerId;
+        const hasOptimisticJump =
+            isLocalPlayerForJump && jumpOptRef.current > 0;
+        const hasJumpAnimation =
+            (currentLocalPlayer.jumpStartTimeMs ?? 0) > 0 || hasOptimisticJump;
         const hasActiveInteraction =
             isActivelyHolding ||
             isEHeldDownRef.current ||
@@ -2411,42 +2441,59 @@ export const useInputHandler = ({
             return;
         }
 
-        // --- Jump Offset Calculation (moved here for per-frame update) ---
-        // Note: Visual animation only, no cooldown logic (server handles that)
-        if (currentLocalPlayer && currentLocalPlayer.jumpStartTimeMs > 0) {
-            // Server handles all jump cooldown logic - we just show visual animation
-            const jumpStartTime = Number(currentLocalPlayer.jumpStartTimeMs);
+        // --- Jump Offset Calculation (per-frame; server authoritative for gameplay) ---
+        if (currentLocalPlayer && ((currentLocalPlayer.jumpStartTimeMs ?? 0) > 0 || hasOptimisticJump)) {
+            const jumpStartTime = Number(currentLocalPlayer.jumpStartTimeMs || 0);
             const playerId = currentLocalPlayer.identity.toHexString();
+            const isLocal = localPlayerId === playerId;
 
-            // Check if this is a NEW jump by comparing server timestamps
-            const lastKnownServerTime = lastKnownServerJumpTimes.current.get(playerId) || 0;
+            if (jumpStartTime > 0) {
+                const lastKnownServerTime = lastKnownServerJumpTimes.current.get(playerId) || 0;
 
-            if (jumpStartTime !== lastKnownServerTime) {
-                // NEW jump detected! Record both server time and client time
-                lastKnownServerJumpTimes.current.set(playerId, jumpStartTime);
-                clientJumpStartTimes.current.set(playerId, Date.now());
+                if (jumpStartTime !== lastKnownServerTime) {
+                    lastKnownServerJumpTimes.current.set(playerId, jumpStartTime);
+                    const opt = jumpOptRef.current;
+                    if (isLocal && opt > 0) {
+                        // Keep jumpOptRef until render merges server jump (renderingUtils clears
+                        // localOptimisticJumpPressMsRef). Clearing here runs before render and
+                        // forces a fresh clientJumpStartTimes=nowMs arc → double-hop visual.
+                        clientJumpStartTimes.current.set(playerId, opt);
+                    } else {
+                        clientJumpStartTimes.current.set(playerId, jumpStartTime);
+                    }
+                }
             }
 
-            // Calculate animation based on client time for smooth animation
-            const clientStartTime = clientJumpStartTimes.current.get(playerId);
+            let clientStartTime = clientJumpStartTimes.current.get(playerId);
+            if (isLocal && jumpOptRef.current > 0) {
+                const opt = jumpOptRef.current;
+                const elapsedOpt = Date.now() - opt;
+                if (elapsedOpt < JUMP_DURATION_MS) {
+                    clientStartTime = opt;
+                } else {
+                    jumpOptRef.current = 0;
+                }
+            }
+
             if (clientStartTime) {
                 const elapsedJumpTime = Date.now() - clientStartTime;
 
                 if (elapsedJumpTime < JUMP_DURATION_MS) {
                     const t = elapsedJumpTime / JUMP_DURATION_MS;
-                    const jumpOffset = Math.sin(t * Math.PI) * JUMP_HEIGHT_PX;
-                    currentJumpOffsetYRef.current = jumpOffset;
+                    currentJumpOffsetYRef.current = Math.sin(t * Math.PI) * JUMP_HEIGHT_PX;
                 } else {
-                    currentJumpOffsetYRef.current = 0; // Animation finished
+                    currentJumpOffsetYRef.current = 0;
                 }
+            } else {
+                currentJumpOffsetYRef.current = 0;
             }
         } else {
-            // No jump active - clean up
             if (currentLocalPlayer) {
                 const playerId = currentLocalPlayer.identity.toHexString();
                 clientJumpStartTimes.current.delete(playerId);
                 lastKnownServerJumpTimes.current.delete(playerId);
             }
+            jumpOptRef.current = 0;
             currentJumpOffsetYRef.current = 0;
         }
         // --- End Jump Offset Calculation ---
@@ -2458,6 +2505,13 @@ export const useInputHandler = ({
         if (isMouseDownRef.current && !placementInfo && !isChatting && !isSearchingCraftRecipes) {
             // 🎣 FISHING INPUT FIX: Disable continuous swing while fishing
             if (!isFishing) {
+                const heldMeleeSwingUnlessDuplicateOfMouseDown = () => {
+                    if (suppressMeleeHeldTickAfterMouseDownRef.current) {
+                        suppressMeleeHeldTickAfterMouseDownRef.current = false;
+                        return;
+                    }
+                    attemptSwing();
+                };
                 // Ranged vs melee: unified dispatch paths
                 const localPlayerActiveEquipment = localPlayerId ? activeEquipmentsRef.current?.get(localPlayerId) : undefined;
                 if (localPlayerActiveEquipment?.equippedItemDefId && itemDefinitionsRef.current) {
@@ -2469,10 +2523,10 @@ export const useInputHandler = ({
                         // Semi-auto weapons fire on click/mousedown path only.
                         // Avoid re-firing while mouse is held in per-frame loop.
                     } else {
-                        attemptSwing();
+                        heldMeleeSwingUnlessDuplicateOfMouseDown();
                     }
                 } else {
-                    attemptSwing();
+                    heldMeleeSwingUnlessDuplicateOfMouseDown();
                 }
             }
         }

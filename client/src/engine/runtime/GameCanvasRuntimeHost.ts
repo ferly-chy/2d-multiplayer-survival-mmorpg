@@ -52,6 +52,8 @@ export interface GameCanvasRuntimeControllerRefs {
   predictedPositionRef: MutableRefObject<{ x: number; y: number } | null>;
   localFacingDirectionRef: MutableRefObject<string | undefined>;
   localOptimisticDodgeRollStartMsRef: MutableRefObject<number>;
+  /** Wall-clock ms when local player pressed jump; render + input merge with server like dodge roll. */
+  localOptimisticJumpPressMsRef: MutableRefObject<number>;
   interpolatedCloudsRef: MutableRefObject<Map<string, any>>;
   cycleProgressRef: MutableRefObject<number>;
   ySortedEntitiesRef: MutableRefObject<any[]>;
@@ -150,6 +152,7 @@ export class GameCanvasRuntimeHost {
     predictedPositionRef: { current: null },
     localFacingDirectionRef: { current: undefined },
     localOptimisticDodgeRollStartMsRef: { current: 0 },
+    localOptimisticJumpPressMsRef: { current: 0 },
     interpolatedCloudsRef: { current: new Map() },
     cycleProgressRef: { current: 0.375 },
     ySortedEntitiesRef: { current: [] },

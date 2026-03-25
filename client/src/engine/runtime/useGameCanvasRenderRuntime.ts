@@ -234,6 +234,7 @@ export function useGameCanvasRenderRuntime({
     hoveredPlayerIds,
     handlePlayerHover,
     localOptimisticDodgeRollStartMsRef: controllerRuntime.localOptimisticDodgeRollStartMsRef,
+    localOptimisticJumpPressMsRef: controllerRuntime.localOptimisticJumpPressMsRef,
     playerDodgeRollStates: sceneRuntime.playerDodgeRollStates,
     foundationTileImagesRef: assets.foundationTileImagesRef,
     wallCells: sceneRuntime.wallCells,

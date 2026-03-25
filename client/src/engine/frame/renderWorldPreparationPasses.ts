@@ -80,6 +80,8 @@ interface RenderWorldPreparationPassesOptions {
   heroCrouchImage: HTMLImageElement | null;
   heroDodgeImage: HTMLImageElement | null;
   currentIdleAnimationFrame: number;
+  /** Walk/swim cycle while moving — matches main `renderYSortedEntities` player pass. */
+  currentWalkingAnimationFrame: number;
   activeConnections: Map<string, any> | null | undefined;
   worldMousePos: { x: number | null; y: number | null };
   activeConsumableEffects: Map<string, any>;
@@ -134,6 +136,7 @@ export function renderWorldPreparationPasses({
   heroCrouchImage,
   heroDodgeImage,
   currentIdleAnimationFrame,
+  currentWalkingAnimationFrame,
   activeConnections,
   worldMousePos,
   activeConsumableEffects,
@@ -239,62 +242,64 @@ export function renderWorldPreparationPasses({
     });
   }
 
-  if (allShadowsEnabled) {
-    swimmingPlayersForBottomHalf.forEach((player) => {
-      const playerId = player.identity.toHexString();
-      const isLocalPlayer = localPlayerId === playerId;
-      const playerForRendering = getPlayerForRendering(
-        player,
-        isLocalPlayer,
-        currentPredictedPosition,
-        currentLocalFacingDirection,
-        remotePlayerInterpolation,
+  // Split-render: bottom half must draw before the water overlay. This is NOT optional shadow work —
+  // gating it on allShadowsEnabled hid the swimmer's legs whenever shadows were disabled.
+  swimmingPlayersForBottomHalf.forEach((player) => {
+    const playerId = player.identity.toHexString();
+    const isLocalPlayer = localPlayerId === playerId;
+    const playerForRendering = getPlayerForRendering(
+      player,
+      isLocalPlayer,
+      currentPredictedPosition,
+      currentLocalFacingDirection,
+      remotePlayerInterpolation,
+      localPlayerId,
+      swimmingPlayerScratchRef.current,
+    );
+    const lastPos = lastPositionsRef.current?.get(playerId);
+    const moving = isPlayerMoving(lastPos, playerForRendering.positionX, playerForRendering.positionY);
+    const currentAnimFrame = moving ? currentWalkingAnimationFrame : currentIdleAnimationFrame;
+    // Do not update lastPositionsRef here — the top-half pass runs later in the same frame and must
+    // see the same previous position so `moving` matches. Updating here made the top use idle frames
+    // while the bottom used walk frames (legs animating faster than the torso).
+    const effectiveHeroImage = heroWaterImage || heroImage;
+
+    if (effectiveHeroImage) {
+      const isOnline = activeConnections ? activeConnections.has(playerId) : false;
+      const isHovered = worldMousePos ? isPlayerHovered(worldMousePos.x, worldMousePos.y, playerForRendering) : false;
+      const forceFullSpriteForLocalWaterEntry = isLocalPlayer && localWaterEntryGraceActive;
+
+      renderPlayer(
+        ctx,
+        playerForRendering,
+        effectiveHeroImage,
+        heroSprintImage || effectiveHeroImage,
+        heroIdleImage || effectiveHeroImage,
+        heroCrouchImage || effectiveHeroImage,
+        heroWaterImage || heroImage || effectiveHeroImage,
+        heroDodgeImage || effectiveHeroImage,
+        isOnline,
+        moving,
+        isHovered,
+        currentAnimFrame,
+        nowMs,
+        0,
+        alwaysShowPlayerNames || isHovered,
+        activeConsumableEffects,
         localPlayerId,
-        swimmingPlayerScratchRef.current,
+        false,
+        currentCycleProgress,
+        localPlayerIsCrouching,
+        forceFullSpriteForLocalWaterEntry ? 'full' : 'bottom',
+        false,
+        0,
+        false,
+        isSnorkeling,
+        undefined,
+        true,
       );
-      const lastPos = lastPositionsRef.current?.get(playerId);
-      const moving = isPlayerMoving(lastPos, playerForRendering.positionX, playerForRendering.positionY);
-      const currentAnimFrame = currentIdleAnimationFrame;
-      lastPositionsRef.current?.set(playerId, { x: playerForRendering.positionX, y: playerForRendering.positionY });
-      const effectiveHeroImage = heroWaterImage || heroImage;
-
-      if (effectiveHeroImage) {
-        const isOnline = activeConnections ? activeConnections.has(playerId) : false;
-        const isHovered = worldMousePos ? isPlayerHovered(worldMousePos.x, worldMousePos.y, playerForRendering) : false;
-        const forceFullSpriteForLocalWaterEntry = isLocalPlayer && localWaterEntryGraceActive;
-
-        renderPlayer(
-          ctx,
-          playerForRendering,
-          effectiveHeroImage,
-          heroSprintImage || effectiveHeroImage,
-          heroIdleImage || effectiveHeroImage,
-          heroCrouchImage || effectiveHeroImage,
-          heroWaterImage || heroImage || effectiveHeroImage,
-          heroDodgeImage || effectiveHeroImage,
-          isOnline,
-          moving,
-          isHovered,
-          currentAnimFrame,
-          nowMs,
-          0,
-          alwaysShowPlayerNames || isHovered,
-          activeConsumableEffects,
-          localPlayerId,
-          false,
-          currentCycleProgress,
-          localPlayerIsCrouching,
-          forceFullSpriteForLocalWaterEntry ? 'full' : 'bottom',
-          false,
-          0,
-          false,
-          isSnorkeling,
-          undefined,
-          true,
-        );
-      }
-    });
-  }
+    }
+  });
 
   swimmingPlayersForBottomHalf.forEach((player) => {
     const playerId = player.identity.toHexString();
@@ -325,10 +330,11 @@ export function renderWorldPreparationPasses({
     if (shadowImage) {
       const lastPos = lastPositionsRef.current?.get(playerId);
       const moving = isPlayerMoving(lastPos, playerForRendering.positionX, playerForRendering.positionY);
+      const swimAnimFrame = moving ? currentWalkingAnimationFrame : currentIdleAnimationFrame;
       const { sx, sy } = getSpriteCoordinates(
         playerForRendering,
         moving,
-        currentIdleAnimationFrame,
+        swimAnimFrame,
         false,
         TOTAL_SWIMMING_FRAMES,
         false,

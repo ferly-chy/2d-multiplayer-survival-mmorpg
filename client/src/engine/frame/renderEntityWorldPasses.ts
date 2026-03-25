@@ -14,6 +14,7 @@ import {
   renderFenceTargetIndicator,
 } from '../../utils/renderers/foundationRenderingUtils';
 import { isPlayerMoving } from '../../config/gameConfig';
+import type { MutableRefObject } from 'react';
 
 const LOCAL_DODGE_ROLL_VISUAL_DURATION_MS = 180;
 
@@ -48,6 +49,7 @@ interface RenderEntityWorldPassesOptions {
   currentCycleProgress: number;
   localPredictedDodgeRollVisualState: any;
   localOptimisticDodgeRollStartMs: number;
+  localOptimisticJumpPressMsRef: MutableRefObject<number>;
   renderPlayerCorpseFn: (props: any) => void;
   localPlayer: any;
   currentPredictedPosition: { x: number; y: number } | null;
@@ -128,6 +130,7 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
     currentCycleProgress,
     localPredictedDodgeRollVisualState,
     localOptimisticDodgeRollStartMs,
+    localOptimisticJumpPressMsRef,
     renderPlayerCorpseFn,
     localPlayer,
     currentPredictedPosition,
@@ -179,6 +182,7 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
   const projectileCollisionCircles = buildProjectileCollisionCircles(ySortedEntities);
   const flushBatch = (batch: any[]) => {
     if (batch.length > 0) {
+      const localOptimisticJumpPressMsSnapshot = localOptimisticJumpPressMsRef.current;
       renderYSortedEntities({
         ctx,
         ySortedEntities: batch,
@@ -210,6 +214,8 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
         localPredictedDodgeRollVisualState,
         localOptimisticDodgeRollStartMs,
         localOptimisticDodgeRollDurationMs: LOCAL_DODGE_ROLL_VISUAL_DURATION_MS,
+        localOptimisticJumpPressMs: localOptimisticJumpPressMsSnapshot,
+        localOptimisticJumpPressMsRef,
         renderPlayerCorpse: renderPlayerCorpseFn,
         localPlayerPosition: currentPredictedPosition ?? { x: localPlayer?.positionX ?? 0, y: localPlayer?.positionY ?? 0 },
         playerDodgeRollStates,
@@ -261,7 +267,7 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
     const isLocalTopHalf = playerId === localPlayerId;
     const lastPos = lastPositionsRef.current?.get(playerId);
     const moving = isPlayerMoving(lastPos, player.positionX, player.positionY);
-    const currentAnimFrame = currentIdleAnimationFrame;
+    const currentAnimFrame = moving ? currentAnimationFrame : currentIdleAnimationFrame;
     const heroImg: HTMLImageElement | null = heroWaterImageRef.current || heroImageRef.current;
 
     if (heroImg) {
@@ -336,6 +342,8 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
         undefined,
         true,
       );
+
+      lastPositionsRef.current?.set(playerId, { x: player.positionX, y: player.positionY });
 
       if (!itemBehindPlayer && canRenderItem && equipment) {
         renderSwimmingEquippedItem();

@@ -57,7 +57,7 @@ import {
 } from '../../generated/types';
 import { DbConnection } from '../../generated';
 import type { PlayerCorpse as SpacetimeDBPlayerCorpse } from '../../generated/types';
-import { gameConfig, JUMP_DURATION_MS } from '../../config/gameConfig';
+import { gameConfig, JUMP_DURATION_MS, JUMP_HEIGHT_PX } from '../../config/gameConfig';
 import { COMPOUND_BUILDINGS, isCompoundMonument } from '../../config/compoundBuildings';
 import { CompoundBuildingEntity } from '../../hooks/useEntityFiltering';
 import { YSortedEntityType } from '../../hooks/useEntityFiltering';
@@ -377,7 +377,8 @@ const GHOST_TRAIL_SPACING_MS = 15; // Add new ghost every 15ms
 const GHOST_TRAIL_FADE_MS = 200; // Fade out over 200ms
 
 // --- Client-side animation tracking ---
-const clientJumpStartTimes = new Map<string, number>(); // playerId -> client timestamp when jump started
+// Epoch-ms anchor for arc: optimistic press time (client) or server jump_start_time_ms (Unix).
+const clientJumpStartTimes = new Map<string, number>();
 const lastKnownServerJumpTimes = new Map<string, number>(); // playerId -> last known server timestamp
 
 interface RenderYSortedEntitiesProps {
@@ -413,6 +414,10 @@ interface RenderYSortedEntitiesProps {
   localPredictedDodgeRollVisualState?: { isDodgeRolling: boolean; progress: number; direction: string } | null;
   localOptimisticDodgeRollStartMs?: number;
   localOptimisticDodgeRollDurationMs?: number;
+  /** Wall-clock ms when local player pressed jump (snapshot for this render batch). */
+  localOptimisticJumpPressMs?: number;
+  /** Cleared after merging server jump into client timeline (same frame as dodge ref pattern). */
+  localOptimisticJumpPressMsRef?: { current: number };
   renderPlayerCorpse: (props: { 
       ctx: CanvasRenderingContext2D; 
       corpse: SpacetimeDBPlayerCorpse; 
@@ -508,6 +513,8 @@ export const renderYSortedEntities = ({
   localPredictedDodgeRollVisualState = null,
   localOptimisticDodgeRollStartMs = 0,
   localOptimisticDodgeRollDurationMs = 500,
+  localOptimisticJumpPressMs = 0,
+  localOptimisticJumpPressMsRef,
   renderPlayerCorpse: renderCorpse,
   localPlayerPosition,
   remotePlayerInterpolation,
@@ -865,37 +872,56 @@ export const renderYSortedEntities = ({
 
          let jumpOffset = 0;
          let isCurrentlyJumping = false;
-         const jumpStartTime = playerForRendering.jumpStartTimeMs;
-         
-         if (jumpStartTime > 0) {
-             const serverJumpTime = Number(jumpStartTime);
-             const playerId = playerForRendering.identity.toHexString();
-             
-             // Check if this is a NEW jump by comparing server timestamps
-             const lastKnownServerTime = lastKnownServerJumpTimes.get(playerId) || 0;
-             
-             if (serverJumpTime !== lastKnownServerTime) {
-                 // Jump detected: record both server time and client time
-                 lastKnownServerJumpTimes.set(playerId, serverJumpTime);
-                 clientJumpStartTimes.set(playerId, nowMs);
+         const jumpStartTimeVal = playerForRendering.jumpStartTimeMs;
+
+         // Local player: immediate arc from input (renderer used to wait only on server — full RTT delay).
+         if (isLocalPlayer && localOptimisticJumpPressMs > 0) {
+             const elapsedOpt = nowMs - localOptimisticJumpPressMs;
+             if (elapsedOpt >= 0 && elapsedOpt < JUMP_DURATION_MS) {
+                 const t = elapsedOpt / JUMP_DURATION_MS;
+                 jumpOffset = Math.sin(t * Math.PI) * JUMP_HEIGHT_PX;
+                 isCurrentlyJumping = true;
              }
-             
-             // Calculate animation based on client time
-             const clientStartTime = clientJumpStartTimes.get(playerId);
-             if (clientStartTime) {
-                 const elapsedJumpTime = nowMs - clientStartTime;
-                 
-                 if (elapsedJumpTime < JUMP_DURATION_MS) {
-                     const t = elapsedJumpTime / JUMP_DURATION_MS;
-                     jumpOffset = Math.sin(t * Math.PI) * 50;
-                     isCurrentlyJumping = true; // Player is mid-jump
+         }
+
+         if (jumpStartTimeVal > 0) {
+             const serverJumpTime = Number(jumpStartTimeVal);
+             const lastKnownServerTime = lastKnownServerJumpTimes.get(playerId) || 0;
+
+             if (serverJumpTime !== lastKnownServerTime) {
+                 lastKnownServerJumpTimes.set(playerId, serverJumpTime);
+                 if (isLocalPlayer && localOptimisticJumpPressMs > 0) {
+                     clientJumpStartTimes.set(playerId, localOptimisticJumpPressMs);
+                     if (localOptimisticJumpPressMsRef) {
+                         localOptimisticJumpPressMsRef.current = 0;
+                     }
+                 } else {
+                     // Use server Unix ms, not reception time. Server keeps jump_start_time_ms after
+                     // landing; if lastKnown was cleared, nowMs would restart the arc (phantom jump on move).
+                     clientJumpStartTimes.set(playerId, serverJumpTime);
+                 }
+             }
+
+             if (jumpOffset === 0) {
+                 const clientStartTime = clientJumpStartTimes.get(playerId);
+                 if (clientStartTime) {
+                     const elapsedJumpTime = nowMs - clientStartTime;
+                     if (elapsedJumpTime < JUMP_DURATION_MS) {
+                         const t = elapsedJumpTime / JUMP_DURATION_MS;
+                         jumpOffset = Math.sin(t * Math.PI) * JUMP_HEIGHT_PX;
+                         isCurrentlyJumping = true;
+                     }
                  }
              }
          } else {
-             // No jump active - clean up for this player
-             const playerId = playerForRendering.identity.toHexString();
-             clientJumpStartTimes.delete(playerId);
-             lastKnownServerJumpTimes.delete(playerId);
+             const optimisticMidAir =
+                 isLocalPlayer &&
+                 localOptimisticJumpPressMs > 0 &&
+                 nowMs - localOptimisticJumpPressMs < JUMP_DURATION_MS;
+             if (!optimisticMidAir) {
+                 clientJumpStartTimes.delete(playerId);
+                 lastKnownServerJumpTimes.delete(playerId);
+             }
          }
          
          // Dodge roll detection logic (animation timeline only)

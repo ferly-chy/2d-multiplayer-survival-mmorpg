@@ -991,13 +991,17 @@ export function renderWildAnimal({
         }
     }
 
-    // Legacy calculation for fallback
-    const serverLastHitTimeMs = serverLastHitTimePropMicros > 0n ? Number(serverLastHitTimePropMicros / 1000n) : 0;
-    const elapsedSinceServerHitMs = serverLastHitTimeMs > 0 ? (nowMs - serverLastHitTimeMs) : Infinity;
-
-    // Use new hit detection if available, otherwise fall back to old system (include optimistic)
-    const effectiveHitElapsed = isCurrentlyHit ? hitEffectElapsed : (hasActiveOptimisticShake && optimisticStart ? nowMs - optimisticStart : elapsedSinceServerHitMs);
-    const shouldShowCombatEffects = isCurrentlyHit || hasActiveOptimisticShake || elapsedSinceServerHitMs < ANIMAL_SHAKE_DURATION_MS;
+    // Same as players: do not key flash/shake off raw server lastHitTime (DOT ticks reset it).
+    const hitStateForEffects = animalHitStates.get(animalId);
+    let clientCombatEffectElapsed = hitStateForEffects ? nowMs - hitStateForEffects.effectStartTime : Infinity;
+    if (hasActiveOptimisticShake && optimisticStart !== undefined) {
+      clientCombatEffectElapsed = Math.min(clientCombatEffectElapsed, nowMs - optimisticStart);
+    }
+    const effectiveHitElapsed = clientCombatEffectElapsed;
+    const shouldShowCombatEffects =
+      isCurrentlyHit ||
+      hasActiveOptimisticShake ||
+      clientCombatEffectElapsed < ANIMAL_SHAKE_DURATION_MS;
 
     // --- Shake Logic ---
     let shakeX = 0;

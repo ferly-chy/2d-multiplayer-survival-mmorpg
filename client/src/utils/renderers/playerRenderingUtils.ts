@@ -145,7 +145,8 @@ function getCachedTextWidth(ctx: CanvasRenderingContext2D, font: string, text: s
 }
 
 // --- Client-side animation tracking ---
-const clientJumpStartTimes = new Map<string, number>(); // playerId -> client timestamp when jump started
+// Epoch-ms anchor: server jump_start_time_ms (Unix) or same for animation timing.
+const clientJumpStartTimes = new Map<string, number>();
 const lastKnownServerJumpTimes = new Map<string, number>(); // playerId -> last known server timestamp
 
 // --- Helper Functions --- 
@@ -621,13 +622,20 @@ export const renderPlayer = (
     }
   }
   
-  // Legacy calculation for fallback (but prioritize new system)
-  const serverLastHitTimeMs = serverLastHitTimePropMicros > 0n ? Number(serverLastHitTimePropMicros / 1000n) : 0;
-  const elapsedSinceServerHitMs = serverLastHitTimeMs > 0 ? (nowMs - serverLastHitTimeMs) : Infinity;
-  
-  // Use new hit detection if available, otherwise fall back to old system (include optimistic)
-  const effectiveHitElapsed = isCurrentlyHit ? hitEffectElapsed : (hasActiveOptimisticShake && optimisticStart ? nowMs - optimisticStart : elapsedSinceServerHitMs);
-  const shouldShowCombatEffects = isCurrentlyHit || hasActiveOptimisticShake || elapsedSinceServerHitMs < PLAYER_SHAKE_DURATION_MS;
+  // Flash/shake must use client-anchored timing only. Server `lastHitTime` updates on every
+  // DOT tick (bleed/burn, etc.); "time since server lastHitTime" stays tiny and would keep
+  // the white tint on for the whole effect duration.
+  // Re-read map so timing stays correct if hit state was removed above (local `hitState` can be stale).
+  const hitStateForEffects = playerHitStates.get(playerHexId);
+  let clientCombatEffectElapsed = hitStateForEffects ? nowMs - hitStateForEffects.effectStartTime : Infinity;
+  if (hasActiveOptimisticShake && optimisticStart !== undefined) {
+    clientCombatEffectElapsed = Math.min(clientCombatEffectElapsed, nowMs - optimisticStart);
+  }
+  const effectiveHitElapsed = clientCombatEffectElapsed;
+  const shouldShowCombatEffects =
+    isCurrentlyHit ||
+    hasActiveOptimisticShake ||
+    clientCombatEffectElapsed < PLAYER_SHAKE_DURATION_MS;
   // --- END NEW hit detection ---
 
   // Only apply knockback interpolation for NON-local players
@@ -751,9 +759,9 @@ export const renderPlayer = (
     const lastKnownServerTime = lastKnownServerJumpTimes.get(playerId) || 0;
     
     if (jumpStartTime !== lastKnownServerTime) {
-      // NEW jump detected! Record both server time and client time
       lastKnownServerJumpTimes.set(playerId, jumpStartTime);
-      clientJumpStartTimes.set(playerId, nowMs);
+      // Anchor to server Unix ms — not nowMs — so a cleared lastKnown map cannot fake a new jump.
+      clientJumpStartTimes.set(playerId, jumpStartTime);
     }
     
     // Calculate animation based on client time
@@ -823,7 +831,7 @@ export const renderPlayer = (
     dodgeRollProgress || 0
   );
   
-  // Shake Logic (directly uses elapsedSinceServerHitMs)
+  // Shake Logic (uses clientCombatEffectElapsed via effectiveHitElapsed)
   let shakeX = 0;
   let shakeY = 0;
   if (!isCorpse && !player.isDead && effectiveHitElapsed < PLAYER_SHAKE_DURATION_MS) {
@@ -857,7 +865,7 @@ export const renderPlayer = (
   const finalJumpOffsetY = isCorpse ? 0 : jumpOffsetY;
   const spriteDrawY = spriteBaseY - finalJumpOffsetY;
 
-  // Flash Logic (directly uses elapsedSinceServerHitMs)
+  // Flash Logic (uses clientCombatEffectElapsed via effectiveHitElapsed)
   const isFlashing = !isCorpse && !player.isDead && effectiveHitElapsed < PLAYER_HIT_FLASH_DURATION_MS;
 
   // Define shadow base offset here to be used by both online/offline
