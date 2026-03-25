@@ -438,6 +438,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   const particleRuntime = useGameCanvasParticleRuntime({
     localPlayer,
     sceneRuntime,
+    localPlayerId,
+    localFacingDirectionRef: controllerRuntime.localFacingDirectionRef,
   });
 
   useGameCanvasHostSyncRuntime({

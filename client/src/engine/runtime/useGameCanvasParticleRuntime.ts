@@ -1,4 +1,4 @@
-import { useMemo, useRef, useCallback } from 'react';
+import { useMemo, useRef, useCallback, type MutableRefObject } from 'react';
 import { useCampfireParticles } from '../../hooks/useCampfireParticles';
 import { useCampfireFireOverlayEmitters } from '../../hooks/useCampfireFireOverlayEmitters';
 import { useTorchParticles } from '../../hooks/useTorchParticles';
@@ -17,6 +17,9 @@ import type { GameCanvasRuntimeParticleSnapshot, GameCanvasRuntimeSceneSnapshot 
 interface UseGameCanvasParticleRuntimeOptions {
   localPlayer: any;
   sceneRuntime: GameCanvasRuntimeSceneSnapshot;
+  localPlayerId?: string;
+  /** Updated each simulation tick; torch CPU particles match client facing like the canvas. */
+  localFacingDirectionRef?: MutableRefObject<string | undefined>;
 }
 
 /**
@@ -28,6 +31,8 @@ interface UseGameCanvasParticleRuntimeOptions {
 export function useGameCanvasParticleRuntime({
   localPlayer,
   sceneRuntime,
+  localPlayerId,
+  localFacingDirectionRef,
 }: UseGameCanvasParticleRuntimeOptions): GameCanvasRuntimeParticleSnapshot {
   const memoryParticleGradientCacheRef = useRef<Map<string, CanvasGradient>>(new Map());
   const particleBucketsRef = useRef<{
@@ -81,6 +86,8 @@ export function useGameCanvasParticleRuntime({
     activeEquipments: sceneRuntime.activeEquipments,
     itemDefinitions: sceneRuntime.itemDefinitions,
     deltaTime: 0,
+    localPlayerId,
+    localFacingDirectionRef,
   });
 
   const fireArrowParticles = useFireArrowParticles({

@@ -7,6 +7,7 @@ import { preloadAnimalCorpseImages } from '../utils/renderers/animalCorpseRender
 import { preloadFumaroleImages } from '../utils/renderers/fumaroleRenderingUtils';
 import { preloadBasaltColumnImages } from '../utils/renderers/basaltColumnRenderingUtils';
 import { itemIcons } from '../utils/itemIconUtils';
+import { touchCampfireFireWebGLInit } from '../utils/renderers/campfireFireOverlayUtils';
 import foundationWoodTileUrl from '../assets/tiles/foundation_wood.png';
 import foundationTwigTileUrl from '../assets/tiles/foundation_twig.png';
 import foundationStoneTileUrl from '../assets/tiles/foundation_stone.png';
@@ -74,6 +75,7 @@ export function useGameCanvasAssetPreload({
   }, [itemImagesRef]);
 
   useEffect(() => {
+    touchCampfireFireWebGLInit();
     preloadMonumentImages();
     preloadCairnImages();
     preloadRoadLamppostImages();

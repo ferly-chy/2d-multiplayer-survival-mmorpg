@@ -476,11 +476,14 @@ export function renderGameCanvasFrame(args: any): void {
     buildCampfireBurningStateMap(visibleCampfiresMap, currentYSortedEntities as any[]),
     fireOverlayTimeMs,
   );
+  // Re-read ref here so torch fire anchor matches this frame’s facing (not server `player.direction`).
+  const torchLocalFacingNow = localFacingDirectionRef.current ?? currentLocalFacingDirection;
   const torchEmitters = buildTorchFireGpuOverlayEmitters({
     players,
     activeEquipments: args.activeEquipments,
     itemDefinitions,
     localPlayerId,
+    localFacingDirection: torchLocalFacingNow,
     localPredictedPosition: currentPredictedPosition,
     remotePlayerInterpolation,
     nowMs: fireOverlayTimeMs,

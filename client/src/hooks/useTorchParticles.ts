@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, type MutableRefObject } from 'react';
 import {
     Player as SpacetimeDBPlayer,
     ActiveEquipment as SpacetimeDBActiveEquipment,
@@ -51,6 +51,8 @@ export function useTorchParticles({
     activeEquipments,
     itemDefinitions,
     deltaTime, // Keep parameter for compatibility but won't use it
+    localPlayerId,
+    localFacingDirectionRef,
 }: UseTorchParticlesProps): Particle[] {
     const particlesRef = useRef<Particle[]>([]);
     const emissionAccumulatorRef = useRef<Map<string, number>>(new Map());
@@ -110,10 +112,15 @@ export function useTorchParticles({
                     let acc = emissionAccumulatorRef.current.get(playerId) || 0;
                     acc += TORCH_FIRE_PARTICLES_PER_FRAME * deltaTimeFactor;
 
+                    const directionForTorch =
+                        localPlayerId && playerId === localPlayerId
+                            ? localFacingDirectionRef?.current ?? player.direction ?? 'down'
+                            : player.direction ?? 'down';
+
                     const anchor = getTorchGpuFlameAnchorWorld({
                         worldX: player.positionX,
                         worldY: player.positionY,
-                        direction: player.direction ?? 'down',
+                        direction: directionForTorch,
                         jumpStartTimeMs: player.jumpStartTimeMs,
                         swingStartTimeMs: Number(equipment?.swingStartTimeMs ?? 0),
                         nowMs: now,
@@ -246,7 +253,7 @@ export function useTorchParticles({
                 cancelAnimationFrame(animationFrameRef.current);
             }
         };
-    }, [players, activeEquipments, itemDefinitions, torchLitStatesKey]); // Removed deltaTime from dependencies
+    }, [players, activeEquipments, itemDefinitions, torchLitStatesKey, localPlayerId, localFacingDirectionRef]);
 
     return particlesRef.current;
 } 

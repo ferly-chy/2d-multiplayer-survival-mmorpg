@@ -10,6 +10,29 @@ const MONUMENT_SCARECROW_CULL_DISTANCE_SQ = 200 * 200; // Only check within 200p
 const MAX_MONUMENT_SCARECROWS_TO_CHECK = 3;
 // Always use COLLISION_RADII.STORAGE_BOX (20) - ignore part.collisionRadius from DB (may be stale 64)
 const MONUMENT_SCARECROW_COLLISION_RADIUS = 20;
+/** Keep in sync with clientCollision COLLISION_DEBUG_VIEWPORT_MARGIN */
+const COLLISION_DEBUG_VIEWPORT_MARGIN = 480;
+
+type CollisionDebugViewportBounds = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+};
+
+function pointInDebugViewport(
+  x: number,
+  y: number,
+  vp: CollisionDebugViewportBounds,
+  margin: number = COLLISION_DEBUG_VIEWPORT_MARGIN
+): boolean {
+  return (
+    x >= vp.minX - margin &&
+    x <= vp.maxX + margin &&
+    y >= vp.minY - margin &&
+    y <= vp.maxY + margin
+  );
+}
 
 function isMonumentScarecrowPart(part: MonumentPart): boolean {
   return part.monumentType?.tag === 'HuntingVillage' && part.partType === 'scarecrow' && (part.collisionRadius ?? 0) > 0;
@@ -22,7 +45,8 @@ function isMonumentScarecrowPart(part: MonumentPart): boolean {
 export function getMonumentScarecrowCollisionShapes(
   monumentParts: Map<string, MonumentPart> | undefined,
   playerX: number,
-  playerY: number
+  playerY: number,
+  collisionDebugViewport?: CollisionDebugViewportBounds
 ): CollisionShape[] {
   if (!monumentParts || monumentParts.size === 0) return [];
 
@@ -30,13 +54,17 @@ export function getMonumentScarecrowCollisionShapes(
   let count = 0;
 
   for (const part of monumentParts.values()) {
-    if (count >= MAX_MONUMENT_SCARECROWS_TO_CHECK) break;
+    if (!collisionDebugViewport && count >= MAX_MONUMENT_SCARECROWS_TO_CHECK) break;
     if (!isMonumentScarecrowPart(part)) continue;
 
-    const dx = part.worldX - playerX;
-    const dy = part.worldY - playerY;
-    const distSq = dx * dx + dy * dy;
-    if (distSq > MONUMENT_SCARECROW_CULL_DISTANCE_SQ) continue;
+    if (collisionDebugViewport) {
+      if (!pointInDebugViewport(part.worldX, part.worldY, collisionDebugViewport)) continue;
+    } else {
+      const dx = part.worldX - playerX;
+      const dy = part.worldY - playerY;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > MONUMENT_SCARECROW_CULL_DISTANCE_SQ) continue;
+    }
 
     shapes.push({
       id: `monument_scarecrow_${part.id}`,
@@ -45,7 +73,7 @@ export function getMonumentScarecrowCollisionShapes(
       y: part.worldY,
       radius: MONUMENT_SCARECROW_COLLISION_RADIUS,
     });
-    count++;
+    if (!collisionDebugViewport) count++;
   }
 
   return shapes;
@@ -71,7 +99,8 @@ function isVillageCampfirePart(part: MonumentPart): boolean {
 export function getVillageCampfireCollisionShapes(
   monumentParts: Map<string, MonumentPart> | undefined,
   playerX: number,
-  playerY: number
+  playerY: number,
+  collisionDebugViewport?: CollisionDebugViewportBounds
 ): CollisionShape[] {
   if (!monumentParts || monumentParts.size === 0) return [];
 
@@ -79,22 +108,29 @@ export function getVillageCampfireCollisionShapes(
   let count = 0;
 
   for (const part of monumentParts.values()) {
-    if (count >= MAX_VILLAGE_CAMPFIRES_TO_CHECK) break;
+    if (!collisionDebugViewport && count >= MAX_VILLAGE_CAMPFIRES_TO_CHECK) break;
     if (!isVillageCampfirePart(part)) continue;
 
-    const dx = part.worldX - playerX;
-    const dy = part.worldY - playerY;
-    const distSq = dx * dx + dy * dy;
-    if (distSq > VILLAGE_CAMPFIRE_CULL_DISTANCE_SQ) continue;
+    const shapeCenterX = part.worldX;
+    const shapeCenterY = part.worldY + VILLAGE_CAMPFIRE_COLLISION_Y_OFFSET;
+
+    if (collisionDebugViewport) {
+      if (!pointInDebugViewport(shapeCenterX, shapeCenterY, collisionDebugViewport)) continue;
+    } else {
+      const dx = part.worldX - playerX;
+      const dy = part.worldY - playerY;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > VILLAGE_CAMPFIRE_CULL_DISTANCE_SQ) continue;
+    }
 
     shapes.push({
       id: `monument_campfire_${part.id}`,
       type: `monument_campfire-${part.id}`,
-      x: part.worldX,
-      y: part.worldY + VILLAGE_CAMPFIRE_COLLISION_Y_OFFSET,
+      x: shapeCenterX,
+      y: shapeCenterY,
       radius: VILLAGE_CAMPFIRE_COLLISION_RADIUS,
     });
-    count++;
+    if (!collisionDebugViewport) count++;
   }
 
   return shapes;

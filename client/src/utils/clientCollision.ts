@@ -5,7 +5,6 @@ import { getVillageCampfireCollisionShapes, getMonumentScarecrowCollisionShapes 
 import { gameConfig, FOUNDATION_TILE_SIZE, foundationCellToWorldCenter } from '../config/gameConfig';
 import { COMPOUND_BUILDINGS, getBuildingWorldPosition, isCompoundMonument } from '../config/compoundBuildings';
 import { ANIMAL_CORPSE_COLLISION_RADIUS } from './renderers/animalCorpseRenderingUtils';
-import { getWildAnimalClientRenderWorldCenter } from './renderers/wildAnimalRenderingUtils';
 
 // Add at top after imports:
 // Spatial filtering constants
@@ -116,6 +115,30 @@ const COLLISION_PERF = {
   EMERGENCY_MAX_ENTITIES: 10,
 };
 
+/** When collision debug uses the camera viewport, expand by this (world px) so large AABBs/radii still draw. */
+const COLLISION_DEBUG_VIEWPORT_MARGIN = 480;
+
+export type CollisionDebugViewportBounds = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+};
+
+function pointInsideCollisionDebugViewport(
+  x: number,
+  y: number,
+  vp: CollisionDebugViewportBounds,
+  margin: number = COLLISION_DEBUG_VIEWPORT_MARGIN
+): boolean {
+  return (
+    x >= vp.minX - margin &&
+    x <= vp.maxX + margin &&
+    y >= vp.minY - margin &&
+    y <= vp.maxY + margin
+  );
+}
+
 // Performance monitoring (DISABLED for performance)
 // let frameCounter = 0;
 // let lastPerformanceLog = 0;
@@ -134,31 +157,46 @@ function filterEntitiesByDistance<T extends { posX?: number; posY?: number; posi
   playerX: number,
   playerY: number,
   maxDistanceSq: number,
-  maxCount: number
+  maxCount: number,
+  collisionDebugViewport?: CollisionDebugViewportBounds
 ): T[] {
   if (!entities || entities.size === 0) return [];
-  
-  const effectiveMaxDistance = maxDistanceSq;
-  const effectiveMaxCount = maxCount;
+
   const result: T[] = [];
+
+  if (collisionDebugViewport) {
+    const vp = collisionDebugViewport;
+    const m = COLLISION_DEBUG_VIEWPORT_MARGIN;
+    const minX = vp.minX - m;
+    const maxX = vp.maxX + m;
+    const minY = vp.minY - m;
+    const maxY = vp.maxY + m;
+    for (const entity of entities.values()) {
+      const entityX = entity.posX ?? entity.positionX ?? 0;
+      const entityY = entity.posY ?? entity.positionY ?? 0;
+      if (entityX >= minX && entityX <= maxX && entityY >= minY && entityY <= maxY) {
+        result.push(entity);
+      }
+    }
+    return result;
+  }
+
   let count = 0;
-  
-  // Single pass: filter by distance and limit count without creating intermediate objects
   for (const entity of entities.values()) {
-    if (count >= effectiveMaxCount) break;
-    
+    if (count >= maxCount) break;
+
     const entityX = entity.posX ?? entity.positionX ?? 0;
     const entityY = entity.posY ?? entity.positionY ?? 0;
     const dx = entityX - playerX;
     const dy = entityY - playerY;
     const distanceSq = dx * dx + dy * dy;
-    
-    if (distanceSq <= effectiveMaxDistance) {
+
+    if (distanceSq <= maxDistanceSq) {
       result.push(entity);
       count++;
     }
   }
-  
+
   return result;
 }
 
@@ -169,7 +207,8 @@ function getCollisionCandidates(
   playerX: number,
   playerY: number,
   localPlayerId: string,
-  isOnSeaTile?: (worldX: number, worldY: number) => boolean
+  isOnSeaTile?: (worldX: number, worldY: number) => boolean,
+  collisionDebugViewport?: CollisionDebugViewportBounds
 ): CollisionShape[] {
   // PERFORMANCE FIX: Remove frameCounter++ to avoid unnecessary operations
   // frameCounter++;
@@ -187,7 +226,8 @@ function getCollisionCandidates(
     playerX,
     playerY,
     COLLISION_PERF.PLAYER_CULL_DISTANCE_SQ,
-    COLLISION_PERF.MAX_PLAYERS_TO_CHECK
+    COLLISION_PERF.MAX_PLAYERS_TO_CHECK,
+    collisionDebugViewport
   );
   
   for (const player of nearbyPlayers) {
@@ -210,7 +250,8 @@ function getCollisionCandidates(
     playerX,
     playerY,
     COLLISION_PERF.TREE_CULL_DISTANCE_SQ,
-    COLLISION_PERF.MAX_TREES_TO_CHECK
+    COLLISION_PERF.MAX_TREES_TO_CHECK,
+    collisionDebugViewport
   );
   
   for (const tree of nearbyTrees) {
@@ -232,7 +273,8 @@ function getCollisionCandidates(
     playerX,
     playerY,
     COLLISION_PERF.STONE_CULL_DISTANCE_SQ,
-    COLLISION_PERF.MAX_STONES_TO_CHECK
+    COLLISION_PERF.MAX_STONES_TO_CHECK,
+    collisionDebugViewport
   );
   
   for (const stone of nearbyStones) {
@@ -253,7 +295,8 @@ function getCollisionCandidates(
     playerX,
     playerY,
     COLLISION_PERF.RUNE_STONE_CULL_DISTANCE_SQ, // Use dedicated cull distance for larger rune stones
-    COLLISION_PERF.MAX_STONES_TO_CHECK
+    COLLISION_PERF.MAX_STONES_TO_CHECK,
+    collisionDebugViewport
   );
   
   for (const runeStone of nearbyRuneStones) {
@@ -274,7 +317,8 @@ function getCollisionCandidates(
     playerX,
     playerY,
     COLLISION_PERF.CAIRN_CULL_DISTANCE_SQ,
-    COLLISION_PERF.MAX_CAIRNS_TO_CHECK
+    COLLISION_PERF.MAX_CAIRNS_TO_CHECK,
+    collisionDebugViewport
   );
   
   for (const cairn of nearbyCairns) {
@@ -295,7 +339,8 @@ function getCollisionCandidates(
     playerX,
     playerY,
     COLLISION_PERF.ANIMAL_CULL_DISTANCE_SQ,
-    COLLISION_PERF.MAX_ANIMALS_TO_CHECK
+    COLLISION_PERF.MAX_ANIMALS_TO_CHECK,
+    collisionDebugViewport
   );
   
   for (const animal of nearbyAnimals) {
@@ -336,7 +381,8 @@ function getCollisionCandidates(
     playerX,
     playerY,
     COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ,
-    COLLISION_PERF.MAX_STRUCTURES_TO_CHECK
+    COLLISION_PERF.MAX_STRUCTURES_TO_CHECK,
+    collisionDebugViewport
   );
   
   for (const box of nearbyBoxes) {
@@ -374,7 +420,8 @@ function getCollisionCandidates(
     playerX,
     playerY,
     COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ,
-    COLLISION_PERF.MAX_STRUCTURES_TO_CHECK
+    COLLISION_PERF.MAX_STRUCTURES_TO_CHECK,
+    collisionDebugViewport
   );
   
   for (const barrel of nearbyBarrels) {
@@ -410,7 +457,8 @@ function getCollisionCandidates(
     playerX,
     playerY,
     COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ,
-    COLLISION_PERF.MAX_STRUCTURES_TO_CHECK
+    COLLISION_PERF.MAX_STRUCTURES_TO_CHECK,
+    collisionDebugViewport
   );
   
   for (const furnace of nearbyFurnaces) {
@@ -449,7 +497,8 @@ function getCollisionCandidates(
       playerX,
       playerY,
       COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ,
-      COLLISION_PERF.MAX_STRUCTURES_TO_CHECK
+      COLLISION_PERF.MAX_STRUCTURES_TO_CHECK,
+      collisionDebugViewport
     );
     
     for (const rainCollector of nearbyRainCollectors) {
@@ -485,7 +534,8 @@ function getCollisionCandidates(
       playerX,
       playerY,
       COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ,
-      COLLISION_PERF.MAX_STRUCTURES_TO_CHECK
+      COLLISION_PERF.MAX_STRUCTURES_TO_CHECK,
+      collisionDebugViewport
     );
     
     for (const barbecue of nearbyBarbecues) {
@@ -508,7 +558,8 @@ function getCollisionCandidates(
       playerX,
       playerY,
       COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ,
-      COLLISION_PERF.MAX_STRUCTURES_TO_CHECK
+      COLLISION_PERF.MAX_STRUCTURES_TO_CHECK,
+      collisionDebugViewport
     );
     
     for (const hearth of nearbyHearths) {
@@ -531,7 +582,8 @@ function getCollisionCandidates(
       playerX,
       playerY,
       COLLISION_PERF.STONE_CULL_DISTANCE_SQ, // Use same distance as stones
-      COLLISION_PERF.MAX_STONES_TO_CHECK
+      COLLISION_PERF.MAX_STONES_TO_CHECK,
+      collisionDebugViewport
     );
     
     for (const basaltColumn of nearbyBasaltColumns) {
@@ -552,7 +604,8 @@ function getCollisionCandidates(
       playerX,
       playerY,
       COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ,
-      COLLISION_PERF.MAX_STONES_TO_CHECK
+      COLLISION_PERF.MAX_STONES_TO_CHECK,
+      collisionDebugViewport
     );
     
     for (const lamppost of nearbyRoadLampposts) {
@@ -574,7 +627,8 @@ function getCollisionCandidates(
       playerX,
       playerY,
       COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ,
-      20 // Max wards to check
+      20, // Max wards to check
+      collisionDebugViewport
     );
     
     for (const lantern of nearbyLanterns) {
@@ -598,7 +652,8 @@ function getCollisionCandidates(
       playerX,
       playerY,
       COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ,
-      20 // Max turrets to check
+      20, // Max turrets to check
+      collisionDebugViewport
     );
     
     for (const turret of nearbyTurrets) {
@@ -637,7 +692,8 @@ function getCollisionCandidates(
       playerX,
       playerY,
       COLLISION_PERF.LIVING_CORAL_CULL_DISTANCE_SQ,
-      COLLISION_PERF.MAX_LIVING_CORALS_TO_CHECK
+      COLLISION_PERF.MAX_LIVING_CORALS_TO_CHECK,
+      collisionDebugViewport
     );
     
     for (const coral of nearbyCorals) {
@@ -664,13 +720,17 @@ function getCollisionCandidates(
     
     for (const station of entities.alkStations.values()) {
       if (!station.isActive) continue;
-      
-      const dx = station.worldPosX - playerX;
-      const dy = station.worldPosY - playerY;
-      const distSq = dx * dx + dy * dy;
-      
-      // Larger cull distance for large structure
-      if (distSq > COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ * 2) continue;
+
+      if (collisionDebugViewport) {
+        if (!pointInsideCollisionDebugViewport(station.worldPosX, station.worldPosY, collisionDebugViewport)) {
+          continue;
+        }
+      } else {
+        const dx = station.worldPosX - playerX;
+        const dy = station.worldPosY - playerY;
+        const distSq = dx * dx + dy * dy;
+        if (distSq > COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ * 2) continue;
+      }
       
       // AABB collision at the building base
       // Central compound uses standardized monument building collision (260px wide, 80px tall)
@@ -710,7 +770,8 @@ function getCollisionCandidates(
     playerX,
     playerY,
     COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ,
-    COLLISION_PERF.MAX_STRUCTURES_TO_CHECK
+    COLLISION_PERF.MAX_STRUCTURES_TO_CHECK,
+    collisionDebugViewport
   );
   
   for (const seaStack of nearbySeaStacks) {
@@ -737,12 +798,15 @@ function getCollisionCandidates(
     const worldPos = getBuildingWorldPosition(building);
     const buildingX = worldPos.x;
     const buildingY = worldPos.y;
-    
-    // Distance-based culling
-    const dx = buildingX - playerX;
-    const dy = buildingY - playerY;
-    const distSq = dx * dx + dy * dy;
-    if (distSq > COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ * 4) continue;
+
+    if (collisionDebugViewport) {
+      if (!pointInsideCollisionDebugViewport(buildingX, buildingY, collisionDebugViewport)) continue;
+    } else {
+      const dx = buildingX - playerX;
+      const dy = buildingY - playerY;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ * 4) continue;
+    }
     
     // Skip walls - they need AABB collision which we don't support yet
     if (building.id.startsWith('wall_')) continue;
@@ -779,7 +843,7 @@ function getCollisionCandidates(
     let sheltersChecked = 0;
     for (const shelter of entities.shelters.values()) {
       if (shelter.isDestroyed) continue; // Skip destroyed shelters
-      if (sheltersChecked >= COLLISION_PERF.MAX_STRUCTURES_TO_CHECK) break;
+      if (!collisionDebugViewport && sheltersChecked >= COLLISION_PERF.MAX_STRUCTURES_TO_CHECK) break;
 
       // Skip collision for shelters owned by the local player (they can walk through their own shelters)
       if (localPlayerId && shelter.placedBy.toHexString() === localPlayerId) {
@@ -790,11 +854,16 @@ function getCollisionCandidates(
       const shelterAabbCenterX = shelter.posX;
       const shelterAabbCenterY = shelter.posY - SHELTER_DIMS.AABB_CENTER_Y_OFFSET_FROM_POS_Y;
 
-      // Distance-based culling using the AABB center, not the base
-      const dxShelter = shelterAabbCenterX - playerX;
-      const dyShelter = shelterAabbCenterY - playerY;
-      const distSqShelter = dxShelter * dxShelter + dyShelter * dyShelter;
-      if (distSqShelter > COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ) continue;
+      if (collisionDebugViewport) {
+        if (!pointInsideCollisionDebugViewport(shelterAabbCenterX, shelterAabbCenterY, collisionDebugViewport)) {
+          continue;
+        }
+      } else {
+        const dxShelter = shelterAabbCenterX - playerX;
+        const dyShelter = shelterAabbCenterY - playerY;
+        const distSqShelter = dxShelter * dxShelter + dyShelter * dyShelter;
+        if (distSqShelter > COLLISION_PERF.STRUCTURE_CULL_DISTANCE_SQ) continue;
+      }
 
       sheltersChecked++;
 
@@ -826,14 +895,15 @@ function getCollisionCandidates(
       // Calculate foundation cell center position
       const tileCenterX = wall.cellX * FOUNDATION_TILE_SIZE + FOUNDATION_TILE_SIZE / 2;
       const tileCenterY = wall.cellY * FOUNDATION_TILE_SIZE + FOUNDATION_TILE_SIZE / 2;
-      
-      // Check distance to player
-      const dx = tileCenterX - playerX;
-      const dy = tileCenterY - playerY;
-      const distanceSq = dx * dx + dy * dy;
-      const maxDistanceSq = 150 * 150; // Check walls within 150px
-      
-      if (distanceSq > maxDistanceSq) continue;
+
+      if (collisionDebugViewport) {
+        if (!pointInsideCollisionDebugViewport(tileCenterX, tileCenterY, collisionDebugViewport)) continue;
+      } else {
+        const dx = tileCenterX - playerX;
+        const dy = tileCenterY - playerY;
+        const distanceSq = dx * dx + dy * dy;
+        if (distanceSq > 150 * 150) continue;
+      }
       
       // Create thin AABB collision shape based on wall edge
       // Edge 0 = North (top), 1 = East (right), 2 = South (bottom), 3 = West (left)
@@ -1044,12 +1114,15 @@ function getCollisionCandidates(
       // Check distance to player (use tile center for distance check)
       const tileCenterX = tileLeft + FOUNDATION_TILE_SIZE / 2;
       const tileCenterY = tileTop + FOUNDATION_TILE_SIZE / 2;
-      const dx = tileCenterX - playerX;
-      const dy = tileCenterY - playerY;
-      const distanceSq = dx * dx + dy * dy;
-      const maxDistanceSq = 150 * 150; // Check doors within 150px
-      
-      if (distanceSq > maxDistanceSq) continue;
+
+      if (collisionDebugViewport) {
+        if (!pointInsideCollisionDebugViewport(tileCenterX, tileCenterY, collisionDebugViewport)) continue;
+      } else {
+        const dx = tileCenterX - playerX;
+        const dy = tileCenterY - playerY;
+        const distanceSq = dx * dx + dy * dy;
+        if (distanceSq > 150 * 150) continue;
+      }
       
       // Create thin AABB collision shape based on door edge (matches server-side logic)
       // Edge 0 = North (top), Edge 2 = South (bottom)
@@ -1110,14 +1183,15 @@ function getCollisionCandidates(
   if (entities.fences && entities.fences.size > 0) {
     for (const fence of entities.fences.values()) {
       if (fence.isDestroyed) continue;
-      
-      // Check distance to player
-      const dx = fence.posX - playerX;
-      const dy = fence.posY - playerY;
-      const distanceSq = dx * dx + dy * dy;
-      const maxDistanceSq = 150 * 150; // Check fences within 150px
-      
-      if (distanceSq > maxDistanceSq) continue;
+
+      if (collisionDebugViewport) {
+        if (!pointInsideCollisionDebugViewport(fence.posX, fence.posY, collisionDebugViewport)) continue;
+      } else {
+        const dx = fence.posX - playerX;
+        const dy = fence.posY - playerY;
+        const distanceSq = dx * dx + dy * dy;
+        if (distanceSq > 150 * 150) continue;
+      }
       
       // Fences span full cell edge (96px) - same as walls
       // Edge 0 (North) and 2 (South) are horizontal, Edge 1 (East) and 3 (West) are vertical
@@ -1146,8 +1220,18 @@ function getCollisionCandidates(
 
   // Monument buildings (village campfires + hunting village scarecrows)
   if (entities.monumentParts && entities.monumentParts.size > 0) {
-    const campfireShapes = getVillageCampfireCollisionShapes(entities.monumentParts, playerX, playerY);
-    const scarecrowShapes = getMonumentScarecrowCollisionShapes(entities.monumentParts, playerX, playerY);
+    const campfireShapes = getVillageCampfireCollisionShapes(
+      entities.monumentParts,
+      playerX,
+      playerY,
+      collisionDebugViewport
+    );
+    const scarecrowShapes = getMonumentScarecrowCollisionShapes(
+      entities.monumentParts,
+      playerX,
+      playerY,
+      collisionDebugViewport
+    );
     shapes.push(...campfireShapes, ...scarecrowShapes);
   }
   
@@ -2016,21 +2100,30 @@ function clampToWorldBounds(x: number, y: number): { x: number; y: number } {
 
 // ===== DEBUG RENDERING EXPORTS =====
 // Export collision shapes for debug visualization
-// This function returns all collision shapes near a player for rendering
+// This function returns collision shapes for debug rendering (viewport when provided, else near player).
 export function getCollisionShapesForDebug(
   entities: GameEntities,
   playerX: number,
   playerY: number,
   localPlayerId: string,
-  isOnSeaTile?: (worldX: number, worldY: number) => boolean
+  isOnSeaTile?: (worldX: number, worldY: number) => boolean,
+  collisionDebugViewport?: CollisionDebugViewportBounds
 ): CollisionShape[] {
-  const debugShapes = getCollisionCandidates(entities, playerX, playerY, localPlayerId, isOnSeaTile);
+  const debugShapes = getCollisionCandidates(
+    entities,
+    playerX,
+    playerY,
+    localPlayerId,
+    isOnSeaTile,
+    collisionDebugViewport
+  );
   const nearbyAnimalCorpses = filterEntitiesByDistance(
     entities.animalCorpses ?? new Map<string, AnimalCorpse>(),
     playerX,
     playerY,
     COLLISION_PERF.ANIMAL_CULL_DISTANCE_SQ,
-    COLLISION_PERF.MAX_ANIMALS_TO_CHECK
+    COLLISION_PERF.MAX_ANIMALS_TO_CHECK,
+    collisionDebugViewport
   );
 
   for (const corpse of nearbyAnimalCorpses) {
@@ -2043,16 +2136,5 @@ export function getCollisionShapesForDebug(
     });
   }
 
-  // Match orange debug circles to smoothed sprite position (authoritative rows still use server pos).
-  for (const shape of debugShapes) {
-    if (!shape.type.startsWith('animal-')) continue;
-    const id = shape.type.slice('animal-'.length);
-    const p = getWildAnimalClientRenderWorldCenter(id);
-    if (p) {
-      shape.x = p.x + COLLISION_OFFSETS.WILD_ANIMAL.x;
-      shape.y = p.y + COLLISION_OFFSETS.WILD_ANIMAL.y;
-    }
-  }
-
   return debugShapes;
-} 
+}

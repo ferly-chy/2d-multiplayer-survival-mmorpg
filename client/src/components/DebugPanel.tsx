@@ -515,7 +515,7 @@ const DebugPanel: React.FC<DebugPanelProps> = ({ localPlayer, worldState, connec
 
                     {/* Collision Debug Toggle */}
                     <button
-                        title="Shows world collision, projectile hit radii, and animal corpse collision circles"
+                        title="Shows collision shapes for everything in the current camera view (plus margin), projectile hit radii, and animal corpses"
                         onClick={(e) => {
                             toggleCollisionDebug();
                             e.currentTarget.blur();

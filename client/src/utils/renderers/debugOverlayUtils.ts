@@ -89,6 +89,10 @@ export interface ProjectileCollisionDebugOptions {
   playerX: number;
   playerY: number;
   currentTimeMs: number;
+  /** When set, draw projectiles that intersect this world rect (expanded by margin) instead of only near the player. */
+  viewBounds?: { minX: number; maxX: number; minY: number; maxY: number };
+  /** Extra world px around viewBounds for projectile hit radii (default 400). */
+  viewBoundsMargin?: number;
 }
 
 // ===== CHUNK BOUNDARIES =====
@@ -707,7 +711,7 @@ export function renderProjectileCollisionDebug(
   ctx: CanvasRenderingContext2D,
   options: ProjectileCollisionDebugOptions
 ): void {
-  const { projectiles, playerX, playerY, currentTimeMs } = options;
+  const { projectiles, playerX, playerY, currentTimeMs, viewBounds, viewBoundsMargin = 400 } = options;
 
   // Render each projectile
   for (const [projectileId, projectile] of projectiles) {
@@ -724,9 +728,20 @@ export function renderProjectileCollisionDebug(
     const currentX = sampledState.x;
     const currentY = sampledState.y;
 
-    // Calculate distance from player for filtering (only show nearby projectiles)
     const distFromPlayer = Math.sqrt((currentX - playerX) ** 2 + (currentY - playerY) ** 2);
-    if (distFromPlayer > 800) continue; // Skip projectiles too far from player
+    if (viewBounds) {
+      const m = viewBoundsMargin;
+      if (
+        currentX < viewBounds.minX - m ||
+        currentX > viewBounds.maxX + m ||
+        currentY < viewBounds.minY - m ||
+        currentY > viewBounds.maxY + m
+      ) {
+        continue;
+      }
+    } else if (distFromPlayer > 800) {
+      continue;
+    }
 
     // Get colors based on projectile type
     const colors = getProjectileDebugColor(projectile.sourceType, projectile.npcProjectileType);

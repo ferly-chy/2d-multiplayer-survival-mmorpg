@@ -25,6 +25,10 @@
 import { Player as SpacetimeDBPlayer, ActiveEquipment as SpacetimeDBActiveEquipment, ItemDefinition as SpacetimeDBItemDefinition, ActiveConsumableEffect, EffectType } from '../../generated/types';
 import { gameConfig } from '../../config/gameConfig';
 import {
+  touchCampfireFireWebGLInit,
+  isCampfireFireWebGLOverlayAvailable,
+} from './campfireFireOverlayUtils';
+import {
   DEFAULT_MELEE_ARC_DEGREES as DEFAULT_ATTACK_ARC_DEGREES,
   DEFAULT_MELEE_ATTACK_RANGE,
   SCYTHE_MELEE_ARC_DEGREES,
@@ -870,11 +874,17 @@ export const renderEquippedItem = (
   // --- Resolve the correct image to render ---
   let imageToRender: HTMLImageElement | undefined = itemImgFromCaller;
   if (itemDef.name === "Torch" && equipment.iconAssetName) {
-    const specificTorchImage = itemImages.get(equipment.iconAssetName);
+    touchCampfireFireWebGLInit();
+    // Lit + GPU fire: always base torch art (same tick as preload init — no torch_on flash).
+    const torchAssetName =
+      player.isTorchLit && isCampfireFireWebGLOverlayAvailable()
+        ? 'torch.png'
+        : equipment.iconAssetName;
+    const specificTorchImage = itemImages.get(torchAssetName);
     if (specificTorchImage) {
       imageToRender = specificTorchImage;
     } else {
-      console.warn(`[renderEquippedItem] Image for torch state '${equipment.iconAssetName}' not found in itemImages map. Falling back.`);
+      console.warn(`[renderEquippedItem] Image for torch state '${torchAssetName}' not found in itemImages map. Falling back.`);
     }
   }
 

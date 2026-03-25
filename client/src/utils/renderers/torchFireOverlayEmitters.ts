@@ -2,17 +2,14 @@
  * Per-frame GPU fire/smoke emitters for lit torches (same WebGL path as campfires).
  */
 
-import type { Player as SpacetimeDBPlayer } from '../../generated/types';
-import type { ActiveEquipment as SpacetimeDBActiveEquipment } from '../../generated/types';
-import type { ItemDefinition as SpacetimeDBItemDefinition } from '../../generated/types';
+import type {
+  ActiveEquipment as SpacetimeDBActiveEquipment,
+  ItemDefinition as SpacetimeDBItemDefinition,
+  Player as SpacetimeDBPlayer,
+} from '../../generated/types';
 import type { CampfireFireGpuEmitter } from './campfireFireOverlayUtils';
 import { isCampfireFireWebGLOverlayAvailable } from './campfireFireOverlayUtils';
-import {
-  deleteCampfireGpuFire01,
-  getCampfireGpuFireDt,
-  pruneTorchGpuFireKeysNotIn,
-  stepCampfireGpuFire01,
-} from './campfireGpuFireSmoothing';
+import { deleteCampfireGpuFire01, pruneTorchGpuFireKeysNotIn } from './campfireGpuFireSmoothing';
 import { getTorchGpuFlameAnchorWorld } from './torchFlameAnchorWorldUtils';
 
 const TORCH_GPU_OVERLAY_SCALE = 0.5;
@@ -27,6 +24,8 @@ export interface BuildTorchFireGpuOverlayEmittersParams {
   activeEquipments: Map<string, SpacetimeDBActiveEquipment>;
   itemDefinitions: Map<string, SpacetimeDBItemDefinition>;
   localPlayerId: string | undefined;
+  /** Client-predicted facing (same frame as canvas); avoids server direction lag for local torch. */
+  localFacingDirection: string | undefined;
   localPredictedPosition: { x: number; y: number } | null | undefined;
   remotePlayerInterpolation: {
     updateAndGetSmoothedPosition: (player: SpacetimeDBPlayer, localId: string) => { x: number; y: number } | null;
@@ -46,12 +45,12 @@ export function buildTorchFireGpuOverlayEmitters(
     activeEquipments,
     itemDefinitions,
     localPlayerId,
+    localFacingDirection,
     localPredictedPosition,
     remotePlayerInterpolation,
     nowMs,
   } = params;
 
-  const dt = getCampfireGpuFireDt(nowMs);
   const out: CampfireFireGpuEmitter[] = [];
   const activePlayerKeys = new Set<string>();
 
@@ -83,39 +82,30 @@ export function buildTorchFireGpuOverlayEmitters(
       }
     }
 
+    const directionForTorch =
+      localPlayerId && playerId === localPlayerId
+        ? localFacingDirection ?? player.direction ?? 'down'
+        : player.direction ?? 'down';
+
     const anchor = getTorchGpuFlameAnchorWorld({
       worldX,
       worldY,
-      direction: player.direction ?? 'down',
+      direction: directionForTorch,
       jumpStartTimeMs: player.jumpStartTimeMs,
       swingStartTimeMs: Number(equipment?.swingStartTimeMs ?? 0),
       nowMs,
     });
 
     if (!isLitTorch) {
-      const fireAmt = stepCampfireGpuFire01(idKey, false, dt);
-      if (fireAmt <= 0) {
-        deleteCampfireGpuFire01(idKey);
-        return;
-      }
-      out.push({
-        anchorX: anchor.x,
-        anchorY: anchor.y,
-        fireAmt,
-        smokeAmt: fireAmt,
-        hotBoost: 0,
-        scale: TORCH_GPU_OVERLAY_SCALE,
-        smokePlumeReach01: TORCH_GPU_SMOKE_PLUME_REACH01,
-      });
+      deleteCampfireGpuFire01(idKey);
       return;
     }
 
-    const fireAmt = stepCampfireGpuFire01(idKey, true, dt);
     out.push({
       anchorX: anchor.x,
       anchorY: anchor.y,
-      fireAmt,
-      smokeAmt: fireAmt,
+      fireAmt: 1,
+      smokeAmt: 1,
       hotBoost: 0,
       scale: TORCH_GPU_OVERLAY_SCALE,
       smokePlumeReach01: TORCH_GPU_SMOKE_PLUME_REACH01,

@@ -256,6 +256,7 @@ export function renderTranslatedWorldExtrasUnderCampfireOverlay(
       playerY,
       localPlayer.identity.toHexString(),
       isOnSeaTileForBarrels,
+      viewBounds,
     );
 
     renderCollisionDebug(ctx, {
@@ -270,6 +271,7 @@ export function renderTranslatedWorldExtrasUnderCampfireOverlay(
       playerX,
       playerY,
       currentTimeMs: performance.now(),
+      viewBounds,
     });
   }
 
