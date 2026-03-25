@@ -131,6 +131,12 @@ const SOUND_DEFINITIONS = {
 
 type SoundType = keyof typeof SOUND_DEFINITIONS;
 
+/** PascalCase→snake via `_` before each cap breaks interior words: ErrorSeeweedAboveWater → error_seeweed_above_water. */
+function normalizeSoundTypeKeyFromEnumTag(s: string): SoundType {
+    if (s === 'error_seeweed_above_water') return 'error_seaweed_above_water';
+    return s as SoundType;
+}
+
 // Sounds that should not have pitch variation (always play at original pitch)
 const NO_PITCH_VARIATION_SOUNDS: Set<SoundType> = new Set([
     'error_resources',
@@ -932,6 +938,59 @@ export const playImmediateSound = (soundType: SoundType, volume: number = 1): vo
     playLocalSound(soundType, volume).catch(console.warn);
 };
 
+const SEAWEED_ABOVE_WATER_ERROR_DEBOUNCE_MS = 350;
+let lastSeaweedAboveWaterErrorPlayAt = 0;
+
+/**
+ * Underwater harvest blocked (not snorkeling). Debounced.
+ * Uses HTMLAudioElement directly so we bypass playLocalSound's isAnySovaAudioPlaying() gate
+ * (SDK 2.x also does not expose reducer on* callbacks on connection.reducers — feedback must be client-driven).
+ */
+export function playSeaweedAboveWaterErrorFeedback(): void {
+    const now = Date.now();
+    if (now - lastSeaweedAboveWaterErrorPlayAt < SEAWEED_ABOVE_WATER_ERROR_DEBOUNCE_MS) return;
+    lastSeaweedAboveWaterErrorPlayAt = now;
+    const url = `${SOUND_CONFIG.SOUNDS_BASE_PATH}error_seaweed_above_water.mp3`;
+    try {
+        const audio = new Audio(url);
+        audio.volume = 0.95;
+        void audio.play().catch(() => {
+            playImmediateSound('error_seaweed_above_water', 1.0);
+        });
+    } catch {
+        playImmediateSound('error_seaweed_above_water', 1.0);
+    }
+}
+
+/** If this resource is SeaweedBed and the player is not snorkeling, play the error clip (matches server rule). */
+export function previewSeaweedHarvestBlockedIfNeeded(
+    connection: {
+        db?: { harvestable_resource?: { iter(): Iterable<{ id: bigint; plantType: unknown }> } };
+    } | null | undefined,
+    resourceId: bigint,
+    isSnorkeling: boolean | null | undefined
+): void {
+    if (isSnorkeling === true) return;
+    const tbl = connection?.db?.harvestable_resource;
+    if (!tbl) return;
+    try {
+        for (const row of tbl.iter()) {
+            if (row.id !== resourceId) continue;
+            const pt = row.plantType;
+            const tag =
+                pt && typeof pt === 'object' && pt !== null && 'tag' in pt
+                    ? String((pt as { tag: string }).tag)
+                    : '';
+            if (tag === 'SeaweedBed') {
+                playSeaweedAboveWaterErrorFeedback();
+            }
+            return;
+        }
+    } catch {
+        /* ignore */
+    }
+}
+
 // Active looping sounds management with enhanced tracking
 const activeLoopingSounds = new Map<string, HTMLAudioElement>();
 const soundCleanupTimeouts = new Map<string, number>();
@@ -1388,6 +1447,7 @@ export const useSoundSystem = ({
                 else if (fromFilename === 'sova_tutorial_memory_shard_200') soundType = 'sova_memory_shard_200_tutorial' as SoundType;
                 else soundType = fromFilename as SoundType;
             }
+            soundType = normalizeSoundTypeKeyFromEnumTag(soundType as string);
             const definition = SOUND_DEFINITIONS[soundType];
             
             // Debug logging for error_resources sounds
@@ -1439,6 +1499,20 @@ export const useSoundSystem = ({
                     queueMicrotask(() => {
                         window.dispatchEvent(new CustomEvent('sova-memory-shard-200-tutorial'));
                     });
+                }
+                return;
+            }
+
+            // Seaweed-above-water: IMMEDIATE in SOUND_DEFINITIONS; skip spatial (SOVA gate + falloff).
+            // Also handled from reducer for reliability; debounced helper avoids double play.
+            const isSeaweedAboveWaterError =
+                soundType === 'error_seaweed_above_water' ||
+                soundEvent.filename.replace(/\d*\.mp3$/i, '') === 'error_seaweed_above_water';
+            if (isSeaweedAboveWaterError) {
+                const th = soundEvent.triggeredBy?.toHexString?.()?.toLowerCase?.();
+                const lh = localPlayerIdentity?.toHexString?.()?.toLowerCase?.();
+                if (th && lh && th === lh) {
+                    playSeaweedAboveWaterErrorFeedback();
                 }
                 return;
             }

@@ -41,13 +41,12 @@ import drownedWatchWalkingAnimatedSheet from '../../assets/drowned_watch_walking
 
 import {
     getWildAnimalSplitSheetUrl,
+    getWildAnimalDirectionalStripLayout,
     REGISTERED_DIRECTIONAL_SHEET_PRELOAD_URLS,
 } from './wildAnimalSplitSheetConfig';
 import {
     getDirectionalWalkingStripSourceRect,
-    DIRECTIONAL_WALKING_STRIP_FRAME_WIDTH,
-    DIRECTIONAL_WALKING_STRIP_FRAME_HEIGHT,
-    DIRECTIONAL_WALKING_STRIP_FRAME_COLS,
+    DEFAULT_DIRECTIONAL_WALKING_STRIP_LAYOUT,
 } from './npcDirectionalWalkingSheetAssets';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -320,9 +319,6 @@ const ANIMATED_DIRECTION_ROW_MAP: Record<string, number> = {
     'up': 3,  // Row 3: facing up
 };
 
-// Animation timing for walking cycle
-const ANIMATED_WALK_FRAME_DURATION_MS = 100; // Time per frame (100ms = smooth animation)
-
 // Helper to check if species uses animated spritesheet
 function usesAnimatedSpritesheet(species: AnimalSpecies): boolean {
     return species.tag in ANIMATED_SPRITE_CONFIGS;
@@ -537,20 +533,28 @@ interface AnimalMovementState {
     lastServerY: number;
     targetX: number;
     targetY: number;
-    lastUpdateTime: number;
     interpolatedX: number;
     interpolatedY: number;
-    velocityX: number; // Estimated velocity for prediction
-    velocityY: number;
+    /** Previous rendered world position (for distance-based walk cycle). */
+    prevRenderX: number;
+    prevRenderY: number;
+    /** Fractional walk phase; advances by interpolated motion / stride (not wall clock). */
+    walkPhase: number;
+    /** For frame-delta smoothing (`nowMs` from game loop). */
+    lastRenderFrameMs?: number;
 }
 
 const animalMovementStates = new Map<string, AnimalMovementState>();
 
-// Interpolation settings tuned for smooth visual movement.
-// Server positions remain authoritative for gameplay/collision; this is render-only smoothing.
-const SERVER_TICK_MS = 125;
+// Interpolation: exponential smoothing toward last server position (render-only).
 const MAX_INTERPOLATION_DISTANCE = 600;
-const VELOCITY_SMOOTHING = 0.3;
+/** Time constant (ms). ~1 server AI tick: smooth without stair-steps when snapshots arrive. */
+const INTERP_SMOOTH_TAU_MS = 105;
+const INTERP_MAX_DELTA_MS = 64;
+/** Pixels of interpolated travel per +1 walk frame index (scaled by on-screen width). */
+const WALK_STRIDE_PER_INDEX_FACTOR = 0.21;
+const WALK_SYNC_MAX_STEP_PX = 80;
+const WALK_PHASE_WRAP = 6000;
 
 // --- Reusable Offscreen Canvas for Tinting ---
 const offscreenCanvas = document.createElement('canvas');
@@ -694,7 +698,9 @@ function getWildAnimalAnimatedSpriteSourceRect(
     useDirectionalSplitSheet: boolean,
 ): { sx: number; sy: number; sw: number; sh: number } {
     if (useDirectionalSplitSheet) {
-        return getDirectionalWalkingStripSourceRect(animationFrame);
+        const layout =
+            getWildAnimalDirectionalStripLayout(species.tag) ?? DEFAULT_DIRECTIONAL_WALKING_STRIP_LAYOUT;
+        return getDirectionalWalkingStripSourceRect(animationFrame, layout);
     }
     return getAnimatedSpriteSourceRect(species, direction, animationFrame);
 }
@@ -863,11 +869,12 @@ export function renderWildAnimal({
             lastServerY: animal.posY,
             targetX: animal.posX,
             targetY: animal.posY,
-            lastUpdateTime: nowMs,
             interpolatedX: animal.posX,
             interpolatedY: animal.posY,
-            velocityX: 0,
-            velocityY: 0,
+            prevRenderX: animal.posX,
+            prevRenderY: animal.posY,
+            walkPhase: 0,
+            lastRenderFrameMs: nowMs,
         };
         animalMovementStates.set(animalId, movementState);
     } else {
@@ -876,65 +883,43 @@ export function renderWildAnimal({
         const dy = animal.posY - movementState.lastServerY;
         const distanceMoved = Math.sqrt(dx * dx + dy * dy);
 
-        if (distanceMoved > 1.0) { // Server position update detected
-            const timeSinceLastUpdate = nowMs - movementState.lastUpdateTime;
-
-            // Teleportation / large correction: snap and reset velocity.
+        if (distanceMoved > 1.0) {
+            // Teleportation / large correction: snap everything.
             if (distanceMoved > MAX_INTERPOLATION_DISTANCE) {
                 movementState.interpolatedX = animal.posX;
                 movementState.interpolatedY = animal.posY;
-                movementState.velocityX = 0;
-                movementState.velocityY = 0;
-            } else if (timeSinceLastUpdate > 5) {
-                // Velocity estimate (px/ms), smoothed to reduce directional jitter.
-                const newVelocityX = dx / timeSinceLastUpdate;
-                const newVelocityY = dy / timeSinceLastUpdate;
-                movementState.velocityX = movementState.velocityX * VELOCITY_SMOOTHING + newVelocityX * (1 - VELOCITY_SMOOTHING);
-                movementState.velocityY = movementState.velocityY * VELOCITY_SMOOTHING + newVelocityY * (1 - VELOCITY_SMOOTHING);
+                movementState.walkPhase = 0;
+                movementState.prevRenderX = animal.posX;
+                movementState.prevRenderY = animal.posY;
             }
 
-            // Update target and tracking
             movementState.targetX = animal.posX;
             movementState.targetY = animal.posY;
             movementState.lastServerX = animal.posX;
             movementState.lastServerY = animal.posY;
-            movementState.lastUpdateTime = nowMs;
         }
 
-        // Velocity-based prediction blended with target-seeking (older smooth model).
-        const timeSinceUpdate = nowMs - movementState.lastUpdateTime;
-        const tickProgress = Math.min(timeSinceUpdate / SERVER_TICK_MS, 1.5);
+        // Exponential smoothing toward server target (continuous in time — no tickProgress phases).
+        let prevFrameMs = movementState.lastRenderFrameMs;
+        if (prevFrameMs === undefined || !Number.isFinite(prevFrameMs)) {
+            prevFrameMs = nowMs - 16.67;
+        }
+        movementState.lastRenderFrameMs = nowMs;
+        let deltaMs = nowMs - prevFrameMs;
+        if (deltaMs < 0) deltaMs = 0;
+        if (deltaMs > INTERP_MAX_DELTA_MS) deltaMs = INTERP_MAX_DELTA_MS;
 
-        const distToTargetX = movementState.targetX - movementState.interpolatedX;
-        const distToTargetY = movementState.targetY - movementState.interpolatedY;
-        const distToTarget = Math.sqrt(distToTargetX * distToTargetX + distToTargetY * distToTargetY);
+        const errX = movementState.targetX - movementState.interpolatedX;
+        const errY = movementState.targetY - movementState.interpolatedY;
+        const err = Math.hypot(errX, errY);
 
-        if (distToTarget > 0.5) {
-            if (tickProgress < 0.8) {
-                const predictionWeight = 0.7 * (1 - tickProgress);
-                const correctionWeight = 1 - predictionWeight;
-
-                const predictedX = movementState.interpolatedX + movementState.velocityX * 16;
-                const predictedY = movementState.interpolatedY + movementState.velocityY * 16;
-
-                const seekSpeed = Math.min(0.15 + tickProgress * 0.2, 0.35);
-                const seekX = movementState.interpolatedX + distToTargetX * seekSpeed;
-                const seekY = movementState.interpolatedY + distToTargetY * seekSpeed;
-
-                movementState.interpolatedX = predictedX * predictionWeight + seekX * correctionWeight;
-                movementState.interpolatedY = predictedY * predictionWeight + seekY * correctionWeight;
-            } else {
-                const catchupSpeed = Math.min(0.25 + (tickProgress - 0.8) * 0.5, 0.6);
-                movementState.interpolatedX += distToTargetX * catchupSpeed;
-                movementState.interpolatedY += distToTargetY * catchupSpeed;
-            }
-
-            if (Math.abs(movementState.interpolatedX - movementState.targetX) < 1) {
-                movementState.interpolatedX = movementState.targetX;
-            }
-            if (Math.abs(movementState.interpolatedY - movementState.targetY) < 1) {
-                movementState.interpolatedY = movementState.targetY;
-            }
+        if (err < 0.4) {
+            movementState.interpolatedX = movementState.targetX;
+            movementState.interpolatedY = movementState.targetY;
+        } else {
+            const alpha = 1 - Math.exp(-deltaMs / INTERP_SMOOTH_TAU_MS);
+            movementState.interpolatedX += errX * alpha;
+            movementState.interpolatedY += errY * alpha;
         }
 
         renderPosX = movementState.interpolatedX;
@@ -1016,12 +1001,14 @@ export function renderWildAnimal({
     // Get the appropriate frame dimensions based on sprite type
     let animatedConfig = useAnimated ? getAnimatedConfig(animal.species) : undefined;
     if (useAnimated && useDirectionalSplitSheet) {
+        const stripLayout =
+            getWildAnimalDirectionalStripLayout(animal.species.tag) ?? DEFAULT_DIRECTIONAL_WALKING_STRIP_LAYOUT;
         animatedConfig = {
-            sheetWidth: DIRECTIONAL_WALKING_STRIP_FRAME_WIDTH * DIRECTIONAL_WALKING_STRIP_FRAME_COLS,
-            sheetHeight: DIRECTIONAL_WALKING_STRIP_FRAME_HEIGHT,
-            frameWidth: DIRECTIONAL_WALKING_STRIP_FRAME_WIDTH,
-            frameHeight: DIRECTIONAL_WALKING_STRIP_FRAME_HEIGHT,
-            cols: DIRECTIONAL_WALKING_STRIP_FRAME_COLS,
+            sheetWidth: stripLayout.frameWidth * stripLayout.cols,
+            sheetHeight: stripLayout.frameHeight,
+            frameWidth: stripLayout.frameWidth,
+            frameHeight: stripLayout.frameHeight,
+            cols: stripLayout.cols,
             rows: 1,
         };
     }
@@ -1038,20 +1025,53 @@ export function renderWildAnimal({
         currentFrameHeight = FRAME_HEIGHT;
     }
 
-    // Calculate animation frame for animated sprites based on movement
+    const props = getSpeciesRenderingProps(animal.species);
+
+    let ageBasedSizeMultiplier = 1.0;
+    const animalIdStr = animal.id.toString();
+    if (animal.species.tag === 'Caribou' && caribouBreedingData) {
+        const breedingData = caribouBreedingData.get(animalIdStr);
+        ageBasedSizeMultiplier = getCaribouAgeMultiplier(breedingData);
+    } else if (animal.species.tag === 'ArcticWalrus' && walrusBreedingData) {
+        const breedingData = walrusBreedingData.get(animalIdStr);
+        ageBasedSizeMultiplier = getWalrusAgeMultiplier(breedingData);
+    }
+
+    const flyingSizeMultiplier = (animal.species.tag === 'Tern' && useFlying) ? 1.3 : 1.0;
+    const renderWidth = props.width * flyingSizeMultiplier * ageBasedSizeMultiplier;
+    const renderHeight = props.height * flyingSizeMultiplier * ageBasedSizeMultiplier;
+
+    // Walk cycle driven by actual interpolated motion (matches feet to screen travel; avoids wall-clock / server-velocity mismatch).
     let calculatedAnimFrame = 0;
     if (useAnimated && movementState && animatedConfig) {
-        const velocityMagnitude = Math.sqrt(movementState.velocityX * movementState.velocityX + movementState.velocityY * movementState.velocityY);
-        const isMoving = velocityMagnitude > 0.02;
+        const cols = animatedConfig.cols;
+        const prx = movementState.prevRenderX ?? renderPosX;
+        const pry = movementState.prevRenderY ?? renderPosY;
+        const rawStep = Math.hypot(renderPosX - prx, renderPosY - pry);
+        const stepDist = Math.min(rawStep, WALK_SYNC_MAX_STEP_PX);
 
-        if (isMoving) {
-            // Calculate animation frame based on time for smooth walking cycle
-            // Use species-specific column count for proper animation cycling
-            calculatedAnimFrame = Math.floor(nowMs / ANIMATED_WALK_FRAME_DURATION_MS) % animatedConfig.cols;
+        const distToTargetNow = Math.hypot(movementState.targetX - renderPosX, movementState.targetY - renderPosY);
+        const isMovingVisual = stepDist > 0.1 || distToTargetNow > 1.2;
+
+        let phase = movementState.walkPhase ?? 0;
+        if (isMovingVisual) {
+            const stridePx = Math.max(8, renderWidth * WALK_STRIDE_PER_INDEX_FACTOR);
+            phase += stepDist / stridePx;
+            if (phase > WALK_PHASE_WRAP) {
+                phase = phase % cols;
+            }
+            movementState.walkPhase = phase;
+            calculatedAnimFrame = ((Math.floor(phase) % cols) + cols) % cols;
         } else {
-            // Idle pose
             calculatedAnimFrame = 0;
+            movementState.walkPhase = phase;
         }
+
+        movementState.prevRenderX = renderPosX;
+        movementState.prevRenderY = renderPosY;
+    } else if (movementState) {
+        movementState.prevRenderX = renderPosX;
+        movementState.prevRenderY = renderPosY;
     }
 
     // Debug logging for bird sprite selection (enable to debug)
@@ -1088,28 +1108,6 @@ export function renderWildAnimal({
     // Bees are rendered as simple black dots - no spritesheet
     const isBee = animal.species.tag === 'Bee';
     const useImageFallback = isBee || !animalImage || !animalImage.complete;
-
-    const props = getSpeciesRenderingProps(animal.species);
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // AGE-BASED SIZE SCALING FOR BREEDING ANIMALS
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Calves/Pups: 50% size, Juveniles: 75% size, Adults: 100% size
-    let ageBasedSizeMultiplier = 1.0;
-    const animalIdStr = animal.id.toString();
-
-    if (animal.species.tag === 'Caribou' && caribouBreedingData) {
-        const breedingData = caribouBreedingData.get(animalIdStr);
-        ageBasedSizeMultiplier = getCaribouAgeMultiplier(breedingData);
-    } else if (animal.species.tag === 'ArcticWalrus' && walrusBreedingData) {
-        const breedingData = walrusBreedingData.get(animalIdStr);
-        ageBasedSizeMultiplier = getWalrusAgeMultiplier(breedingData);
-    }
-
-    // Flying terns appear slightly larger to account for wingspan
-    const flyingSizeMultiplier = (animal.species.tag === 'Tern' && useFlying) ? 1.3 : 1.0;
-    const renderWidth = props.width * flyingSizeMultiplier * ageBasedSizeMultiplier;
-    const renderHeight = props.height * flyingSizeMultiplier * ageBasedSizeMultiplier;
 
     const renderX = renderPosX - renderWidth / 2 + shakeX; // Apply shake to X (using interpolated position)
     const renderY = renderPosY - renderHeight / 2 + shakeY; // Apply shake to Y (using interpolated position)

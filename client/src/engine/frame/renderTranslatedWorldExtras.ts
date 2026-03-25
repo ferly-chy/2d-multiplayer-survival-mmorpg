@@ -14,7 +14,7 @@ import { renderAttackRangeDebug } from '../../utils/renderers/attackRangeDebugUt
 import { getCollisionShapesForDebug } from '../../utils/clientCollision';
 import { gameConfig } from '../../config/gameConfig';
 
-interface RenderTranslatedWorldExtrasOptions {
+export interface RenderTranslatedWorldExtrasOptions {
   ctx: CanvasRenderingContext2D;
   visibleHarvestableResourcesMap: Map<string, any>;
   visibleCampfiresMap: Map<string, any>;
@@ -110,163 +110,72 @@ interface RenderTranslatedWorldExtrasOptions {
   interpolatedGrass: any;
 }
 
-export function renderTranslatedWorldExtras({
-  ctx,
-  visibleHarvestableResourcesMap,
-  visibleCampfiresMap,
-  visibleFurnacesMap,
-  visibleBarbecuesMap,
-  fumaroles,
-  visibleDroppedItemsMap,
-  visibleBoxesMap,
-  visiblePlayerCorpsesMap,
-  stashes,
-  visibleSleepingBagsMap,
-  players,
-  itemDefinitions,
-  unifiedInteractableTarget,
-  visibleLanternsMap,
-  visibleTurretsMap,
-  rainCollectors,
-  brothPots,
-  visibleHomesteadHearthsMap,
-  visibleDoorsMap,
-  alkStations,
-  emptyMap,
-  localPlayer,
-  currentPredictedPosition,
-  isAutoAttacking,
-  isAutoWalking,
-  placementInfo,
-  buildingState,
-  itemImagesRef,
-  shelterImageRef,
-  currentWorldMouseX,
-  currentWorldMouseY,
-  isPlacementTooFarValue,
-  placementError,
-  clearPlacementError,
-  connection,
-  doodadImagesRef,
-  currentCameraOffsetX,
-  currentCameraOffsetY,
-  localPlayerX,
-  localPlayerY,
-  inventoryItems,
-  foundationTileImagesRef,
-  lastPlacementWarningRef,
-  setPlacementWarning,
-  cloudsEnabled,
-  clouds,
-  currentInterpolatedClouds,
-  cloudImagesRef,
-  droneEvents,
-  droneImageRef,
-  nowMs,
-  showChunkBoundaries,
-  worldState,
-  currentCanvasWidth,
-  currentCanvasHeight,
-  showInteriorDebug,
-  resolvedBuildingClusters,
-  playerBuildingClusterId,
-  showCollisionDebug,
-  trees,
-  stones,
-  runeStones,
-  cairns,
-  woodenStorageBoxes,
-  furnaces,
-  barbecues,
-  shelters,
-  wildAnimals,
-  visibleAnimalCorpsesMap,
-  barrels,
-  roadLampposts,
-  seaStacks,
-  wallCells,
-  foundationCells,
-  homesteadHearths,
-  basaltColumns,
-  doors,
-  lanterns,
-  turrets,
-  monumentParts,
-  isOnSeaTileForBarrels,
-  projectiles,
-  showYSortDebug,
-  currentYSortedEntities,
-  viewBounds,
-  hasStoneTiller,
-  currentLocalFacingDirection,
-  showAttackRangeDebug,
-  activeEquipments,
-  campfires,
-  sleepingBags,
-  interpolatedGrass,
-}: RenderTranslatedWorldExtrasOptions): void {
-  renderInteractionLabels({
+/** Clouds, drones, debug overlays — draw before GPU campfire smoke so plume can sit above world layers. */
+export function renderTranslatedWorldExtrasUnderCampfireOverlay(
+  opts: RenderTranslatedWorldExtrasOptions,
+): void {
+  const {
     ctx,
-    harvestableResources: visibleHarvestableResourcesMap,
-    campfires: visibleCampfiresMap,
-    furnaces: visibleFurnacesMap,
-    barbecues: visibleBarbecuesMap,
-    fumaroles,
-    droppedItems: visibleDroppedItemsMap,
-    woodenStorageBoxes: visibleBoxesMap,
-    playerCorpses: visiblePlayerCorpsesMap,
-    stashes,
-    sleepingBags: visibleSleepingBagsMap,
-    players,
-    itemDefinitions,
-    closestInteractableTarget: unifiedInteractableTarget,
-    lanterns: visibleLanternsMap,
-    turrets: visibleTurretsMap,
+    cloudsEnabled,
+    clouds,
+    currentInterpolatedClouds,
+    cloudImagesRef,
+    currentCameraOffsetX,
+    currentCameraOffsetY,
+    droneEvents,
+    droneImageRef,
+    nowMs,
+    showChunkBoundaries,
+    worldState,
+    currentCanvasWidth,
+    currentCanvasHeight,
+    showInteriorDebug,
+    resolvedBuildingClusters,
+    playerBuildingClusterId,
+    showCollisionDebug,
+    localPlayer,
+    currentPredictedPosition,
+    trees,
+    stones,
+    runeStones,
+    cairns,
+    woodenStorageBoxes,
     rainCollectors,
-    brothPots,
-    homesteadHearths: visibleHomesteadHearthsMap,
-    doors: visibleDoorsMap,
-    alkStations: alkStations || emptyMap,
-  });
-
-  if (localPlayer && !localPlayer.isDead) {
-    const localPlayerScreenX = currentPredictedPosition?.x ?? localPlayer.positionX;
-    const localPlayerScreenY = currentPredictedPosition?.y ?? localPlayer.positionY;
-    renderLocalPlayerStatusTags({
-      ctx,
-      playerX: localPlayerScreenX,
-      playerY: localPlayerScreenY,
-      isAutoAttacking,
-      isAutoWalking,
-    });
-  }
-
-  const placementWarningResult = renderPlacementPreview({
-    ctx,
-    placementInfo,
-    buildingState,
-    itemImagesRef,
-    shelterImageRef,
-    worldMouseX: currentWorldMouseX,
-    worldMouseY: currentWorldMouseY,
-    isPlacementTooFar: isPlacementTooFarValue,
-    placementError,
-    onClearPlacementError: clearPlacementError,
+    furnaces,
+    barbecues,
+    shelters,
+    players,
+    wildAnimals,
+    visibleAnimalCorpsesMap,
+    barrels,
+    roadLampposts,
+    seaStacks,
+    wallCells,
+    foundationCells,
+    homesteadHearths,
+    basaltColumns,
+    doors,
+    alkStations,
+    lanterns,
+    turrets,
+    monumentParts,
+    emptyMap,
+    isOnSeaTileForBarrels,
+    projectiles,
+    showYSortDebug,
+    currentYSortedEntities,
+    viewBounds,
+    hasStoneTiller,
     connection,
-    doodadImagesRef,
-    worldScale: 1,
-    viewOffsetX: -currentCameraOffsetX,
-    viewOffsetY: -currentCameraOffsetY,
-    localPlayerX,
-    localPlayerY,
-    inventoryItems,
+    currentLocalFacingDirection,
+    showAttackRangeDebug,
+    activeEquipments,
     itemDefinitions,
-    foundationTileImagesRef,
-  });
-  if (placementWarningResult !== lastPlacementWarningRef.current) {
-    lastPlacementWarningRef.current = placementWarningResult;
-    setPlacementWarning(placementWarningResult);
-  }
+    campfires,
+    sleepingBags,
+    stashes,
+    interpolatedGrass,
+  } = opts;
 
   if (cloudsEnabled && clouds && clouds.size > 0 && cloudImagesRef.current) {
     renderCloudsDirectly({
@@ -426,4 +335,126 @@ export function renderTranslatedWorldExtras({
       },
     );
   }
+}
+
+/** Interaction labels, status tags, placement preview — draw after GPU campfire smoke. */
+export function renderTranslatedWorldExtrasOverCampfireOverlay(
+  opts: RenderTranslatedWorldExtrasOptions,
+): void {
+  const {
+    ctx,
+    visibleHarvestableResourcesMap,
+    visibleCampfiresMap,
+    visibleFurnacesMap,
+    visibleBarbecuesMap,
+    fumaroles,
+    visibleDroppedItemsMap,
+    visibleBoxesMap,
+    visiblePlayerCorpsesMap,
+    stashes,
+    visibleSleepingBagsMap,
+    players,
+    itemDefinitions,
+    unifiedInteractableTarget,
+    visibleLanternsMap,
+    visibleTurretsMap,
+    rainCollectors,
+    brothPots,
+    visibleHomesteadHearthsMap,
+    visibleDoorsMap,
+    alkStations,
+    emptyMap,
+    localPlayer,
+    currentPredictedPosition,
+    isAutoAttacking,
+    isAutoWalking,
+    placementInfo,
+    buildingState,
+    itemImagesRef,
+    shelterImageRef,
+    currentWorldMouseX,
+    currentWorldMouseY,
+    isPlacementTooFarValue,
+    placementError,
+    clearPlacementError,
+    connection,
+    doodadImagesRef,
+    currentCameraOffsetX,
+    currentCameraOffsetY,
+    localPlayerX,
+    localPlayerY,
+    inventoryItems,
+    foundationTileImagesRef,
+    lastPlacementWarningRef,
+    setPlacementWarning,
+  } = opts;
+
+  renderInteractionLabels({
+    ctx,
+    harvestableResources: visibleHarvestableResourcesMap,
+    campfires: visibleCampfiresMap,
+    furnaces: visibleFurnacesMap,
+    barbecues: visibleBarbecuesMap,
+    fumaroles,
+    droppedItems: visibleDroppedItemsMap,
+    woodenStorageBoxes: visibleBoxesMap,
+    playerCorpses: visiblePlayerCorpsesMap,
+    stashes,
+    sleepingBags: visibleSleepingBagsMap,
+    players,
+    itemDefinitions,
+    closestInteractableTarget: unifiedInteractableTarget,
+    lanterns: visibleLanternsMap,
+    turrets: visibleTurretsMap,
+    rainCollectors,
+    brothPots,
+    homesteadHearths: visibleHomesteadHearthsMap,
+    doors: visibleDoorsMap,
+    alkStations: alkStations || emptyMap,
+  });
+
+  if (localPlayer && !localPlayer.isDead) {
+    const localPlayerScreenX = currentPredictedPosition?.x ?? localPlayer.positionX;
+    const localPlayerScreenY = currentPredictedPosition?.y ?? localPlayer.positionY;
+    renderLocalPlayerStatusTags({
+      ctx,
+      playerX: localPlayerScreenX,
+      playerY: localPlayerScreenY,
+      isAutoAttacking,
+      isAutoWalking,
+    });
+  }
+
+  const placementWarningResult = renderPlacementPreview({
+    ctx,
+    placementInfo,
+    buildingState,
+    itemImagesRef,
+    shelterImageRef,
+    worldMouseX: currentWorldMouseX,
+    worldMouseY: currentWorldMouseY,
+    isPlacementTooFar: isPlacementTooFarValue,
+    placementError,
+    onClearPlacementError: clearPlacementError,
+    connection,
+    doodadImagesRef,
+    worldScale: 1,
+    viewOffsetX: -currentCameraOffsetX,
+    viewOffsetY: -currentCameraOffsetY,
+    localPlayerX,
+    localPlayerY,
+    inventoryItems,
+    itemDefinitions,
+    foundationTileImagesRef,
+  });
+  if (placementWarningResult !== lastPlacementWarningRef.current) {
+    lastPlacementWarningRef.current = placementWarningResult;
+    setPlacementWarning(placementWarningResult);
+  }
+}
+
+/** Full pass in legacy order (labels under clouds). Prefer split under/over + campfire overlay in the frame. */
+export function renderTranslatedWorldExtras(opts: RenderTranslatedWorldExtrasOptions): void {
+  renderTranslatedWorldExtrasOverCampfireOverlay(opts);
+  renderTranslatedWorldExtrasUnderCampfireOverlay(opts);
 }

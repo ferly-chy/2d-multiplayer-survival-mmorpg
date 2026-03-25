@@ -23,9 +23,13 @@ import voleWalkingAnimatedSheet from '../../assets/vole_walking_release.png';
 import {
     usesSplitDirectionalSheets,
     getWildAnimalCorpseDirectionalSheetUrl,
+    getWildAnimalDirectionalStripLayout,
     REGISTERED_DIRECTIONAL_SHEET_PRELOAD_URLS,
 } from './wildAnimalSplitSheetConfig';
-import { getDirectionalWalkingStripSourceRect } from './npcDirectionalWalkingSheetAssets';
+import {
+    getDirectionalWalkingStripSourceRect,
+    DEFAULT_DIRECTIONAL_WALKING_STRIP_LAYOUT,
+} from './npcDirectionalWalkingSheetAssets';
 
 // Sprite sheet configuration for 4x4 sheets (Phase 6: 256x256, all animals)
 const SPRITE_SHEET_CONFIG_4X4 = {
@@ -140,7 +144,9 @@ function sliceRectIntoChunks(
 
 function getCorpseFrameSourceBase(species: { tag: string }): { sx: number; sy: number; fw: number; fh: number } {
   if (usesSplitDirectionalSheets(species.tag)) {
-    const r = getDirectionalWalkingStripSourceRect(0);
+    const layout =
+      getWildAnimalDirectionalStripLayout(species.tag) ?? DEFAULT_DIRECTIONAL_WALKING_STRIP_LAYOUT;
+    const r = getDirectionalWalkingStripSourceRect(0, layout);
     return { sx: r.sx, sy: r.sy, fw: r.sw, fh: r.sh };
   }
   return {

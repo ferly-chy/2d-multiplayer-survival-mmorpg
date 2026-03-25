@@ -11,9 +11,24 @@ import {
 
 export type { CampfireFireGpuEmitter };
 
-let wctx: ReturnType<typeof initCampfireFireWebGL> | undefined;
+let wctx: ReturnType<typeof initCampfireFireWebGL> | null | undefined;
+let loggedCampfireWebGLPath = false;
 
 const PX = 4;
+
+/** Sync init so sprite pick (before overlay composite) knows if GPU fire path is active. No-op if already tried. */
+export function touchCampfireFireWebGLInit(): void {
+  if (wctx !== undefined) return;
+  wctx = initCampfireFireWebGL();
+  if (wctx && !loggedCampfireWebGLPath) {
+    loggedCampfireWebGLPath = true;
+    console.log('[CampfireFire] Using WebGL2 (GPU) path');
+  }
+}
+
+export function isCampfireFireWebGLOverlayAvailable(): boolean {
+  return wctx != null;
+}
 
 export function renderCampfireFireOverlay(
   ctx: CanvasRenderingContext2D,
@@ -26,12 +41,7 @@ export function renderCampfireFireOverlay(
 ): void {
   if (emitters.length === 0 || canvasWidth <= 0 || canvasHeight <= 0) return;
 
-  if (wctx === undefined) {
-    wctx = initCampfireFireWebGL();
-    if (wctx) {
-      console.log('[CampfireFire] Using WebGL2 (GPU) path');
-    }
-  }
+  touchCampfireFireWebGLInit();
   if (!wctx) return;
 
   const camX = -cameraOffsetX;

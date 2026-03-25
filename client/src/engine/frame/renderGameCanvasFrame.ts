@@ -10,6 +10,15 @@ import { renderWardParticles } from '../../hooks/useWardParticles';
 import { renderCutGrassEffects } from '../../effects/cutGrassEffect';
 import { renderArrowBreakEffects } from '../../effects/arrowBreakEffect';
 import { renderCampfireFireOverlay } from '../../utils/renderers/campfireFireOverlayUtils';
+import { mergeCampfireFireEmittersWithYSort } from '../../utils/renderers/campfireFireEmittersMerge';
+import {
+  syncCampfireSmokePlumeBuild,
+  buildCampfireBurningStateMap,
+} from '../../utils/renderers/campfireSmokePlumeReach';
+import {
+  renderTranslatedWorldExtrasUnderCampfireOverlay,
+  renderTranslatedWorldExtrasOverCampfireOverlay,
+} from './renderTranslatedWorldExtras';
 
 export function renderGameCanvasFrame(args: any): void {
   const frameStartTime = performance.now();
@@ -70,7 +79,6 @@ export function renderGameCanvasFrame(args: any): void {
     footprintsEnabled,
     renderEntityWorldPasses,
     renderWorldPreparationPasses,
-    renderTranslatedWorldExtras,
     renderScreenSpaceWorldEffects,
     renderLateFramePasses,
     hoveredPlayerIds,
@@ -460,16 +468,24 @@ export function renderGameCanvasFrame(args: any): void {
     hasRepairHammer,
   });
 
+  // GPU fire only when isBurning (server: new campfires start unlit until fueled + lit).
+  // Merge y-sorted campfires so emitters match the renderer even if visibleCampfiresMap is stale same frame.
+  const fireOverlayTimeMs = performance.now();
+  syncCampfireSmokePlumeBuild(
+    buildCampfireBurningStateMap(visibleCampfiresMap, currentYSortedEntities as any[]),
+    fireOverlayTimeMs,
+  );
+  const hookEmitters =
+    typeof computeCampfireFireOverlayEmitters === 'function'
+      ? computeCampfireFireOverlayEmitters(fireOverlayTimeMs)
+      : [];
+  const fireEmitters = mergeCampfireFireEmittersWithYSort(
+    hookEmitters,
+    currentYSortedEntities as any[],
+    fireOverlayTimeMs,
+  );
+
   if (worldParticlesQuality > 0) {
-    renderCampfireFireOverlay(
-      ctx,
-      currentCameraOffsetX,
-      currentCameraOffsetY,
-      currentCanvasWidth,
-      currentCanvasHeight,
-      nowMs,
-      computeCampfireFireOverlayEmitters(nowMs),
-    );
     renderParticles(ctx, campfireParticles);
     renderParticles(ctx, fireArrowParticles);
     if (worldParticlesQuality > 1) {
@@ -488,7 +504,7 @@ export function renderGameCanvasFrame(args: any): void {
     (window as any).renderOtherPlayersFishing(ctx);
   }
 
-  renderTranslatedWorldExtras({
+  const translatedWorldExtrasOpts = {
     ctx,
     visibleHarvestableResourcesMap,
     visibleCampfiresMap,
@@ -582,7 +598,22 @@ export function renderGameCanvasFrame(args: any): void {
     campfires,
     sleepingBags: args.sleepingBags,
     interpolatedGrass,
-  });
+  };
+
+  renderTranslatedWorldExtrasUnderCampfireOverlay(translatedWorldExtrasOpts);
+
+  // Between clouds/debug and interaction UI so E labels and placement preview stay on top.
+  renderCampfireFireOverlay(
+    ctx,
+    currentCameraOffsetX,
+    currentCameraOffsetY,
+    currentCanvasWidth,
+    currentCanvasHeight,
+    fireOverlayTimeMs,
+    fireEmitters,
+  );
+
+  renderTranslatedWorldExtrasOverCampfireOverlay(translatedWorldExtrasOpts);
 
   ctx.restore();
 

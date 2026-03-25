@@ -2,6 +2,7 @@ import { Player as SpacetimeDBPlayer, ItemDefinition as SpacetimeDBItemDefinitio
 
 // Import rendering constants
 import { CAMPFIRE_RENDER_Y_OFFSET, CAMPFIRE_HEIGHT } from '../renderers/campfireRenderingUtils';
+import { getPlacedCampfireLightIntensity01 } from '../renderers/campfireGpuFireSmoothing';
 import { ROAD_LAMP_LIGHT_Y_OFFSET, ROAD_LAMP_LIGHT_RADIUS_BASE } from '../renderers/roadLamppostRenderingUtils';
 import { BUOY_HEIGHT } from '../renderers/barrelRenderingUtils';
 import { isNightTime, mapLegacyCycleProgress, NIGHT_LIGHTS_OFF } from '../../config/dayNightConstants';
@@ -188,9 +189,15 @@ function renderWoodFireLight(
     radiusBase: number,
     cameraOffsetX: number,
     cameraOffsetY: number,
-    buildingClusters?: Map<string, BuildingCluster>
+    buildingClusters?: Map<string, BuildingCluster>,
+    intensityScale: number = 1,
 ): void {
+    if (intensityScale <= 0) return;
+    const a = Math.max(0, Math.min(1, intensityScale));
     const restoreClip = applyIndoorClip(ctx, worldX, worldY, cameraOffsetX, cameraOffsetY, buildingClusters);
+
+    ctx.save();
+    ctx.globalAlpha *= a;
 
     const lightScreenX = worldX + cameraOffsetX;
     const lightScreenY = visualCenterY + cameraOffsetY;
@@ -238,6 +245,7 @@ function renderWoodFireLight(
     ctx.arc(lightScreenX, lightScreenY, coreRadius, 0, Math.PI * 2);
     ctx.fill();
 
+    ctx.restore();
     if (restoreClip) restoreClip();
 }
 
@@ -567,9 +575,22 @@ export const renderCampfireLight = ({
     cameraOffsetY,
     buildingClusters,
 }: RenderCampfireLightProps) => {
-    if (!campfire.isBurning) return;
+    const idKey = String(campfire.id);
+    const intensity = getPlacedCampfireLightIntensity01(campfire.isBurning, idKey);
+    if (intensity <= 0) return;
     const visualCenterY = campfire.posY - (CAMPFIRE_HEIGHT / 2) - CAMPFIRE_RENDER_Y_OFFSET;
-    renderWoodFireLight(ctx, campfire.posX, campfire.posY, visualCenterY, CAMPFIRE_FLICKER_AMOUNT, CAMPFIRE_LIGHT_RADIUS_BASE, cameraOffsetX, cameraOffsetY, buildingClusters);
+    renderWoodFireLight(
+        ctx,
+        campfire.posX,
+        campfire.posY,
+        visualCenterY,
+        CAMPFIRE_FLICKER_AMOUNT,
+        CAMPFIRE_LIGHT_RADIUS_BASE,
+        cameraOffsetX,
+        cameraOffsetY,
+        buildingClusters,
+        intensity,
+    );
 };
 
 // --- Barbecue Light Rendering ---
@@ -591,7 +612,18 @@ export const renderBarbecueLight = ({
 }: RenderBarbecueLightProps) => {
     if (!barbecue.isBurning) return;
     // Sprite is CENTERED on posY, so visual center = posY
-    renderWoodFireLight(ctx, barbecue.posX, barbecue.posY, barbecue.posY, BARBECUE_FLICKER_AMOUNT, BARBECUE_LIGHT_RADIUS_BASE, cameraOffsetX, cameraOffsetY, buildingClusters);
+    renderWoodFireLight(
+        ctx,
+        barbecue.posX,
+        barbecue.posY,
+        barbecue.posY,
+        BARBECUE_FLICKER_AMOUNT,
+        BARBECUE_LIGHT_RADIUS_BASE,
+        cameraOffsetX,
+        cameraOffsetY,
+        buildingClusters,
+        1,
+    );
 };
 
 // --- Lantern Light Rendering ---

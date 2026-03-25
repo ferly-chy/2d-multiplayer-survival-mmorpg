@@ -1,12 +1,14 @@
 /**
- * useGameReducerFeedbackHandlers - Registers SpacetimeDB reducer callbacks for error/success feedback.
- * Handles consumeItem, applyFertilizer, destroy, placement, pickup, doors, cairns, milking, fishing, upgrade.
+ * SpacetimeDB 2.x: `connection.reducers` is invoke-only (no `onConsumeItem` / `removeOn*`).
+ * We wrap selected reducer methods once per connection so failed calls still run sounds + toasts
+ * via the returned Promise rejection (SenderError / InternalError).
  */
 
 import { useEffect } from 'react';
+import { InternalError, SenderError } from 'spacetimedb';
 import { logReducer, trimErrorForDisplay } from '../utils/gameDebugUtils';
 
-type Connection = { reducers: Record<string, (...args: any[]) => void> } | null;
+type Connection = { reducers: Record<string, unknown> } | null;
 
 export interface UseGameReducerFeedbackHandlersParams {
   connection: Connection;
@@ -15,22 +17,197 @@ export interface UseGameReducerFeedbackHandlersParams {
   isAnySovaAudioPlaying: () => boolean;
 }
 
-type ReducerBinding = { on: string; off: string; handler: (...args: any[]) => void };
-
-function registerReducerBindings(connection: NonNullable<Connection>, bindings: ReducerBinding[]) {
-  const reducers = connection.reducers;
-  for (const binding of bindings) {
-    const fn = (reducers as any)[binding.on];
-    if (typeof fn === 'function') fn.call(reducers, binding.handler);
+function rejectionMessage(err: unknown): string {
+  if (err instanceof SenderError || err instanceof InternalError || err instanceof Error) {
+    return err.message;
   }
+  return String(err);
 }
 
-function unregisterReducerBindings(connection: NonNullable<Connection>, bindings: ReducerBinding[]) {
+type FailureCtx = Pick<
+  UseGameReducerFeedbackHandlersParams,
+  'showError' | 'playImmediateSound' | 'isAnySovaAudioPlaying'
+>;
+
+const PLACEMENT_LABELS: Record<string, string> = {
+  placeCampfire: 'Campfire',
+  placeFurnace: 'Furnace',
+  placeLantern: 'Lantern',
+  placeWoodenStorageBox: 'Wooden Storage Box',
+  placeSleepingBag: 'Sleeping Bag',
+  placeStash: 'Stash',
+  placeShelter: 'Shelter',
+  placeRainCollector: 'Rain Collector',
+  placeHomesteadHearth: "Matron's Chest",
+  placeBarbecue: 'Barbecue',
+  placeTurret: 'Turret',
+  placeExplosive: 'Explosive',
+};
+
+function wrapReducer(
+  reducers: Record<string, unknown>,
+  methodName: string,
+  onFailure: (errorMsg: string, args: unknown[]) => void
+): (() => void) | undefined {
+  const original = reducers[methodName];
+  if (typeof original !== 'function') return undefined;
+
+  const bound = original.bind(reducers) as (...args: unknown[]) => Promise<unknown>;
+
+  reducers[methodName] = (...args: unknown[]) => {
+    return bound(...args).catch((err: unknown) => {
+      onFailure(rejectionMessage(err), args);
+      return Promise.reject(err);
+    });
+  };
+
+  return () => {
+    reducers[methodName] = original;
+  };
+}
+
+function installReducerFailureWrappers(connection: NonNullable<Connection>, ctx: FailureCtx): () => void {
+  const { showError, playImmediateSound, isAnySovaAudioPlaying } = ctx;
   const reducers = connection.reducers;
-  for (const binding of bindings) {
-    const fn = (reducers as any)[binding.off];
-    if (typeof fn === 'function') fn.call(reducers, binding.handler);
+  const cleanups: (() => void)[] = [];
+
+  const add = (method: string, onFailure: (errorMsg: string, args: unknown[]) => void) => {
+    const u = wrapReducer(reducers, method, onFailure);
+    if (u) cleanups.push(u);
+  };
+
+  add('consumeItem', (errorMsg, args) => {
+    const params = args[0] as { itemInstanceId?: bigint } | undefined;
+    logReducer('GameCanvas', 'consumeItem reject', params?.itemInstanceId?.toString?.() ?? '?', errorMsg);
+    if (errorMsg === 'BREW_COOLDOWN') {
+      if (isAnySovaAudioPlaying()) {
+        showError('Brew cooldown active.');
+      } else {
+        const brewCooldownSounds = [
+          '/sounds/sova_brew_cooldown.mp3',
+          '/sounds/sova_brew_cooldown1.mp3',
+          '/sounds/sova_brew_cooldown2.mp3',
+          '/sounds/sova_brew_cooldown3.mp3',
+        ];
+        const randomSound = brewCooldownSounds[Math.floor(Math.random() * brewCooldownSounds.length)];
+        try {
+          const audio = new Audio(randomSound);
+          audio.volume = 0.7;
+          audio.play().catch(() => {});
+        } catch {
+          // Ignore
+        }
+      }
+    } else {
+      showError(trimErrorForDisplay(errorMsg));
+    }
+  });
+
+  add('applyFertilizer', (errorMsg, args) => {
+    const params = args[0] as { fertilizerInstanceId?: bigint } | undefined;
+    logReducer('GameCanvas', 'applyFertilizer reject', params?.fertilizerInstanceId?.toString?.() ?? '?', errorMsg);
+    showError(trimErrorForDisplay(errorMsg || 'Unknown error'));
+  });
+
+  add('destroyFoundation', (errorMsg) => {
+    logReducer('GameCanvas', 'destroyFoundation', errorMsg);
+    showError(trimErrorForDisplay(errorMsg || 'Failed to destroy foundation'));
+  });
+
+  add('destroyWall', (errorMsg) => {
+    logReducer('GameCanvas', 'destroyWall', errorMsg);
+    showError(trimErrorForDisplay(errorMsg || 'Failed to destroy wall'));
+  });
+
+  add('fireProjectile', () => {
+    // Sync / expected failures — suppress sound and toast
+  });
+
+  add('loadRangedWeapon', (errorMsg) => {
+    if (errorMsg.includes('need at least 1 arrow')) {
+      playImmediateSound('error_arrows', 1.0);
+    }
+    showError(errorMsg || 'Failed to load weapon');
+  });
+
+  const upgradeFoundationLike = (errorMsg: string) => {
+    if (errorMsg.includes('Building privilege') || errorMsg.includes('building privilege')) {
+      playImmediateSound('error_building_privilege', 1.0);
+    } else if (
+      errorMsg.includes('Cannot downgrade') ||
+      errorMsg.includes('Current tier') ||
+      errorMsg.includes('Target tier')
+    ) {
+      playImmediateSound('error_tier_upgrade', 1.0);
+    } else if (
+      errorMsg.includes('Not enough') ||
+      errorMsg.includes('wood') ||
+      errorMsg.includes('stone') ||
+      errorMsg.includes('metal fragments') ||
+      errorMsg.includes('Required:')
+    ) {
+      playImmediateSound('error_resources', 1.0);
+    }
+    showError(trimErrorForDisplay(errorMsg));
+  };
+
+  add('upgradeFoundation', (errorMsg) => upgradeFoundationLike(errorMsg));
+
+  add('upgradeWall', (errorMsg) => {
+    logReducer('GameCanvas', 'upgradeWall', errorMsg);
+    upgradeFoundationLike(errorMsg || 'Failed to upgrade wall');
+  });
+
+  for (const [method, label] of Object.entries(PLACEMENT_LABELS)) {
+    add(method, (errorMsg) => {
+      playImmediateSound('error_placement_failed', 1.0);
+      showError(trimErrorForDisplay(errorMsg || `${label} placement failed`));
+    });
   }
+
+  add('pickupDroppedItem', (errorMsg) => {
+    const lower = errorMsg.toLowerCase();
+    if (lower.includes('too far') || lower.includes('not found')) return;
+    showError(trimErrorForDisplay(errorMsg || 'Cannot pick up item'));
+  });
+
+  add('interactDoor', (errorMsg) => {
+    if (errorMsg.toLowerCase().includes('too far')) return;
+    showError(trimErrorForDisplay(errorMsg || 'Cannot interact with door'));
+  });
+
+  add('interactWithCairn', (errorMsg) => {
+    if (errorMsg.toLowerCase().includes('too far')) return;
+    showError(trimErrorForDisplay(errorMsg || 'Cannot interact with cairn'));
+  });
+
+  add('milkAnimal', (errorMsg) => {
+    if (errorMsg.toLowerCase().includes('too far')) return;
+    showError(trimErrorForDisplay(errorMsg || 'Cannot milk animal'));
+  });
+
+  add('castFishingLine', (errorMsg) => {
+    if (errorMsg.toLowerCase().includes('too far')) return;
+    showError(trimErrorForDisplay(errorMsg || 'Cannot cast fishing line'));
+  });
+
+  add('finishFishing', (errorMsg) => {
+    const lower = errorMsg.toLowerCase();
+    if (lower.includes('no active') || lower.includes('session is not active')) return;
+    showError(trimErrorForDisplay(errorMsg || 'Fishing failed'));
+  });
+
+  add('respawnRandomly', (errorMsg) => {
+    showError(trimErrorForDisplay(errorMsg || 'Respawn failed'));
+  });
+
+  add('respawnAtSleepingBag', (errorMsg) => {
+    showError(trimErrorForDisplay(errorMsg || 'Respawn at sleeping bag failed'));
+  });
+
+  return () => {
+    for (let i = cleanups.length - 1; i >= 0; i--) cleanups[i]();
+  };
 }
 
 export function useGameReducerFeedbackHandlers({
@@ -41,223 +218,10 @@ export function useGameReducerFeedbackHandlers({
 }: UseGameReducerFeedbackHandlersParams) {
   useEffect(() => {
     if (!connection) return;
-
-    const handleConsumeItemResult = (ctx: any, itemInstanceId: bigint) => {
-      logReducer('GameCanvas', 'consumeItem callback', itemInstanceId.toString(), ctx.event?.status);
-      if (ctx.event?.status?.tag === 'Failed') {
-        const errorMsg = ctx.event.status.value || 'Unknown error';
-        if (errorMsg === 'BREW_COOLDOWN') {
-          if (isAnySovaAudioPlaying()) {
-            showError('Brew cooldown active.');
-          } else {
-            const brewCooldownSounds = [
-              '/sounds/sova_brew_cooldown.mp3',
-              '/sounds/sova_brew_cooldown1.mp3',
-              '/sounds/sova_brew_cooldown2.mp3',
-              '/sounds/sova_brew_cooldown3.mp3',
-            ];
-            const randomSound = brewCooldownSounds[Math.floor(Math.random() * brewCooldownSounds.length)];
-            try {
-              const audio = new Audio(randomSound);
-              audio.volume = 0.7;
-              audio.play().catch(() => {});
-            } catch {
-              // Ignore
-            }
-          }
-        } else {
-          showError(trimErrorForDisplay(errorMsg));
-        }
-      }
-    };
-
-    const handleApplyFertilizerResult = (ctx: any, fertilizerInstanceId: bigint) => {
-      logReducer('GameCanvas', 'applyFertilizer callback', fertilizerInstanceId.toString(), ctx.event?.status);
-      if (ctx.event?.status?.tag === 'Failed') {
-        showError(trimErrorForDisplay(ctx.event.status.value || 'Unknown error'));
-      }
-    };
-
-    const handleDestroyFoundationResult = (ctx: any, foundationId: bigint) => {
-      logReducer('GameCanvas', 'destroyFoundation', ctx.event?.status);
-      if (ctx.event?.status?.tag === 'Failed') {
-        showError(trimErrorForDisplay(ctx.event.status.value || 'Failed to destroy foundation'));
-      }
-    };
-
-    const handleDestroyWallResult = (ctx: any, wallId: bigint) => {
-      logReducer('GameCanvas', 'destroyWall', ctx.event?.status);
-      if (ctx.event?.status?.tag === 'Failed') {
-        showError(trimErrorForDisplay(ctx.event.status.value || 'Failed to destroy wall'));
-      }
-    };
-
-    const handleFireProjectileResult = () => {
-      // Sync issue - suppress sound, no user-facing error
-    };
-
-    const handleLoadRangedWeaponResult = (ctx: any) => {
-      if (ctx.event?.status?.tag === 'Failed') {
-        const errorMsg = ctx.event.status.value || '';
-        if (errorMsg.includes('need at least 1 arrow')) {
-          playImmediateSound('error_arrows', 1.0);
-        }
-        showError(errorMsg || 'Failed to load weapon');
-      }
-    };
-
-    const handleUpgradeFoundationResult = (ctx: any, _foundationId: bigint, _newTier: number) => {
-      if (ctx.event?.status?.tag === 'Failed') {
-        const errorMsg = ctx.event.status.value || '';
-        if (errorMsg.includes('Building privilege') || errorMsg.includes('building privilege')) {
-          playImmediateSound('error_building_privilege', 1.0);
-        } else if (errorMsg.includes('Cannot downgrade') || errorMsg.includes('Current tier') || errorMsg.includes('Target tier')) {
-          playImmediateSound('error_tier_upgrade', 1.0);
-        } else if (errorMsg.includes('Not enough') || errorMsg.includes('wood') || errorMsg.includes('stone') || errorMsg.includes('metal fragments') || errorMsg.includes('Required:')) {
-          playImmediateSound('error_resources', 1.0);
-        }
-        showError(trimErrorForDisplay(errorMsg));
-      }
-    };
-
-    const handlePlacementError = (ctx: any, itemName: string) => {
-      const status = ctx.event?.status;
-      const isFailed = status?.tag === 'Failed' || (status && typeof status === 'object' && 'Failed' in status);
-      if (isFailed) {
-        let errorMsg =
-          (status?.tag === 'Failed' && status?.value) ||
-          status?.Failed ||
-          ctx.event?.message ||
-          `${itemName} placement failed`;
-        if (typeof errorMsg !== 'string') errorMsg = String(errorMsg);
-        playImmediateSound('error_placement_failed', 1.0);
-        showError(trimErrorForDisplay(errorMsg));
-      }
-    };
-
-    const createPlacementHandler = (itemName: string) =>
-      (_ctx: any, _itemInstanceId: bigint, _worldX: number, _worldY: number) =>
-        handlePlacementError(_ctx, itemName);
-
-    const PLACEMENT_BINDINGS: { on: string; off: string; label: string }[] = [
-      { on: 'onPlaceCampfire', off: 'removeOnPlaceCampfire', label: 'Campfire' },
-      { on: 'onPlaceFurnace', off: 'removeOnPlaceFurnace', label: 'Furnace' },
-      { on: 'onPlaceLantern', off: 'removeOnPlaceLantern', label: 'Lantern' },
-      { on: 'onPlaceWoodenStorageBox', off: 'removeOnPlaceWoodenStorageBox', label: 'Wooden Storage Box' },
-      { on: 'onPlaceSleepingBag', off: 'removeOnPlaceSleepingBag', label: 'Sleeping Bag' },
-      { on: 'onPlaceStash', off: 'removeOnPlaceStash', label: 'Stash' },
-      { on: 'onPlaceShelter', off: 'removeOnPlaceShelter', label: 'Shelter' },
-      { on: 'onPlaceRainCollector', off: 'removeOnPlaceRainCollector', label: 'Rain Collector' },
-      { on: 'onPlaceHomesteadHearth', off: 'removeOnPlaceHomesteadHearth', label: "Matron's Chest" },
-      { on: 'onPlaceBarbecue', off: 'removeOnPlaceBarbecue', label: 'Barbecue' },
-      { on: 'onPlaceTurret', off: 'removeOnPlaceTurret', label: 'Turret' },
-      { on: 'onPlaceExplosive', off: 'removeOnPlaceExplosive', label: 'Explosive' },
-    ];
-
-    const handleUpgradeWallResult = (ctx: any, _wallId: bigint, _newTier: number) => {
-      logReducer('GameCanvas', 'upgradeWall', ctx.event?.status);
-      if (ctx.event?.status?.tag === 'Failed') {
-        const errorMsg = ctx.event.status.value || 'Failed to upgrade wall';
-        if (errorMsg.includes('Building privilege') || errorMsg.includes('building privilege')) {
-          playImmediateSound('error_building_privilege', 1.0);
-        } else if (errorMsg.includes('Cannot downgrade') || errorMsg.includes('Current tier') || errorMsg.includes('Target tier')) {
-          playImmediateSound('error_tier_upgrade', 1.0);
-        } else if (errorMsg.includes('Not enough') || errorMsg.includes('wood') || errorMsg.includes('stone') || errorMsg.includes('metal fragments') || errorMsg.includes('Required:')) {
-          playImmediateSound('error_resources', 1.0);
-        }
-        showError(trimErrorForDisplay(errorMsg));
-      }
-    };
-
-    const requiredBindings: ReducerBinding[] = [
-      { on: 'onConsumeItem', off: 'removeOnConsumeItem', handler: handleConsumeItemResult },
-      { on: 'onApplyFertilizer', off: 'removeOnApplyFertilizer', handler: handleApplyFertilizerResult },
-      { on: 'onDestroyFoundation', off: 'removeOnDestroyFoundation', handler: handleDestroyFoundationResult },
-      { on: 'onDestroyWall', off: 'removeOnDestroyWall', handler: handleDestroyWallResult },
-      { on: 'onFireProjectile', off: 'removeOnFireProjectile', handler: handleFireProjectileResult },
-      { on: 'onLoadRangedWeapon', off: 'removeOnLoadRangedWeapon', handler: handleLoadRangedWeaponResult },
-      { on: 'onUpgradeFoundation', off: 'removeOnUpgradeFoundation', handler: handleUpgradeFoundationResult },
-      { on: 'onUpgradeWall', off: 'removeOnUpgradeWall', handler: handleUpgradeWallResult },
-      ...PLACEMENT_BINDINGS.map(({ on, off, label }) => ({ on, off, handler: createPlacementHandler(label) })),
-    ];
-    registerReducerBindings(connection, requiredBindings);
-
-    const handlePickupDroppedItemResult = (ctx: any) => {
-      if (ctx.event?.status?.tag === 'Failed') {
-        const errorMsg = ctx.event.status.value || 'Cannot pick up item';
-        if (errorMsg.toLowerCase().includes('too far') || errorMsg.toLowerCase().includes('not found')) return;
-        showError(trimErrorForDisplay(errorMsg));
-      }
-    };
-    const handleInteractDoorResult = (ctx: any) => {
-      if (ctx.event?.status?.tag === 'Failed') {
-        const errorMsg = ctx.event.status.value || 'Cannot interact with door';
-        if (errorMsg.toLowerCase().includes('too far')) return;
-        showError(trimErrorForDisplay(errorMsg));
-      }
-    };
-    const handleInteractWithCairnResult = (ctx: any) => {
-      if (ctx.event?.status?.tag === 'Failed') {
-        const errorMsg = ctx.event.status.value || 'Cannot interact with cairn';
-        if (errorMsg.toLowerCase().includes('too far')) return;
-        showError(trimErrorForDisplay(errorMsg));
-      }
-    };
-    const handleMilkAnimalResult = (ctx: any) => {
-      if (ctx.event?.status?.tag === 'Failed') {
-        const errorMsg = ctx.event.status.value || 'Cannot milk animal';
-        if (errorMsg.toLowerCase().includes('too far')) return;
-        showError(trimErrorForDisplay(errorMsg));
-      }
-    };
-    const handleCastFishingLineResult = (ctx: any) => {
-      if (ctx.event?.status?.tag === 'Failed') {
-        const errorMsg = ctx.event.status.value || 'Cannot cast fishing line';
-        if (errorMsg.toLowerCase().includes('too far')) return;
-        showError(trimErrorForDisplay(errorMsg));
-      }
-    };
-    const handleFinishFishingResult = (ctx: any) => {
-      if (ctx.event?.status?.tag === 'Failed') {
-        const errorMsg = ctx.event.status.value || 'Fishing failed';
-        if (errorMsg.toLowerCase().includes('no active') || errorMsg.toLowerCase().includes('session is not active')) return;
-        showError(trimErrorForDisplay(errorMsg));
-      }
-    };
-
-    const handleRespawnRandomlyResult = (ctx: any) => {
-      if (ctx.event?.status?.tag === 'Failed') {
-        showError(trimErrorForDisplay(ctx.event.status.value || 'Respawn failed'));
-      }
-    };
-
-    const handleRespawnAtBagResult = (ctx: any, _bagId: number) => {
-      if (ctx.event?.status?.tag === 'Failed') {
-        showError(trimErrorForDisplay(ctx.event.status.value || 'Respawn at sleeping bag failed'));
-      }
-    };
-
-    const optionalBindings: ReducerBinding[] = [
-      { on: 'onPickupDroppedItem', off: 'removeOnPickupDroppedItem', handler: handlePickupDroppedItemResult },
-      { on: 'onInteractDoor', off: 'removeOnInteractDoor', handler: handleInteractDoorResult },
-      { on: 'onInteractWithCairn', off: 'removeOnInteractWithCairn', handler: handleInteractWithCairnResult },
-      { on: 'onMilkAnimal', off: 'removeOnMilkAnimal', handler: handleMilkAnimalResult },
-      { on: 'onCastFishingLine', off: 'removeOnCastFishingLine', handler: handleCastFishingLineResult },
-      { on: 'onFinishFishing', off: 'removeOnFinishFishing', handler: handleFinishFishingResult },
-      { on: 'onRespawnRandomly', off: 'removeOnRespawnRandomly', handler: handleRespawnRandomlyResult },
-      { on: 'onRespawnAtSleepingBag', off: 'removeOnRespawnAtSleepingBag', handler: handleRespawnAtBagResult },
-    ];
-    for (const binding of optionalBindings) {
-      const onFn = (connection.reducers as any)[binding.on];
-      if (typeof onFn === 'function') onFn.call(connection.reducers, binding.handler);
-    }
-
-    return () => {
-      unregisterReducerBindings(connection, requiredBindings);
-      for (const binding of optionalBindings) {
-        const offFn = (connection.reducers as any)[binding.off];
-        if (typeof offFn === 'function') offFn.call(connection.reducers, binding.handler);
-      }
-    };
+    return installReducerFailureWrappers(connection, {
+      showError,
+      playImmediateSound,
+      isAnySovaAudioPlaying,
+    });
   }, [connection, showError, playImmediateSound, isAnySovaAudioPlaying]);
 }

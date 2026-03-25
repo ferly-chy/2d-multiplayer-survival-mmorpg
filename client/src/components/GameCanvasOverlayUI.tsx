@@ -1,4 +1,4 @@
-import React, { type MutableRefObject } from 'react';
+import React, { type MutableRefObject, useRef } from 'react';
 import DeathScreen from './DeathScreen';
 import GameMinimapOverlay from './GameMinimapOverlay';
 import { BuildingRadialMenu } from './BuildingRadialMenu';
@@ -10,6 +10,11 @@ import { logDebug } from '../utils/gameDebugUtils';
 import { useGameplaySession } from '../contexts/GameplaySessionContext';
 import { useEngineSnapshot } from '../engine/react/useEngineSnapshot';
 import { useGameScreenWorldTables, useLocalPlayer } from '../engine/selectors';
+import { calculateChunkIndex } from '../utils/chunkUtils';
+import {
+  EMPTY_TOOLTIP_WORLD_ENV,
+  type TooltipWorldEnv,
+} from './plantedSeedTooltipSnapshot';
 
 const EMPTY_MAP = new Map();
 
@@ -77,6 +82,30 @@ export default function GameCanvasOverlayUI(props: GameCanvasOverlayUIProps) {
   const resolvedTrees = worldTables.trees ?? EMPTY_MAP;
   const resolvedRuneStones = worldTables.runeStones ?? EMPTY_MAP;
   const resolvedLanterns = worldTables.lanterns ?? EMPTY_MAP;
+
+  const plantedSeedTooltipWorldRef = useRef<TooltipWorldEnv>(EMPTY_TOOLTIP_WORLD_ENV);
+  plantedSeedTooltipWorldRef.current = {
+    clouds: worldTables.clouds ?? EMPTY_MAP,
+    worldState: worldTables.worldState,
+    chunkWeather: worldTables.chunkWeather ?? EMPTY_MAP,
+    waterPatches: worldTables.waterPatches ?? EMPTY_MAP,
+    campfires: worldTables.campfires ?? EMPTY_MAP,
+    lanterns: resolvedLanterns,
+    furnaces: worldTables.furnaces ?? EMPTY_MAP,
+    trees: resolvedTrees,
+    runeStones: resolvedRuneStones,
+    fertilizerPatches: worldTables.fertilizerPatches ?? EMPTY_MAP,
+    worldChunkData: worldChunkDataMap ?? undefined,
+  };
+
+  const plantedSeedChunkWxTag =
+    hoveredSeed != null
+      ? (worldTables.chunkWeather ?? EMPTY_MAP)
+          .get(calculateChunkIndex(hoveredSeed.posX, hoveredSeed.posY).toString())
+          ?.currentWeather?.tag ?? ''
+      : '';
+  const plantedSeedGlobalWeatherTag = worldTables.worldState?.currentWeather?.tag ?? '';
+  const plantedSeedTimeOfDayTag = worldTables.worldState?.timeOfDay?.tag ?? '';
 
   const closeFoundationUpgrade = () => {
     setShowUpgradeRadialMenu(false);
@@ -258,17 +287,10 @@ export default function GameCanvasOverlayUI(props: GameCanvasOverlayUIProps) {
           seed={hoveredSeed}
           visible={true}
           position={{ x: canvasMousePos.x, y: canvasMousePos.y }}
-          clouds={worldTables.clouds}
-          worldState={worldTables.worldState}
-          chunkWeather={worldTables.chunkWeather}
-          waterPatches={worldTables.waterPatches}
-          campfires={worldTables.campfires}
-          lanterns={resolvedLanterns}
-          furnaces={worldTables.furnaces}
-          trees={resolvedTrees}
-          runeStones={resolvedRuneStones}
-          fertilizerPatches={worldTables.fertilizerPatches}
-          worldChunkData={worldChunkDataMap ?? undefined}
+          worldEnvRef={plantedSeedTooltipWorldRef}
+          globalWeatherTag={plantedSeedGlobalWeatherTag}
+          timeOfDayTag={plantedSeedTimeOfDayTag}
+          chunkWxTag={plantedSeedChunkWxTag}
         />
       )}
 

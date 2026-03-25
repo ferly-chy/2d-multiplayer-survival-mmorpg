@@ -5,7 +5,6 @@ import { useGameCanvasLagDiagnostics } from '../../hooks/useGameCanvasLagDiagnos
 import { renderLateFramePasses } from '../frame/renderLateFramePasses';
 import { renderWorldPreparationPasses } from '../frame/renderWorldPreparationPasses';
 import { renderEntityWorldPasses } from '../frame/renderEntityWorldPasses';
-import { renderTranslatedWorldExtras } from '../frame/renderTranslatedWorldExtras';
 import { renderScreenSpaceWorldEffects } from '../frame/renderScreenSpaceWorldEffects';
 import type {
   GameCanvasRuntimeControllerSnapshot,
@@ -230,7 +229,6 @@ export function useGameCanvasRenderRuntime({
     footprintsEnabled,
     renderWorldPreparationPasses,
     renderEntityWorldPasses,
-    renderTranslatedWorldExtras,
     renderScreenSpaceWorldEffects,
     renderLateFramePasses,
     hoveredPlayerIds,

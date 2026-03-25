@@ -30,6 +30,7 @@ import {
 } from '../config/dayNightConstants';
 import { dayNightConfig } from '../config/sharedGameConfig';
 import { CAMPFIRE_HEIGHT } from '../utils/renderers/campfireRenderingUtils';
+import { getPlacedCampfireLightIntensity01 } from '../utils/renderers/campfireGpuFireSmoothing';
 import { LANTERN_HEIGHT, LANTERN_RENDER_Y_OFFSET, LANTERN_TYPE_LANTERN } from '../utils/renderers/lanternRenderingUtils';
 import { FURNACE_HEIGHT, FURNACE_RENDER_Y_OFFSET, getFurnaceDimensions, FURNACE_TYPE_LARGE } from '../utils/renderers/furnaceRenderingUtils';
 import { BARBECUE_HEIGHT, BARBECUE_RENDER_Y_OFFSET } from '../utils/renderers/barbecueRenderingUtils';
@@ -309,7 +310,8 @@ function renderClippedLightCutout(
     gradientStops: Array<{ stop: number; alpha: number }>,
     enclosingCluster: { clusterId: string; cluster: BuildingCluster } | null,
     cameraOffsetX: number,
-    cameraOffsetY: number
+    cameraOffsetY: number,
+    alphaScale: number = 1,
 ): void {
     // Save context before potentially applying clip
     if (enclosingCluster) {
@@ -322,8 +324,9 @@ function renderClippedLightCutout(
     const innerRadius = lightRadius * (gradientStops[0]?.stop || 0.08);
     const maskGradient = ctx.createRadialGradient(screenX, screenY, innerRadius, screenX, screenY, lightRadius);
     
+    const s = Math.max(0, Math.min(1, alphaScale));
     for (const { stop, alpha } of gradientStops) {
-        maskGradient.addColorStop(stop, `rgba(0,0,0,${alpha})`);
+        maskGradient.addColorStop(stop, `rgba(0,0,0,${alpha * s})`);
     }
     
     ctx.fillStyle = maskGradient;
@@ -673,41 +676,44 @@ export function useDayNightCycle({
             });
         }
 
-        // Render campfire light cutouts
+        // Render campfire light cutouts (alpha follows GPU fire ramp when WebGL2 overlay is active)
         campfires.forEach(campfire => {
-            if (campfire.isBurning) {
-                // Adjust Y position for the light source to be centered on the flame
-                const visualCenterWorldY = campfire.posY - (CAMPFIRE_HEIGHT / 2);
-                const adjustedGradientCenterWorldY = visualCenterWorldY - (CAMPFIRE_HEIGHT * 0); // Changed from 0.6 to 0.4
-                
-                const screenX = campfire.posX + cameraOffsetX;
-                const screenY = adjustedGradientCenterWorldY + cameraOffsetY; // Use adjusted Y
-                
-                // Check if campfire is inside an enclosed building
-                const enclosingCluster = buildingClusters 
-                    ? findEnclosingCluster(campfire.posX, campfire.posY, buildingClusters)
-                    : null;
-                
-                // SUBSTANTIAL CAMPFIRE CUTOUT - 2x larger inner bright area with natural gradient
-                const lightRadius = CAMPFIRE_LIGHT_RADIUS_BASE * 2.0; // Double the cutout size
-                
-                // Use clipped rendering if inside a building
-                renderClippedLightCutout(
-                    maskCtx,
-                    screenX,
-                    screenY,
-                    lightRadius,
-                    [
-                        { stop: 0.08, alpha: 1 },    // Full cutout at center
-                        { stop: 0.4, alpha: 0.7 },   // Natural transition zone
-                        { stop: 0.8, alpha: 0.3 },   // Gentle fade
-                        { stop: 1, alpha: 0 },       // Complete fade to darkness
-                    ],
-                    enclosingCluster,
-                    cameraOffsetX,
-                    cameraOffsetY
-                );
-            }
+            const cutoutAlpha = getPlacedCampfireLightIntensity01(
+                campfire.isBurning,
+                String(campfire.id),
+            );
+            if (cutoutAlpha <= 0) return;
+            // Adjust Y position for the light source to be centered on the flame
+            const visualCenterWorldY = campfire.posY - (CAMPFIRE_HEIGHT / 2);
+            const adjustedGradientCenterWorldY = visualCenterWorldY - (CAMPFIRE_HEIGHT * 0); // Changed from 0.6 to 0.4
+
+            const screenX = campfire.posX + cameraOffsetX;
+            const screenY = adjustedGradientCenterWorldY + cameraOffsetY; // Use adjusted Y
+
+            // Check if campfire is inside an enclosed building
+            const enclosingCluster = buildingClusters
+                ? findEnclosingCluster(campfire.posX, campfire.posY, buildingClusters)
+                : null;
+
+            // SUBSTANTIAL CAMPFIRE CUTOUT - 2x larger inner bright area with natural gradient
+            const lightRadius = CAMPFIRE_LIGHT_RADIUS_BASE * 2.0; // Double the cutout size
+
+            renderClippedLightCutout(
+                maskCtx,
+                screenX,
+                screenY,
+                lightRadius,
+                [
+                    { stop: 0.08, alpha: 1 },    // Full cutout at center
+                    { stop: 0.4, alpha: 0.7 },   // Natural transition zone
+                    { stop: 0.8, alpha: 0.3 },   // Gentle fade
+                    { stop: 1, alpha: 0 },       // Complete fade to darkness
+                ],
+                enclosingCluster,
+                cameraOffsetX,
+                cameraOffsetY,
+                cutoutAlpha,
+            );
         });
 
         // Render village campfire light cutouts (fishing + hunting villages)

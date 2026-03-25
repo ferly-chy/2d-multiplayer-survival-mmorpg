@@ -60,6 +60,17 @@ export function createCairnLoreAudio(loreIndex: number, volume: number = 0.8): H
     // Store reference
     currentCairnAudio = audio;
 
+    // Once playback starts, clear "pending" — otherwise if SovaSoundBox replaces this clip
+    // (pause without 'ended'), pending stays true forever and isAnySovaAudioPlaying() blocks
+    // all SOVA error / notification SFX (useSoundSystem gates on isCairnAudioPlaying).
+    audio.addEventListener(
+      'playing',
+      () => {
+        cairnAudioPending = false;
+      },
+      { once: true }
+    );
+
     // Clear references when audio ends
     audio.onended = () => {
       console.log(`[CairnAudio] Audio finished: ${filename}`);
@@ -125,13 +136,18 @@ export function stopCairnLoreAudio(): void {
   }
 }
 
+/** If `audio` is the active cairn lore element, clear cairn state (e.g. SovaSoundBox interrupted it). */
+export function stopCairnLoreAudioIfCurrent(audio: HTMLAudioElement | null | undefined): void {
+  if (audio && currentCairnAudio === audio) {
+    stopCairnLoreAudio();
+  }
+}
+
 /**
  * Check if cairn audio is currently playing or pending (about to play).
- * 
- * IMPORTANT: This includes a "pending" check that returns true immediately
- * when createCairnLoreAudio is called, BEFORE audio.play() completes.
- * This prevents race conditions where notification sounds could sneak in
- * during the brief window between audio creation and playback start.
+ *
+ * "Pending" is only true until the first `playing` event (or until stop/error) so an
+ * interrupted clip cannot leave this stuck true forever.
  */
 export function isCairnAudioPlaying(): boolean {
   // Check pending flag first - this catches the race condition window

@@ -7,7 +7,8 @@
  *
  * Responsibilities:
  * 1. SPRITE RENDERING: renderCampfire uses genericGroundRenderer. isDestroyed
- *    selects campfire_off.png vs campfire.png.
+ *    hides the sprite. Lit + WebGL2 GPU fire uses campfire_off.png (shader draws flame);
+ *    lit without WebGL keeps campfire.png as fallback.
  *
  * 2. SHAKE: Client-side shake on hit. SHAKE_DURATION_MS, SHAKE_INTENSITY_PX.
  *
@@ -24,6 +25,10 @@ import campfireOffImage from '../../assets/doodads/campfire_off.png'; // Direct 
 import { GroundEntityConfig, renderConfiguredGroundEntity } from './genericGroundRenderer'; // Import generic renderer
 import { drawDynamicGroundShadow, calculateShakeOffsets } from './shadowUtils';
 import { imageManager } from './imageManager'; // Import image manager
+import {
+  touchCampfireFireWebGLInit,
+  isCampfireFireWebGLOverlayAvailable,
+} from './campfireFireOverlayUtils';
 // --- Constants directly used by this module or exported ---
 export const CAMPFIRE_WIDTH = 64;
 export const CAMPFIRE_HEIGHT = 64;
@@ -43,19 +48,26 @@ export const SERVER_CAMPFIRE_DAMAGE_CENTER_Y_OFFSET = 0.0;
 /** Gray smoke after extinguish; matches former particle linger duration. */
 export const CAMPFIRE_SMOKE_LINGER_MS = 4000;
 
+/** GPU procedural fire intensity ramps (seconds-scale; pairs with plume buildup). */
+export const CAMPFIRE_GPU_FIRE_RAMP_UP_MS = 4200;
+export const CAMPFIRE_GPU_FIRE_RAMP_DOWN_MS = 4800;
+
+/** Canvas light / night mask ramp up — slower than fire so glow follows visible flame. Capped by fire01 each frame. */
+export const CAMPFIRE_LIGHT_RAMP_UP_MS = 9800;
+
 /** Monument "fv_campfire" world Y offset (fishing / hunting village). */
 export const STATIC_MONUMENT_CAMPFIRE_Y_OFFSET = -135;
 
-/** Fire column anchor in world pixels for placed campfires (entity base at posY). */
+/** Fire column anchor in world pixels for placed campfires (entity base at posY). Smaller Y = higher on screen. */
 export function getPlacedCampfireFireAnchorWorld(posX: number, posY: number): { x: number; y: number } {
   const visualCenterY = posY - CAMPFIRE_HEIGHT / 2 - CAMPFIRE_RENDER_Y_OFFSET;
-  return { x: posX, y: visualCenterY + CAMPFIRE_HEIGHT * 0.12 };
+  return { x: posX, y: visualCenterY + CAMPFIRE_HEIGHT * 0.12 - 8 };
 }
 
 /** Fire anchor for static monument campfires (image centered at world pos). */
 export function getStaticMonumentCampfireFireAnchorWorld(posX: number, posY: number): { x: number; y: number } {
   const visualCenterY = posY + STATIC_MONUMENT_CAMPFIRE_Y_OFFSET;
-  return { x: posX, y: visualCenterY + CAMPFIRE_HEIGHT * 0.08 };
+  return { x: posX, y: visualCenterY + CAMPFIRE_HEIGHT * 0.08 - 8 };
 }
 
 // --- Other Local Constants ---
@@ -73,7 +85,11 @@ const campfireConfig: GroundEntityConfig<Campfire> = {
         if (entity.isDestroyed) {
             return null; // Don't render if destroyed (placeholder for shatter)
         }
-        return entity.isBurning ? campfireImage : campfireOffImage;
+        if (!entity.isBurning) {
+            return campfireOffImage;
+        }
+        touchCampfireFireWebGLInit();
+        return isCampfireFireWebGLOverlayAvailable() ? campfireOffImage : campfireImage;
     },
 
     getTargetDimensions: (_img, _entity) => ({

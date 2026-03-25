@@ -77,6 +77,7 @@ import { wasAlkPanelJustClosed } from '../components/AlkDeliveryPanel';
 import { CAIRN_LORE_TIDBITS, CairnLoreEntry } from '../data/cairnLoreData';
 import { Cairn as SpacetimeDBCairn } from '../generated/types';
 import { createCairnLoreAudio, isCairnAudioPlaying, getTotalCairnLoreCount, stopCairnLoreAudio } from '../utils/cairnAudioUtils';
+import { previewSeaweedHarvestBlockedIfNeeded } from './useSoundSystem';
 import { CairnNotification } from '../components/CairnUnlockNotification';
 import { registerLocalPlayerRangedShot, registerLocalPlayerSwing } from '../utils/renderers/equippedItemRenderingUtils';
 import { triggerTreeShakeOptimistic } from '../utils/renderers/treeRenderingUtils';
@@ -1267,7 +1268,14 @@ export const useInputHandler = ({
                             case 'harvestable_resource':
                                 const resourceId = currentTarget.id as bigint;
                                 console.log('[E-KeyDown] Immediate harvest:', resourceId);
-                                currentConnection.reducers.interactWithHarvestableResource({ resourceId });
+                                previewSeaweedHarvestBlockedIfNeeded(
+                                  currentConnection,
+                                  resourceId,
+                                  localPlayer?.isSnorkeling,
+                                );
+                                void Promise.resolve(
+                                  currentConnection.reducers.interactWithHarvestableResource({ resourceId }),
+                                ).catch(() => {});
                                 break;
                             case 'dropped_item':
                                 console.log('[E-KeyDown] Immediate pickup:', currentTarget.id);
@@ -1524,6 +1532,11 @@ export const useInputHandler = ({
                                         }
                                         
                                         // console.log('[E-Tap ACTION] Harvesting resource:', currentTarget.id);
+                                        previewSeaweedHarvestBlockedIfNeeded(
+                                          connectionRef.current,
+                                          resourceId,
+                                          localPlayer?.isSnorkeling,
+                                        );
                                         connectionRef.current.reducers.interactWithHarvestableResource({ resourceId });
                                         tapActionTaken = true;
                                         break;

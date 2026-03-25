@@ -30,16 +30,15 @@ function buildSeedBuckets(seeds: Map<string, PlantedSeed>): SeedBuckets {
   return buckets;
 }
 
-function findClosestSeedWithBuckets(
+function findClosestSeedIdWithBuckets(
   seeds: Map<string, PlantedSeed>,
   buckets: SeedBuckets,
   worldMouseX: number,
   worldMouseY: number,
-): [string, PlantedSeed] | null {
+): string | null {
   const cx = Math.floor(worldMouseX / BUCKET_CELL);
   const cy = Math.floor(worldMouseY / BUCKET_CELL);
   let closestId: string | null = null;
-  let closestSeed: PlantedSeed | null = null;
   let closestDistSq = SEED_HOVER_RADIUS_SQ;
 
   for (let dy = -BUCKET_SCAN_RADIUS; dy <= BUCKET_SCAN_RADIUS; dy++) {
@@ -56,25 +55,21 @@ function findClosestSeedWithBuckets(
         if (distSq < closestDistSq) {
           closestDistSq = distSq;
           closestId = id;
-          closestSeed = seed;
         }
       }
     }
   }
 
-  if (closestId && closestSeed) {
-    return [closestId, closestSeed];
-  }
-  return null;
+  return closestId;
 }
 
 /** Fallback when bucket index is empty or out of sync (e.g. rare same-size table churn). */
-function findClosestSeedFullScan(
+function findClosestSeedIdFullScan(
   seeds: Map<string, PlantedSeed>,
   worldMouseX: number,
   worldMouseY: number,
-): [string, PlantedSeed] | null {
-  let closestEntry: [string, PlantedSeed] | null = null;
+): string | null {
+  let closestId: string | null = null;
   let closestDistSq = SEED_HOVER_RADIUS_SQ;
   for (const [id, seed] of seeds) {
     const dx = worldMouseX - seed.posX;
@@ -82,10 +77,10 @@ function findClosestSeedFullScan(
     const distSq = dx * dx + dy * dy;
     if (distSq < closestDistSq) {
       closestDistSq = distSq;
-      closestEntry = [id, seed];
+      closestId = id;
     }
   }
-  return closestEntry;
+  return closestId;
 }
 
 /**
@@ -93,7 +88,10 @@ function findClosestSeedFullScan(
  *
  * Performance: `plantedSeeds` gets a new Map reference on many SpacetimeDB updates (growth ticks).
  * We keep a spatial bucket index rebuilt only when `plantedSeeds.size` changes, and we only
- * recompute the closest seed when mouse position or that size changes — not on every table clone.
+ * recompute the closest seed id when mouse position or that size changes — not on every table clone.
+ *
+ * The closest match is exposed as a **primitive id** so downstream effects do not run on every
+ * mousemove (tuple/array identity would change each frame).
  */
 export function usePlantedSeedHover(
   plantedSeeds: Map<string, PlantedSeed>,
@@ -102,6 +100,8 @@ export function usePlantedSeedHover(
 ) {
   const [hoveredSeedId, setHoveredSeedId] = useState<string | null>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoveredSeedIdRef = useRef<string | null>(null);
+  hoveredSeedIdRef.current = hoveredSeedId;
 
   const plantedSeedsRef = useRef(plantedSeeds);
   plantedSeedsRef.current = plantedSeeds;
@@ -115,20 +115,23 @@ export function usePlantedSeedHover(
     };
   }
 
-  const closestSeed = useMemo((): [string, PlantedSeed] | null => {
+  /** Boolean only flips when pointer leaves/enters canvas — not on every mousemove. */
+  const canvasPointerActive = worldMouseX != null && worldMouseY != null;
+
+  const closestSeedId = useMemo((): string | null => {
     if (worldMouseX === null || worldMouseY === null || lastSize === 0) {
       return null;
     }
     const seeds = plantedSeedsRef.current;
     const idx = bucketIndexRef.current;
     if (!idx) {
-      return findClosestSeedFullScan(seeds, worldMouseX, worldMouseY);
+      return findClosestSeedIdFullScan(seeds, worldMouseX, worldMouseY);
     }
-    const fromBuckets = findClosestSeedWithBuckets(seeds, idx.buckets, worldMouseX, worldMouseY);
+    const fromBuckets = findClosestSeedIdWithBuckets(seeds, idx.buckets, worldMouseX, worldMouseY);
     if (fromBuckets) {
       return fromBuckets;
     }
-    return findClosestSeedFullScan(seeds, worldMouseX, worldMouseY);
+    return findClosestSeedIdFullScan(seeds, worldMouseX, worldMouseY);
   }, [worldMouseX, worldMouseY, lastSize]);
 
   useEffect(() => {
@@ -140,9 +143,7 @@ export function usePlantedSeedHover(
   }, []);
 
   useEffect(() => {
-    const [newSeedId] = closestSeed || [null];
-
-    if (worldMouseX === null || worldMouseY === null) {
+    if (!canvasPointerActive) {
       if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current);
         hoverTimeoutRef.current = null;
@@ -151,13 +152,15 @@ export function usePlantedSeedHover(
       return;
     }
 
-    if (newSeedId) {
+    if (closestSeedId) {
       if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current);
         hoverTimeoutRef.current = null;
       }
-      setHoveredSeedId(newSeedId);
-    } else if (hoveredSeedId !== null) {
+      if (hoveredSeedIdRef.current !== closestSeedId) {
+        setHoveredSeedId(closestSeedId);
+      }
+    } else if (hoveredSeedIdRef.current !== null) {
       if (!hoverTimeoutRef.current) {
         hoverTimeoutRef.current = setTimeout(() => {
           setHoveredSeedId(null);
@@ -165,15 +168,16 @@ export function usePlantedSeedHover(
         }, 150);
       }
     }
-  }, [closestSeed, hoveredSeedId, worldMouseX, worldMouseY]);
+  }, [closestSeedId, canvasPointerActive]);
 
   const hoveredSeed = hoveredSeedId ? plantedSeeds.get(hoveredSeedId) : null;
 
   useEffect(() => {
-    if (hoveredSeedId && !hoveredSeed) {
+    if (!hoveredSeedId) return;
+    if (!plantedSeedsRef.current.get(hoveredSeedId)) {
       setHoveredSeedId(null);
     }
-  }, [hoveredSeedId, hoveredSeed]);
+  }, [hoveredSeedId, lastSize]);
 
   return {
     hoveredSeed,

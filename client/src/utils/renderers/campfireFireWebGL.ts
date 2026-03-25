@@ -57,18 +57,20 @@ float fbm(vec2 p) {
   return v;
 }
 
-void readEmit(int i, out vec2 anchor, out float fireAmt, out float smokeAmt, out float hotBoost, out float scl) {
+void readEmit(int i, out vec2 anchor, out float fireAmt, out float smokeAmt, out float hotBoost, out float scl, out float smokePlumeReach) {
   int b = i * 8;
   anchor = vec2(u_emitPacked[b], u_emitPacked[b + 1]);
   fireAmt = u_emitPacked[b + 2];
   smokeAmt = u_emitPacked[b + 3];
   hotBoost = u_emitPacked[b + 4];
   scl = max(u_emitPacked[b + 5], 0.5);
+  smokePlumeReach = clamp(u_emitPacked[b + 6], 0.0, 1.0);
 }
 
 void main() {
   vec2 worldPx = floor(u_camOrigin + vec2(v_uv.x, 1.0 - v_uv.y) * u_viewSize);
-  float t = u_time * 0.001;
+  // Global animation rate (lower = slower)
+  float t = u_time * 0.00026;
 
   vec3 col = vec3(0.0);
   float a = 0.0;
@@ -77,71 +79,103 @@ void main() {
     if (i >= u_count) break;
 
     vec2 anchor;
-    float fireAmt, smokeAmt, hotBoost, scl;
-    readEmit(i, anchor, fireAmt, smokeAmt, hotBoost, scl);
+    float fireAmt, smokeAmt, hotBoost, scl, smokePlumeReach;
+    readEmit(i, anchor, fireAmt, smokeAmt, hotBoost, scl, smokePlumeReach);
 
     float dx = worldPx.x - anchor.x;
     float relUp = anchor.y - worldPx.y;
 
     // --- Fire column (relUp positive = above anchor / upward in world) ---
     if (fireAmt > 0.01) {
-      float hMax = 58.0 * scl;
+      float hMax = 56.0 * scl;
       float hMin = -6.0 * scl;
       if (relUp > hMin && relUp < hMax) {
         float hn = relUp / hMax;
-        float halfW = mix(16.0, 5.0, hn) * scl;
+        // hn is negative below the anchor; pow(negative, non-integer) is undefined in GLSL → NaNs and full-width garbage rows.
+        float hnShape = clamp(hn, 0.0, 1.0);
+        // Tighter column; shape unchanged (wide base → narrow tip)
+        float halfW = mix(19.5, 3.2, pow(hnShape, 1.35)) * scl;
         vec2 warp = vec2(
-          fbm(vec2(worldPx.x * 0.09 + t * 18.0, worldPx.y * 0.11 - t * 52.0)),
-          fbm(vec2(worldPx.y * 0.08 + t * 14.0, worldPx.x * 0.10 + t * 40.0))
+          fbm(vec2(worldPx.x * 0.09 + t * 5.5, worldPx.y * 0.11 - t * 16.0)),
+          fbm(vec2(worldPx.y * 0.08 + t * 4.5, worldPx.x * 0.10 + t * 12.0))
         ) - 0.5;
-        float wobble = (warp.x + warp.y) * 9.0 * scl;
+        float wobble = (warp.x + warp.y) * mix(7.8, 6.4, hnShape) * scl;
         float adx = abs(dx + wobble);
 
-        float edge = smoothstep(halfW + 3.5 * scl, halfW - 1.0 * scl, adx);
-        float vert = smoothstep(hMin - 2.0 * scl, hMin + 8.0 * scl, relUp)
-                   * smoothstep(hMax + 8.0 * scl, hMax - 12.0 * scl, relUp);
+        float edgeIn = mix(halfW * 0.14, halfW * 0.22, hnShape);
+        float edge = 1.0 - smoothstep(edgeIn, halfW + 4.5 * scl, adx);
+        // Shorter ease through the coals → less “flat shelf”; still covers logs
+        float vertLow = smoothstep(hMin - 2.5 * scl, hMin + 11.0 * scl, relUp);
+        float vertHigh = 1.0 - smoothstep(hMax - 14.0 * scl, hMax + 6.0 * scl, relUp);
+        float vert = vertLow * vertHigh;
+        // Dome the base: brighter in the middle, softer at the sides (reads rounder than a plate)
+        float baseDome = mix(0.72 + 0.28 * sqrt(clamp(edge, 0.0, 1.0)), 1.0, smoothstep(0.0, 0.22, hnShape));
+        vert *= baseDome;
 
-        float flick = fbm(vec2(worldPx * 0.15 + vec2(0.0, t * 80.0)));
-        float core = smoothstep(0.35, 0.75, flick) * edge * vert;
+        float flick = fbm(vec2(worldPx * 0.15 + vec2(0.0, t * 26.0)));
+        float flickLo = mix(0.06, 0.2, hnShape);
+        float flickHi = mix(0.82, 0.88, hnShape);
+        float core = smoothstep(flickLo, flickHi, flick) * edge * vert;
+        // Base fill: keep coverage but break uniformity with flicker so the foot isn’t a flat mat
+        float baseFill = (1.0 - hnShape) * (1.0 - hnShape);
+        float baseFillNoise = 0.78 + 0.22 * fbm(vec2(worldPx * 0.22 + vec2(t * 3.1, relUp * 0.08)));
+        core = min(1.0, core + baseFill * edge * vert * 0.5 * baseFillNoise);
 
         vec3 yellow = vec3(1.0, 0.92, 0.45);
         vec3 orange = vec3(1.0, 0.55, 0.12);
         vec3 deep = vec3(0.85, 0.12, 0.04);
-        float heat = clamp(flick + (1.0 - hn) * 0.35, 0.0, 1.0);
-        vec3 fcol = mix(deep, orange, smoothstep(0.0, 0.55, heat));
-        fcol = mix(fcol, yellow, smoothstep(0.45, 1.0, heat));
+        float heat = clamp(flick + (1.0 - hn) * 0.42, 0.0, 1.0);
+        // Compact orange body; yellow only in a tight hot core
+        vec3 fcol = mix(deep, orange, smoothstep(0.0, 0.52, heat));
+        fcol = mix(fcol, yellow, smoothstep(0.74, 0.93, heat));
 
         float steps = 5.0;
         fcol = floor(fcol * steps + 0.001) / steps;
 
-        float fa = fireAmt * core * 0.95;
-        col = col + fcol * fa * (1.0 - a * 0.35);
-        a = min(1.0, a + fa * 0.85);
+        float baseAlphaBoost = mix(1.62, 1.0, smoothstep(0.0, 0.38, hnShape));
+        float fa = fireAmt * core * 1.5 * baseAlphaBoost;
+        col = col + fcol * fa * (1.0 - a * 0.12);
+        a = min(1.0, a + fa * 1.28);
       }
     }
 
-    // --- Smoke plume above fire ---
+    // --- Smoke: effective column height ramps with smokePlumeReach (tall wisps appear late) ---
     if (smokeAmt > 0.01) {
-      float sBase = 18.0 * scl;
-      float sTop = sBase + 95.0 * scl;
-      if (relUp > sBase && relUp < sTop) {
-        float sn = (relUp - sBase) / (sTop - sBase);
-        float halfW = mix(10.0, 28.0, sn) * scl;
-        vec2 sp = worldPx * 0.06 + vec2(t * 7.0, -t * 11.0);
-        float billow = fbm(sp + hotBoost * 2.0) * 14.0 * scl;
-        float adx = abs(dx + billow);
+      // Lower threshold = dark plume begins closer to the anchor (visually starts lower / nearer the flame)
+      float sBase = 8.5 * scl;
+      float sTopFull = sBase + 268.0 * scl;
+      float reachE = smokePlumeReach * smokePlumeReach * (3.0 - 2.0 * smokePlumeReach);
+      float colSpan = (sTopFull - sBase) * (0.12 + 0.88 * reachE);
+      float sEffTop = sBase + max(colSpan, 12.0 * scl);
+      // Long top fade: ramp starts well below sEffTop, tail extends past nominal top (fadeOutEnd must cover upper edge).
+      float fadeOutSpanPre = 32.0 * scl;
+      float fadeOutSpanPost = 16.0 * scl;
+      float fadeOutEnd = sEffTop + fadeOutSpanPost;
+      if (relUp > sBase && relUp < fadeOutEnd) {
+        float sn = clamp((relUp - sBase) / max(sEffTop - sBase, 1.0), 0.0, 1.0);
+        float halfW = mix(6.2, 24.0, sn) * scl;
+        float smokeShiftX = (3.0 + sn * 1.8) * scl;
+        vec2 sp = vec2(
+          worldPx.x * 0.052 + sin(t * 1.1 + worldPx.y * 0.02) * 0.35 + smokeShiftX * 0.04,
+          worldPx.y * 0.052 - t * 3.4
+        );
+        float billow = fbm(sp + hotBoost * 2.0) * (10.0 + sn * 5.0) * scl;
+        float adx = abs(dx - smokeShiftX + billow);
 
-        float dens = smoothstep(halfW + 6.0 * scl, halfW * 0.35, adx);
-        dens *= smoothstep(sBase - 4.0 * scl, sBase + 10.0 * scl, relUp);
-        dens *= smoothstep(sTop + 12.0 * scl, sTop - 25.0 * scl, relUp);
-        dens *= noise(worldPx * 0.11 + t * 3.0) * 0.35 + 0.65;
+        float dens = 1.0 - smoothstep(halfW * 0.18, halfW + 7.2 * scl, adx);
+        dens *= smoothstep(sBase - 6.0 * scl, sBase + 14.0 * scl, relUp);
+        dens *= 1.0 - smoothstep(sEffTop - fadeOutSpanPre, sEffTop + fadeOutSpanPost, relUp);
+        dens *= noise(worldPx * 0.09 + vec2(t * 0.9, -t * 2.2)) * 0.28 + 0.72;
 
-        vec3 sgray = mix(vec3(0.42, 0.42, 0.44), vec3(0.12, 0.12, 0.13), hotBoost);
+        vec3 sgray = mix(vec3(0.1, 0.1, 0.11), vec3(0.028, 0.028, 0.032), hotBoost);
+        // Stronger darkening aloft (long upper column reads much darker)
+        float plumeLiftDark = mix(0.1, 1.0, pow(1.0 - sn, 1.35));
+        sgray *= plumeLiftDark;
         sgray = floor(sgray * 6.0 + 0.001) / 6.0;
 
-        float sa = smokeAmt * dens * 0.42 * (1.0 - sn * 0.35);
+        float sa = smokeAmt * dens * 0.82 * (0.52 + 0.48 * (1.0 - sn));
         col = mix(col, sgray, sa);
-        a = min(1.0, a + sa * 0.55);
+        a = min(1.0, a + sa * 0.82);
       }
     }
   }
@@ -248,6 +282,12 @@ export function initCampfireFireWebGL(): CampfireFireWebGLContext | null {
   }
 
   const aLoc = gl.getAttribLocation(program, 'a_position');
+  if (aLoc < 0) {
+    console.warn('[CampfireFire] Missing attribute a_position');
+    gl.deleteProgram(program);
+    gl.deleteBuffer(buffer);
+    return null;
+  }
   ctx = { canvas, gl, program, buffer, uLoc, aLoc };
   return ctx;
 }
@@ -263,6 +303,8 @@ export interface CampfireFireGpuEmitter {
   smokeAmt: number;
   hotBoost: number;
   scale: number;
+  /** 0..1 tall-plume buildup (CPU); default 1 if omitted */
+  smokePlumeReach01?: number;
 }
 
 export function renderCampfireFireWebGL(
@@ -291,6 +333,7 @@ export function renderCampfireFireWebGL(
     packedScratch[b + 3] = e.smokeAmt;
     packedScratch[b + 4] = e.hotBoost;
     packedScratch[b + 5] = e.scale;
+    packedScratch[b + 6] = e.smokePlumeReach01 ?? 1.0;
   }
 
   if (wctx.canvas.width !== bw || wctx.canvas.height !== bh) {

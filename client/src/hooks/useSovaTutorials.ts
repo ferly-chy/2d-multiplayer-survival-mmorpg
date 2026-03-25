@@ -18,10 +18,6 @@
  */
 
 import { useEffect, useRef, useCallback, MutableRefObject } from 'react';
-import {
-    registerSovaTutorialPlaybackAudio,
-    unregisterSovaTutorialPlaybackAudio,
-} from './useSovaSoundBox';
 
 // ============================================================================
 // Types
@@ -303,11 +299,6 @@ function playSovaTutorial(
     try {
         const audio = new Audio(audioFile);
         audio.volume = 0.8;
-
-        const releaseTutorialGuard = () => unregisterSovaTutorialPlaybackAudio(audio);
-        audio.addEventListener('ended', releaseTutorialGuard, { once: true });
-        audio.addEventListener('error', releaseTutorialGuard, { once: true });
-        registerSovaTutorialPlaybackAudio(audio);
         
         // CRITICAL: Show sound box BEFORE calling play() to set the __SOVA_SOUNDBOX_IS_ACTIVE__ flag
         // This prevents notification sounds from sneaking in during the async play() window
@@ -335,7 +326,6 @@ function playSovaTutorial(
                 }
             })
             .catch(err => {
-                releaseTutorialGuard();
                 console.warn(`[SovaTutorials] Failed to play ${soundBoxLabel}:`, err);
                 onError?.(err);
                 // Still send message even if audio fails

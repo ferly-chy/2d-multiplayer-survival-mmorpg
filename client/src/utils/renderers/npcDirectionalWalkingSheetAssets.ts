@@ -7,8 +7,8 @@
  *   {prefix}_left_walking.png
  *   {prefix}_right_walking.png
  *
- * Each file: 6 frames × frameSize (default 64×64 → 384×64). Add species in
- * `wildAnimalSplitSheetConfig` → `DIRECTIONAL_SHEET_SPECIES_PREFIX` when assets exist.
+ * Each file: N frames × frameSize in one horizontal row (default 6×64×64 → 384×64).
+ * Per-species frame size lives in `wildAnimalSplitSheetConfig` (`WILD_ANIMAL_DIRECTIONAL_SHEET_CONFIG`).
  */
 type AssetModule = { default: string };
 
@@ -56,20 +56,37 @@ export function collectNpcWalkingSheetUrlsForPrefixes(prefixes: readonly string[
     return out;
 }
 
-/** 1×6 strip, 64×64 per frame (384×64). */
-export const DIRECTIONAL_WALKING_STRIP_FRAME_WIDTH = 64;
-export const DIRECTIONAL_WALKING_STRIP_FRAME_HEIGHT = 64;
-export const DIRECTIONAL_WALKING_STRIP_FRAME_COLS = 6;
+/** One horizontal strip: `cols` frames of `frameWidth`×`frameHeight`. */
+export interface DirectionalWalkingStripLayout {
+    frameWidth: number;
+    frameHeight: number;
+    cols: number;
+}
 
-export function getDirectionalWalkingStripSourceRect(animationFrame: number): {
+/** Default strip layout (e.g. BeachCrab): 6×64×64 → 384×64. */
+export const DEFAULT_DIRECTIONAL_WALKING_STRIP_LAYOUT: DirectionalWalkingStripLayout = {
+    frameWidth: 64,
+    frameHeight: 64,
+    cols: 6,
+};
+
+/** Legacy aliases (default strip); prefer `DEFAULT_DIRECTIONAL_WALKING_STRIP_LAYOUT`. */
+export const DIRECTIONAL_WALKING_STRIP_FRAME_WIDTH = DEFAULT_DIRECTIONAL_WALKING_STRIP_LAYOUT.frameWidth;
+export const DIRECTIONAL_WALKING_STRIP_FRAME_HEIGHT = DEFAULT_DIRECTIONAL_WALKING_STRIP_LAYOUT.frameHeight;
+export const DIRECTIONAL_WALKING_STRIP_FRAME_COLS = DEFAULT_DIRECTIONAL_WALKING_STRIP_LAYOUT.cols;
+
+export function getDirectionalWalkingStripSourceRect(
+    animationFrame: number,
+    layout: DirectionalWalkingStripLayout = DEFAULT_DIRECTIONAL_WALKING_STRIP_LAYOUT,
+): {
     sx: number;
     sy: number;
     sw: number;
     sh: number;
 } {
-    const cols = DIRECTIONAL_WALKING_STRIP_FRAME_COLS;
+    const cols = layout.cols;
     const col = ((animationFrame % cols) + cols) % cols;
-    const w = DIRECTIONAL_WALKING_STRIP_FRAME_WIDTH;
-    const h = DIRECTIONAL_WALKING_STRIP_FRAME_HEIGHT;
+    const w = layout.frameWidth;
+    const h = layout.frameHeight;
     return { sx: col * w, sy: 0, sw: w, sh: h };
 }

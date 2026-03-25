@@ -7,6 +7,7 @@ const EMPTY_CAIRNS_MAP = new Map<string, any>();
 import { useInputHandler } from '../../hooks/useInputHandler';
 import { getInteractableLabel } from '../../utils/interactionLabelUtils';
 import { isAnySovaAudioPlaying } from '../../hooks/useSovaSoundBox';
+import { previewSeaweedHarvestBlockedIfNeeded } from '../../hooks/useSoundSystem';
 import { logDebug } from '../../utils/gameDebugUtils';
 import type { InteractableTarget } from '../../types/interactions';
 import { getRecordButtonBounds } from '../../utils/profiler';
@@ -277,6 +278,11 @@ export function useGameCanvasInteractionRuntime(options: UseGameCanvasInteractio
     if (options.connection?.reducers) {
       switch (target.type) {
         case 'harvestable_resource':
+          previewSeaweedHarvestBlockedIfNeeded(
+            options.connection,
+            target.id as bigint,
+            options.localPlayer?.isSnorkeling,
+          );
           options.connection.reducers.interactWithHarvestableResource({ resourceId: target.id as bigint });
           break;
         case 'dropped_item':
