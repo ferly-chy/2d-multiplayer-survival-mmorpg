@@ -20,6 +20,12 @@ import snowyOwlWalkingAnimatedSheet from '../../assets/owl_walking_release.png';
 import crowWalkingAnimatedSheet from '../../assets/crow_walking_release.png';
 import crabWalkingAnimatedSheet from '../../assets/crab_release_walking.png';
 import voleWalkingAnimatedSheet from '../../assets/vole_walking_release.png';
+import {
+    usesSplitDirectionalSheets,
+    getWildAnimalCorpseDirectionalSheetUrl,
+    REGISTERED_DIRECTIONAL_SHEET_PRELOAD_URLS,
+} from './wildAnimalSplitSheetConfig';
+import { getDirectionalWalkingStripSourceRect } from './npcDirectionalWalkingSheetAssets';
 
 // Sprite sheet configuration for 4x4 sheets (Phase 6: 256x256, all animals)
 const SPRITE_SHEET_CONFIG_4X4 = {
@@ -73,7 +79,7 @@ const speciesSpriteSheets: Record<string, string> = {
     'PolarBear': polarBearWalkingAnimatedSheet,
     'Hare': hareWalkingAnimatedSheet,
     'SnowyOwl': snowyOwlWalkingAnimatedSheet,
-    // BeachCrab and Vole use 4x4 release pattern (like live animals)
+    // BeachCrab: split directional sheets when enabled (see getCorpseSpriteSheet); else monolithic atlas
     'BeachCrab': crabWalkingAnimatedSheet,
     'Vole': voleWalkingAnimatedSheet,
     // CableViper uses 4x4 (same as other wildlife)
@@ -132,6 +138,19 @@ function sliceRectIntoChunks(
   }
 }
 
+function getCorpseFrameSourceBase(species: { tag: string }): { sx: number; sy: number; fw: number; fh: number } {
+  if (usesSplitDirectionalSheets(species.tag)) {
+    const r = getDirectionalWalkingStripSourceRect(0);
+    return { sx: r.sx, sy: r.sy, fw: r.sw, fh: r.sh };
+  }
+  return {
+    sx: CORPSE_FRAME_4X4 * FRAME_WIDTH_4X4,
+    sy: CORPSE_DIRECTION_4X4 * FRAME_HEIGHT_4X4,
+    fw: FRAME_WIDTH_4X4,
+    fh: FRAME_HEIGHT_4X4,
+  };
+}
+
 function generateAnimalCorpseDestructionChunks(
   corpse: SpacetimeDBAnimalCorpse,
   renderWidth: number,
@@ -140,10 +159,9 @@ function generateAnimalCorpseDestructionChunks(
   const srcRects: Array<{ srcX: number; srcY: number; srcW: number; srcH: number }> = [];
   sliceRectIntoChunks(0, 0, renderWidth, renderHeight, 0, ANIMAL_CORPSE_CHUNK_SLICE_LEVELS, srcRects);
 
-  const sxBase = CORPSE_FRAME_4X4 * FRAME_WIDTH_4X4;
-  const syBase = CORPSE_DIRECTION_4X4 * FRAME_HEIGHT_4X4;
-  const scaleX = FRAME_WIDTH_4X4 / renderWidth;
-  const scaleY = FRAME_HEIGHT_4X4 / renderHeight;
+  const { sx: sxBase, sy: syBase, fw: frameW, fh: frameH } = getCorpseFrameSourceBase(corpse.animalSpecies);
+  const scaleX = frameW / renderWidth;
+  const scaleY = frameH / renderHeight;
   const baseSpeed = 3.5 + Math.random() * 3.5;
   const centerX = corpse.posX;
   const centerY = corpse.posY;
@@ -285,15 +303,17 @@ function getCorpseRenderSize(species: any): { width: number; height: number } {
 
 // Helper function to get sprite sheet for animal corpse
 function getCorpseSpriteSheet(species: any): string {
+    const directional = getWildAnimalCorpseDirectionalSheetUrl(species.tag);
+    if (directional) return directional;
     return speciesSpriteSheets[species.tag] || foxWalkingAnimatedSheet;
 }
 
 // Preload animal corpse images using imageManager
 export const preloadAnimalCorpseImages = () => {
-    // Preload all sprite sheets (includes all release and legacy sheets)
     Object.values(speciesSpriteSheets).forEach(sheet => {
         imageManager.preloadImage(sheet);
     });
+    REGISTERED_DIRECTIONAL_SHEET_PRELOAD_URLS.forEach((url) => imageManager.preloadImage(url));
 };
 
 /**
@@ -351,11 +371,7 @@ export const renderAnimalCorpse = (
   // Flip vertically only (upside down but still facing right)
   ctx.scale(1, -1);
   
-  // 4x4 pattern: use frame 0, direction 0 (down-facing), flip upside down for corpse effect
-  const sx = CORPSE_FRAME_4X4 * FRAME_WIDTH_4X4;
-  const sy = CORPSE_DIRECTION_4X4 * FRAME_HEIGHT_4X4;
-  const frameWidth = FRAME_WIDTH_4X4;
-  const frameHeight = FRAME_HEIGHT_4X4;
+  const { sx, sy, fw: frameWidth, fh: frameHeight } = getCorpseFrameSourceBase(corpse.animalSpecies);
   
   // Render the sprite frame (flipped vertically)
   ctx.drawImage(

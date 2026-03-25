@@ -39,6 +39,17 @@ import shoreboundWalkingAnimatedSheet from '../../assets/shorebound_walking_rele
 import shardkinWalkingAnimatedSheet from '../../assets/shardkin_walking_release.png';
 import drownedWatchWalkingAnimatedSheet from '../../assets/drowned_watch_walking_release.png';
 
+import {
+    getWildAnimalSplitSheetUrl,
+    REGISTERED_DIRECTIONAL_SHEET_PRELOAD_URLS,
+} from './wildAnimalSplitSheetConfig';
+import {
+    getDirectionalWalkingStripSourceRect,
+    DIRECTIONAL_WALKING_STRIP_FRAME_WIDTH,
+    DIRECTIONAL_WALKING_STRIP_FRAME_HEIGHT,
+    DIRECTIONAL_WALKING_STRIP_FRAME_COLS,
+} from './npcDirectionalWalkingSheetAssets';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // LEGACY SPRITE SHEETS (3x3 static layout - no walking animations yet)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -676,6 +687,18 @@ function getAnimatedSpriteSourceRect(
     };
 }
 
+function getWildAnimalAnimatedSpriteSourceRect(
+    species: AnimalSpecies,
+    direction: string,
+    animationFrame: number,
+    useDirectionalSplitSheet: boolean,
+): { sx: number; sy: number; sw: number; sh: number } {
+    if (useDirectionalSplitSheet) {
+        return getDirectionalWalkingStripSourceRect(animationFrame);
+    }
+    return getAnimatedSpriteSourceRect(species, direction, animationFrame);
+}
+
 // Get the source rectangle for a sprite from the sheet based on direction (no animation)
 function getSpriteSourceRect(
     direction: string,
@@ -973,11 +996,23 @@ export function renderWildAnimal({
     const isBird = animal.species.tag === 'Tern' || animal.species.tag === 'Crow';
     const useFlying = isBird && animal.isFlying === true;
     const useAnimated = usesAnimatedSpritesheet(animal.species);
-    const spriteSheetSrc = getSpriteSheet(animal.species, useFlying);
+    const splitSheetUrl = getWildAnimalSplitSheetUrl(animal.species.tag, animal.facingDirection);
+    const useDirectionalSplitSheet = splitSheetUrl !== undefined;
+    const spriteSheetSrc = splitSheetUrl ?? getSpriteSheet(animal.species, useFlying);
     const spriteSheetImage = imageManager.getImage(spriteSheetSrc);
 
     // Get the appropriate frame dimensions based on sprite type
-    const animatedConfig = useAnimated ? getAnimatedConfig(animal.species) : undefined;
+    let animatedConfig = useAnimated ? getAnimatedConfig(animal.species) : undefined;
+    if (useAnimated && useDirectionalSplitSheet) {
+        animatedConfig = {
+            sheetWidth: DIRECTIONAL_WALKING_STRIP_FRAME_WIDTH * DIRECTIONAL_WALKING_STRIP_FRAME_COLS,
+            sheetHeight: DIRECTIONAL_WALKING_STRIP_FRAME_HEIGHT,
+            frameWidth: DIRECTIONAL_WALKING_STRIP_FRAME_WIDTH,
+            frameHeight: DIRECTIONAL_WALKING_STRIP_FRAME_HEIGHT,
+            cols: DIRECTIONAL_WALKING_STRIP_FRAME_COLS,
+            rows: 1,
+        };
+    }
     let currentFrameWidth: number;
     let currentFrameHeight: number;
     if (useAnimated && animatedConfig) {
@@ -1145,7 +1180,12 @@ export function renderWildAnimal({
                 _animalShadowCtx.clearRect(0, 0, currentFrameWidth, currentFrameHeight);
                 // Use animated sprite rect for animated species, standard for others
                 const spriteRect = useAnimated
-                    ? getAnimatedSpriteSourceRect(animal.species, animal.facingDirection, calculatedAnimFrame)
+                    ? getWildAnimalAnimatedSpriteSourceRect(
+                        animal.species,
+                        animal.facingDirection,
+                        calculatedAnimFrame,
+                        useDirectionalSplitSheet,
+                    )
                     : getSpriteSourceRect(animal.facingDirection, useFlying);
                 _animalShadowCtx.drawImage(
                     animalImage,
@@ -1290,7 +1330,12 @@ export function renderWildAnimal({
             // Use animated sprite rect for animated species, standard for others
             const spriteRect = useSpriteSheet
                 ? (useAnimated
-                    ? getAnimatedSpriteSourceRect(animal.species, animal.facingDirection, calculatedAnimFrame)
+                    ? getWildAnimalAnimatedSpriteSourceRect(
+                        animal.species,
+                        animal.facingDirection,
+                        calculatedAnimFrame,
+                        useDirectionalSplitSheet,
+                    )
                     : getSpriteSourceRect(animal.facingDirection, useFlying))
                 : null;
 
@@ -1372,7 +1417,12 @@ export function renderWildAnimal({
             if (useSpriteSheet) {
                 // Use animated sprite rect for animated species, standard for others
                 const spriteRect = useAnimated
-                    ? getAnimatedSpriteSourceRect(animal.species, animal.facingDirection, calculatedAnimFrame)
+                    ? getWildAnimalAnimatedSpriteSourceRect(
+                        animal.species,
+                        animal.facingDirection,
+                        calculatedAnimFrame,
+                        useDirectionalSplitSheet,
+                    )
                     : getSpriteSourceRect(animal.facingDirection, useFlying);
                 ctx.drawImage(
                     animalImage!,
@@ -1529,6 +1579,8 @@ export function preloadWildAnimalImages(): void {
     [...animatedSpriteSheets, ...legacySpriteSheets].forEach(imageSrc => {
         imageManager.preloadImage(imageSrc);
     });
+
+    REGISTERED_DIRECTIONAL_SHEET_PRELOAD_URLS.forEach((url) => imageManager.preloadImage(url));
 }
 
 // Helper function to check if coordinates are within animal bounds
