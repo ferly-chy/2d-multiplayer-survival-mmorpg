@@ -5,7 +5,11 @@ import { renderEquippedItem } from '../../utils/renderers/equippedItemRenderingU
 import { buildProjectileCollisionCircles } from '../../utils/renderers/projectileRenderingUtils';
 import { renderTreeCanopyShadowsOverlay } from '../../utils/renderers/treeRenderingUtils';
 import { renderSeaStackShadowsOverlay } from '../../utils/renderers/seaStackRenderingUtils';
-import { processWildAnimalsForBurrowEffects, renderBurrowEffects } from '../../utils/renderers/wildAnimalRenderingUtils';
+import {
+  beginWildAnimalRenderFrame,
+  processWildAnimalsForBurrowEffects,
+  renderBurrowEffects,
+} from '../../utils/renderers/wildAnimalRenderingUtils';
 import { renderHotSprings } from '../../utils/renderers/hotSpringRenderingUtils';
 import { renderUnderwaterEffectsOver } from '../../utils/renderers/underwaterEffectsUtils';
 import {
@@ -176,6 +180,7 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
     hasRepairHammer,
   } = options;
 
+  beginWildAnimalRenderFrame();
   const projectileCollisionCircles = buildProjectileCollisionCircles(ySortedEntities);
   const flushBatch = (batch: any[]) => {
     if (batch.length > 0) {

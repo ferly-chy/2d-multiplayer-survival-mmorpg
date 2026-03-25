@@ -5,12 +5,11 @@ import {
     ItemDefinition as SpacetimeDBItemDefinition,
 } from '../generated/types';
 import { Particle } from './useCampfireParticles'; // Reuse Particle type
-import { JUMP_DURATION_MS, JUMP_HEIGHT_PX } from '../config/gameConfig';
-import { gameConfig } from '../config/gameConfig'; // <<< ADDED for spriteWidth/Height
-
-// --- Swing Constants (from equippedItemRenderingUtils.ts) ---
-const SWING_DURATION_MS = 150;
-const DEFAULT_SWING_ANGLE_MAX_RAD = Math.PI / 4; // 45 degrees for default swing (90° total arc)
+import { isCampfireFireWebGLOverlayAvailable } from '../utils/renderers/campfireFireOverlayUtils';
+import {
+    getTorchGpuFlameAnchorWorld,
+    TORCH_FLAME_ANCHOR_FIRE_BASE_Y_OFFSET,
+} from '../utils/renderers/torchFlameAnchorWorldUtils';
 
 // --- Particle Constants for Torch (can be adjusted) ---
 const TORCH_PARTICLE_LIFETIME_MIN = 100;  // Slightly longer for better visibility
@@ -39,23 +38,6 @@ const TORCH_SMOKE_GROWTH_RATE = 0.025; // Faster growth
 const TORCH_SMOKE_INITIAL_ALPHA = 0.5; // Higher initial alpha
 const TORCH_SMOKE_TARGET_ALPHA = 0.05;
 const TORCH_SMOKE_Y_ACCELERATION = -0.008; // More acceleration
-
-// Original base offsets (now effectively 0,0 as per user changes)
-const BASE_TORCH_FLAME_OFFSET_X = 0;
-const BASE_TORCH_FLAME_OFFSET_Y = 0;
-
-// Refined Directional Offsets based on user feedback
-const OFFSET_X_LEFT = -25;
-const OFFSET_Y_LEFT = -10;
-
-const OFFSET_X_RIGHT = 15;  // Was 20, user wants it "translated left a bit"
-const OFFSET_Y_RIGHT = -10;
-
-const OFFSET_X_UP = 35;     // Making X for Up slightly different from Right, still offset right
-const OFFSET_Y_UP = -15;    // User wants it "up just a little bit"
-
-const OFFSET_X_DOWN = -30;  // From user's DIRECTIONAL_ADJUST_X_DOWN
-const OFFSET_Y_DOWN = -10;    // User wants it "up just a little bit" from its previous Y of +10
 
 interface UseTorchParticlesProps {
     players: Map<string, SpacetimeDBPlayer>;
@@ -117,118 +99,33 @@ export function useTorchParticles({
                 const isTorchCurrentlyActiveAndLit = !!(itemDef && itemDef.name === "Torch" && player.isTorchLit);
 
                 if (isTorchCurrentlyActiveAndLit) {
+                    if (isCampfireFireWebGLOverlayAvailable()) {
+                        emissionAccumulatorRef.current.set(playerId, 0);
+                        return;
+                    }
+
                     // Use actual deltaTime for frame-rate independent movement
                     const deltaTimeFactor = deltaTime / 16.667; // Normalize to 60fps
-                    
+
                     let acc = emissionAccumulatorRef.current.get(playerId) || 0;
                     acc += TORCH_FIRE_PARTICLES_PER_FRAME * deltaTimeFactor;
-                    
-                    let currentJumpOffsetY = 0;
-                    if (player.jumpStartTimeMs > 0) {
-                        const elapsedJumpTime = now - Number(player.jumpStartTimeMs);
-                        if (elapsedJumpTime >= 0 && elapsedJumpTime < JUMP_DURATION_MS) {
-                            const t = elapsedJumpTime / JUMP_DURATION_MS;
-                            currentJumpOffsetY = Math.sin(t * Math.PI) * JUMP_HEIGHT_PX;
-                        }
-                    }
 
-                    // --- Base non-swinging flame offset from player center ---
-                    let baseFlameOffsetX = BASE_TORCH_FLAME_OFFSET_X;
-                    let baseFlameOffsetY = BASE_TORCH_FLAME_OFFSET_Y;
-
-                    switch (player.direction) {
-                        case "left": 
-                            baseFlameOffsetX = OFFSET_X_LEFT;
-                            baseFlameOffsetY = OFFSET_Y_LEFT;
-                            break;
-                        case "right": 
-                            baseFlameOffsetX = OFFSET_X_RIGHT;
-                            baseFlameOffsetY = OFFSET_Y_RIGHT;
-                            break;
-                        case "up": 
-                            baseFlameOffsetX = OFFSET_X_UP;
-                            baseFlameOffsetY = OFFSET_Y_UP;
-                            break;
-                        case "down": 
-                            baseFlameOffsetX = OFFSET_X_DOWN;
-                            baseFlameOffsetY = OFFSET_Y_DOWN;
-                            break;
-                        default:
-                            break;
-                    }
-
-                    // --- Calculate Hand Pivot (relative to player center) ---
-                    const handOffsetXConfig = gameConfig.spriteWidth * 0.2;
-                    const handOffsetYConfig = gameConfig.spriteHeight * 0.05;
-                    let handPivotRelativeX = 0;
-                    let handPivotRelativeY = 0;
-
-                    switch (player.direction) {
-                        case 'up': 
-                            handPivotRelativeX = -handOffsetXConfig * -1.5;
-                            handPivotRelativeY = -handOffsetYConfig * 2.0; 
-                            break;
-                        case 'down': 
-                            handPivotRelativeX = handOffsetXConfig * -2.5;
-                            handPivotRelativeY = handOffsetYConfig * 1.5; 
-                            break;
-                        case 'left': 
-                            handPivotRelativeX = -handOffsetXConfig * 2.0; 
-                            handPivotRelativeY = handOffsetYConfig;
-                            break;
-                        case 'right': 
-                            handPivotRelativeX = handOffsetXConfig * 0.5; 
-                            handPivotRelativeY = handOffsetYConfig;
-                            break;
-                    }
-
-                    // --- Calculate Swing Rotation ---
-                    let swingRotationRad = 0;
-                    const swingStartTime = Number(equipment?.swingStartTimeMs || 0);
-                    if (swingStartTime > 0) {
-                        const elapsedSwingTime = now - swingStartTime;
-                        if (elapsedSwingTime >= 0 && elapsedSwingTime < SWING_DURATION_MS) {
-                            const swingProgress = elapsedSwingTime / SWING_DURATION_MS;
-                            const baseAngle = Math.sin(swingProgress * Math.PI) * DEFAULT_SWING_ANGLE_MAX_RAD;
-                            if (player.direction === 'right' || player.direction === 'up') {
-                                swingRotationRad = baseAngle;
-                            } else {
-                                swingRotationRad = -baseAngle;
-                            }
-                        }
-                    }
-
-                    // --- Determine Final Emission Point ---
-                    const playerWorldX = player.positionX;
-                    const playerWorldY = player.positionY - currentJumpOffsetY;
-
-                    const worldHandPivotX = playerWorldX + handPivotRelativeX;
-                    const worldHandPivotY = playerWorldY + handPivotRelativeY;
-
-                    const initialFlameWorldX = playerWorldX + baseFlameOffsetX;
-                    const initialFlameWorldY = playerWorldY + baseFlameOffsetY;
-
-                    const vecToFlameX = initialFlameWorldX - worldHandPivotX;
-                    const vecToFlameY = initialFlameWorldY - worldHandPivotY;
-
-                    const cosAngle = Math.cos(swingRotationRad);
-                    const sinAngle = Math.sin(swingRotationRad);
-
-                    const rotatedVecToFlameX = vecToFlameX * cosAngle - vecToFlameY * sinAngle;
-                    const rotatedVecToFlameY = vecToFlameX * sinAngle + vecToFlameY * cosAngle;
-
-                    const finalEmissionPointX = worldHandPivotX + rotatedVecToFlameX;
-                    const finalEmissionPointY = worldHandPivotY + rotatedVecToFlameY;
-
-                    const emissionPointX = finalEmissionPointX;
-                    const emissionPointY = finalEmissionPointY;
+                    const anchor = getTorchGpuFlameAnchorWorld({
+                        worldX: player.positionX,
+                        worldY: player.positionY,
+                        direction: player.direction ?? 'down',
+                        jumpStartTimeMs: player.jumpStartTimeMs,
+                        swingStartTimeMs: Number(equipment?.swingStartTimeMs ?? 0),
+                        nowMs: now,
+                    });
+                    const emissionPointX = anchor.x;
+                    const emissionPointY = anchor.y - TORCH_FLAME_ANCHOR_FIRE_BASE_Y_OFFSET;
 
                     while (acc >= 1) {
                         acc -= 1;
                         const lifetime = TORCH_PARTICLE_LIFETIME_MIN + Math.random() * (TORCH_PARTICLE_LIFETIME_MAX - TORCH_PARTICLE_LIFETIME_MIN);
                         
-                        // Position fire particles at the visual center of the torch flame (lower than smoke)
-                        const fireEmissionY = emissionPointY + 8; // Push fire particles down to overlay torch flame graphic
+                        const fireEmissionY = emissionPointY + TORCH_FLAME_ANCHOR_FIRE_BASE_Y_OFFSET;
                         
                         newGeneratedParticlesThisFrame.push({
                             id: `torch_fire_${playerId}_${now}_${Math.random()}`,

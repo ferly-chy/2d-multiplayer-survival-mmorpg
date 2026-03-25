@@ -51,6 +51,19 @@ export function deleteCampfireGpuFire01(idKey: string): void {
   lightSmoothed.delete(idKey);
 }
 
+/** Drop `torch_*` ramp state when those players are no longer in the world map. */
+export function pruneTorchGpuFireKeysNotIn(validTorchKeys: Set<string>): void {
+  const toDelete: string[] = [];
+  smoothed.forEach((_v, k) => {
+    if (k.startsWith('torch_') && !validTorchKeys.has(k)) {
+      toDelete.push(k);
+    }
+  });
+  for (let i = 0; i < toDelete.length; i++) {
+    deleteCampfireGpuFire01(toDelete[i]!);
+  }
+}
+
 export function getCampfireGpuFire01(idKey: string): number {
   return smoothed.get(idKey) ?? 0;
 }

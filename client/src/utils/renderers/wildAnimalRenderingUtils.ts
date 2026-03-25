@@ -531,26 +531,37 @@ export function cleanupBurrowTracking(activeAnimalIds: Set<string>) {
 interface AnimalMovementState {
     lastServerX: number;
     lastServerY: number;
-    targetX: number;
-    targetY: number;
-    interpolatedX: number;
-    interpolatedY: number;
+    /** Segment start = previous authoritative sample (world center). */
+    sampleFromX: number;
+    sampleFromY: number;
+    sampleFromMs: number;
+    /** Segment end = latest authoritative sample (world center). */
+    sampleToX: number;
+    sampleToY: number;
+    sampleToMs: number;
     /** Previous rendered world position (for distance-based walk cycle). */
     prevRenderX: number;
     prevRenderY: number;
     /** Fractional walk phase; advances by interpolated motion / stride (not wall clock). */
     walkPhase: number;
-    /** For frame-delta smoothing (`nowMs` from game loop). */
-    lastRenderFrameMs?: number;
 }
 
 const animalMovementStates = new Map<string, AnimalMovementState>();
 
-// Interpolation: exponential smoothing toward last server position (render-only).
+/** Smoothed world center from last `renderWildAnimal` (for debug overlay sync). Cleared each entity pass. */
+const wildAnimalClientRenderWorldCenter = new Map<string, { x: number; y: number }>();
+
+export function beginWildAnimalRenderFrame(): void {
+    wildAnimalClientRenderWorldCenter.clear();
+}
+
+export function getWildAnimalClientRenderWorldCenter(animalId: string): { x: number; y: number } | undefined {
+    return wildAnimalClientRenderWorldCenter.get(animalId);
+}
+
+// Interpolation: linear between consecutive server samples (entity interpolation — constant speed per segment).
 const MAX_INTERPOLATION_DISTANCE = 600;
-/** Time constant (ms). ~1 server AI tick: smooth without stair-steps when snapshots arrive. */
-const INTERP_SMOOTH_TAU_MS = 105;
-const INTERP_MAX_DELTA_MS = 64;
+const MIN_SEGMENT_SPAN_MS = 12;
 /** Pixels of interpolated travel per +1 walk frame index (scaled by on-screen width). */
 const WALK_STRIDE_PER_INDEX_FACTOR = 0.21;
 const WALK_SYNC_MAX_STEP_PX = 80;
@@ -867,64 +878,63 @@ export function renderWildAnimal({
         movementState = {
             lastServerX: animal.posX,
             lastServerY: animal.posY,
-            targetX: animal.posX,
-            targetY: animal.posY,
-            interpolatedX: animal.posX,
-            interpolatedY: animal.posY,
+            sampleFromX: animal.posX,
+            sampleFromY: animal.posY,
+            sampleFromMs: nowMs,
+            sampleToX: animal.posX,
+            sampleToY: animal.posY,
+            sampleToMs: nowMs,
             prevRenderX: animal.posX,
             prevRenderY: animal.posY,
             walkPhase: 0,
-            lastRenderFrameMs: nowMs,
         };
         animalMovementStates.set(animalId, movementState);
     } else {
-        // Check if server position changed
         const dx = animal.posX - movementState.lastServerX;
         const dy = animal.posY - movementState.lastServerY;
         const distanceMoved = Math.sqrt(dx * dx + dy * dy);
 
         if (distanceMoved > 1.0) {
-            // Teleportation / large correction: snap everything.
             if (distanceMoved > MAX_INTERPOLATION_DISTANCE) {
-                movementState.interpolatedX = animal.posX;
-                movementState.interpolatedY = animal.posY;
+                movementState.sampleFromX = animal.posX;
+                movementState.sampleFromY = animal.posY;
+                movementState.sampleToX = animal.posX;
+                movementState.sampleToY = animal.posY;
+                movementState.sampleFromMs = nowMs;
+                movementState.sampleToMs = nowMs;
                 movementState.walkPhase = 0;
                 movementState.prevRenderX = animal.posX;
                 movementState.prevRenderY = animal.posY;
+            } else {
+                movementState.sampleFromX = movementState.sampleToX;
+                movementState.sampleFromY = movementState.sampleToY;
+                movementState.sampleFromMs = movementState.sampleToMs;
+                movementState.sampleToX = animal.posX;
+                movementState.sampleToY = animal.posY;
+                movementState.sampleToMs = nowMs;
             }
-
-            movementState.targetX = animal.posX;
-            movementState.targetY = animal.posY;
             movementState.lastServerX = animal.posX;
             movementState.lastServerY = animal.posY;
         }
 
-        // Exponential smoothing toward server target (continuous in time — no tickProgress phases).
-        let prevFrameMs = movementState.lastRenderFrameMs;
-        if (prevFrameMs === undefined || !Number.isFinite(prevFrameMs)) {
-            prevFrameMs = nowMs - 16.67;
-        }
-        movementState.lastRenderFrameMs = nowMs;
-        let deltaMs = nowMs - prevFrameMs;
-        if (deltaMs < 0) deltaMs = 0;
-        if (deltaMs > INTERP_MAX_DELTA_MS) deltaMs = INTERP_MAX_DELTA_MS;
-
-        const errX = movementState.targetX - movementState.interpolatedX;
-        const errY = movementState.targetY - movementState.interpolatedY;
-        const err = Math.hypot(errX, errY);
-
-        if (err < 0.4) {
-            movementState.interpolatedX = movementState.targetX;
-            movementState.interpolatedY = movementState.targetY;
+        const span = movementState.sampleToMs - movementState.sampleFromMs;
+        if (span < MIN_SEGMENT_SPAN_MS) {
+            renderPosX = movementState.sampleToX;
+            renderPosY = movementState.sampleToY;
         } else {
-            const alpha = 1 - Math.exp(-deltaMs / INTERP_SMOOTH_TAU_MS);
-            movementState.interpolatedX += errX * alpha;
-            movementState.interpolatedY += errY * alpha;
+            let alpha = (nowMs - movementState.sampleFromMs) / span;
+            if (alpha > 1) alpha = 1;
+            if (alpha < 0) alpha = 0;
+            renderPosX =
+                movementState.sampleFromX +
+                (movementState.sampleToX - movementState.sampleFromX) * alpha;
+            renderPosY =
+                movementState.sampleFromY +
+                (movementState.sampleToY - movementState.sampleFromY) * alpha;
         }
-
-        renderPosX = movementState.interpolatedX;
-        renderPosY = movementState.interpolatedY;
     }
+
+    wildAnimalClientRenderWorldCenter.set(animalId, { x: renderPosX, y: renderPosY });
 
     // --- Hit detection and effect timing (similar to player system) ---
     const serverLastHitTimePropMicros = animal.lastHitTime?.microsSinceUnixEpoch ?? 0n;
@@ -1050,7 +1060,7 @@ export function renderWildAnimal({
         const rawStep = Math.hypot(renderPosX - prx, renderPosY - pry);
         const stepDist = Math.min(rawStep, WALK_SYNC_MAX_STEP_PX);
 
-        const distToTargetNow = Math.hypot(movementState.targetX - renderPosX, movementState.targetY - renderPosY);
+        const distToTargetNow = Math.hypot(movementState.sampleToX - renderPosX, movementState.sampleToY - renderPosY);
         const isMovingVisual = stepDist > 0.1 || distToTargetNow > 1.2;
 
         let phase = movementState.walkPhase ?? 0;

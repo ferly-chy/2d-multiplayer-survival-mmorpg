@@ -5,6 +5,7 @@ import { getVillageCampfireCollisionShapes, getMonumentScarecrowCollisionShapes 
 import { gameConfig, FOUNDATION_TILE_SIZE, foundationCellToWorldCenter } from '../config/gameConfig';
 import { COMPOUND_BUILDINGS, getBuildingWorldPosition, isCompoundMonument } from '../config/compoundBuildings';
 import { ANIMAL_CORPSE_COLLISION_RADIUS } from './renderers/animalCorpseRenderingUtils';
+import { getWildAnimalClientRenderWorldCenter } from './renderers/wildAnimalRenderingUtils';
 
 // Add at top after imports:
 // Spatial filtering constants
@@ -2040,6 +2041,17 @@ export function getCollisionShapesForDebug(
       y: corpse.posY,
       radius: ANIMAL_CORPSE_COLLISION_RADIUS,
     });
+  }
+
+  // Match orange debug circles to smoothed sprite position (authoritative rows still use server pos).
+  for (const shape of debugShapes) {
+    if (!shape.type.startsWith('animal-')) continue;
+    const id = shape.type.slice('animal-'.length);
+    const p = getWildAnimalClientRenderWorldCenter(id);
+    if (p) {
+      shape.x = p.x + COLLISION_OFFSETS.WILD_ANIMAL.x;
+      shape.y = p.y + COLLISION_OFFSETS.WILD_ANIMAL.y;
+    }
   }
 
   return debugShapes;

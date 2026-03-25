@@ -15,6 +15,7 @@ import {
   syncCampfireSmokePlumeBuild,
   buildCampfireBurningStateMap,
 } from '../../utils/renderers/campfireSmokePlumeReach';
+import { buildTorchFireGpuOverlayEmitters } from '../../utils/renderers/torchFireOverlayEmitters';
 import {
   renderTranslatedWorldExtrasUnderCampfireOverlay,
   renderTranslatedWorldExtrasOverCampfireOverlay,
@@ -475,12 +476,21 @@ export function renderGameCanvasFrame(args: any): void {
     buildCampfireBurningStateMap(visibleCampfiresMap, currentYSortedEntities as any[]),
     fireOverlayTimeMs,
   );
+  const torchEmitters = buildTorchFireGpuOverlayEmitters({
+    players,
+    activeEquipments: args.activeEquipments,
+    itemDefinitions,
+    localPlayerId,
+    localPredictedPosition: currentPredictedPosition,
+    remotePlayerInterpolation,
+    nowMs: fireOverlayTimeMs,
+  });
   const hookEmitters =
     typeof computeCampfireFireOverlayEmitters === 'function'
       ? computeCampfireFireOverlayEmitters(fireOverlayTimeMs)
       : [];
   const fireEmitters = mergeCampfireFireEmittersWithYSort(
-    hookEmitters,
+    [...torchEmitters, ...hookEmitters],
     currentYSortedEntities as any[],
     fireOverlayTimeMs,
   );
