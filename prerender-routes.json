@@ -5,7 +5,6 @@
     "/privacy",
     "/terms",
     "/cookies",
-    "/ai-disclosure",
     "/blog/armor-system-design",
     "/blog/babushka-art-direction-broth-bullets",
     "/blog/babushka-sprite-evolution",
@@ -37,5 +36,5 @@
     "/blog/survival-games-like-rust-alternatives"
   ],
   "generatedAt": "2026-02-06T08:37:46.631Z",
-  "totalRoutes": 35
+  "totalRoutes": 34
 }

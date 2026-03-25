@@ -41,7 +41,8 @@ export function useMatronagePanelController() {
         e.stopPropagation();
       }
       if (
-        e.key === 'y' || e.key === 'Y' || e.key === 'g' || e.key === 'G' ||
+        e.key === 'y' || e.key === 'Y' || e.key === 'k' || e.key === 'K' ||
+        e.key === 'g' || e.key === 'G' ||
         e.key === 'e' || e.key === 'E' || e.key === 'r' || e.key === 'R' ||
         e.key === 'f' || e.key === 'F' || e.key === 'q' || e.key === 'Q' ||
         e.key === 'Tab'

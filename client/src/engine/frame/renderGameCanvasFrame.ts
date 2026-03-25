@@ -9,6 +9,7 @@ import { logLagDiagnostic } from '../../utils/gameDebugUtils';
 import { renderWardParticles } from '../../hooks/useWardParticles';
 import { renderCutGrassEffects } from '../../effects/cutGrassEffect';
 import { renderArrowBreakEffects } from '../../effects/arrowBreakEffect';
+import { renderCampfireFireOverlay } from '../../utils/renderers/campfireFireOverlayUtils';
 
 export function renderGameCanvasFrame(args: any): void {
   const frameStartTime = performance.now();
@@ -100,6 +101,7 @@ export function renderGameCanvasFrame(args: any): void {
     hasRepairHammer,
     worldParticlesQuality,
     renderParticles,
+    computeCampfireFireOverlayEmitters,
     campfireParticles,
     fireArrowParticles,
     torchParticles,
@@ -459,6 +461,15 @@ export function renderGameCanvasFrame(args: any): void {
   });
 
   if (worldParticlesQuality > 0) {
+    renderCampfireFireOverlay(
+      ctx,
+      currentCameraOffsetX,
+      currentCameraOffsetY,
+      currentCanvasWidth,
+      currentCanvasHeight,
+      nowMs,
+      computeCampfireFireOverlayEmitters(nowMs),
+    );
     renderParticles(ctx, campfireParticles);
     renderParticles(ctx, fireArrowParticles);
     if (worldParticlesQuality > 1) {

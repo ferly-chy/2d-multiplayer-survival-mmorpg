@@ -238,6 +238,18 @@ export function useGameplaySessionRuntime({
           setInterfaceInitialView('achievements');
           setIsMinimapOpen(true);
         }
+        return;
+      }
+
+      if ((event.key === 'k' || event.key === 'K') && !isChatting) {
+        event.preventDefault();
+        if (isMinimapOpen && interfaceInitialView === 'alk') {
+          setInterfaceInitialView(undefined);
+          setIsMinimapOpen(false);
+        } else {
+          setInterfaceInitialView('alk');
+          setIsMinimapOpen(true);
+        }
       }
     };
 

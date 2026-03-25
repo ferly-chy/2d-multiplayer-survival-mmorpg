@@ -20,4 +20,6 @@ export default __t.row({
   durationMicros: __t.i64().name("duration_micros"),
   directionX: __t.f32().name("direction_x"),
   directionY: __t.f32().name("direction_y"),
+  crateDropElapsedMicros: __t.i64().name("crate_drop_elapsed_micros"),
+  militaryCrateSpawned: __t.bool().name("military_crate_spawned"),
 });

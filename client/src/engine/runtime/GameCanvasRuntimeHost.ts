@@ -6,6 +6,7 @@ import type { RuntimeFramePipeline } from '../types';
 import type { GameLoopMetrics } from '../../hooks/useGameLoop';
 import type { FrameInfo } from '../../hooks/useGameLoop';
 import type { Projectile as SpacetimeDBProjectile } from '../../generated/types';
+import type { CampfireFireGpuEmitter } from '../../utils/renderers/campfireFireOverlayUtils';
 
 export interface GameCanvasRuntimeRenderContext {
   [key: string]: unknown;
@@ -108,6 +109,8 @@ export interface GameCanvasRuntimeControllerSnapshot
 
 export interface GameCanvasRuntimeParticleSnapshot extends Record<string, any> {
   renderParticles: (ctx: CanvasRenderingContext2D, particles: any[]) => void;
+  /** World-space GPU emitters for WebGL fire/smoke overlay (built each frame with nowMs). */
+  computeCampfireFireOverlayEmitters: (nowMs: number) => readonly CampfireFireGpuEmitter[];
   campfireParticles: any;
   torchParticles: any;
   fireArrowParticles: any;

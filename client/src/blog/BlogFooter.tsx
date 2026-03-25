@@ -272,7 +272,6 @@ const BlogFooter: React.FC = () => {
                             { label: 'PRIVACY POLICY', path: '/privacy' },
                             { label: 'TERMS OF SERVICE', path: '/terms' },
                             { label: 'COOKIE DECLARATION', path: '/cookies' },
-                            { label: 'AI DISCLOSURE', path: '/ai-disclosure' },
                         ].map((link) => (
                             <li key={link.label} style={{ marginBottom: '12px' }}>
                                 <button

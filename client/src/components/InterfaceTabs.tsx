@@ -63,7 +63,9 @@ const InterfaceTabs: React.FC<InterfaceTabsProps> = ({
       
       {/* ALK Provisioning Tab */}
       <button
+        type="button"
         className={`tab alk-tab ${isAlkActive ? 'active' : 'inactive'} ${hoveredTab === 'alk' ? 'hovered' : ''}`}
+        title="Hotkey: K"
         onClick={() => onViewChange('alk')}
         onMouseEnter={() => setHoveredTab('alk')}
         onMouseLeave={() => setHoveredTab(null)}
@@ -105,7 +107,9 @@ const InterfaceTabs: React.FC<InterfaceTabsProps> = ({
       
       {/* ACHIEVEMENTS Tab */}
       <button
+        type="button"
         className={`tab achievements-tab ${isAchievementsActive ? 'active' : 'inactive'} ${hoveredTab === 'achievements' ? 'hovered' : ''}`}
+        title="Hotkey: Y"
         onClick={() => onViewChange('achievements')}
         onMouseEnter={() => setHoveredTab('achievements')}
         onMouseLeave={() => setHoveredTab(null)}

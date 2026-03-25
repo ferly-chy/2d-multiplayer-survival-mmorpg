@@ -258,7 +258,6 @@ export default function GameCanvasOverlayUI(props: GameCanvasOverlayUIProps) {
           seed={hoveredSeed}
           visible={true}
           position={{ x: canvasMousePos.x, y: canvasMousePos.y }}
-          currentTime={Date.now()}
           clouds={worldTables.clouds}
           worldState={worldTables.worldState}
           chunkWeather={worldTables.chunkWeather}

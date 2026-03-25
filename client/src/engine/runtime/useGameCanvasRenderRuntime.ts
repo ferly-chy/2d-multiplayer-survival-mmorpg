@@ -261,6 +261,7 @@ export function useGameCanvasRenderRuntime({
     hasRepairHammer: controllerRuntime.hasRepairHammer,
     worldParticlesQuality,
     renderParticles: effectsRuntime.renderParticles,
+    computeCampfireFireOverlayEmitters: effectsRuntime.computeCampfireFireOverlayEmitters,
     campfireParticles: effectsRuntime.campfireParticles,
     fireArrowParticles: effectsRuntime.fireArrowParticles,
     torchParticles: effectsRuntime.torchParticles,

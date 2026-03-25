@@ -87,7 +87,12 @@ import { renderStash } from './stashRenderingUtils';
 import { renderSleepingBag } from './sleepingBagRenderingUtils';
 import { renderShelter } from './shelterRenderingUtils';
 import { renderRainCollector } from './rainCollectorRenderingUtils';
-import { renderWildAnimal, renderTamingThoughtBubbles, renderPregnancyIndicator } from './wildAnimalRenderingUtils';
+import {
+  renderWildAnimal,
+  renderTamingThoughtBubbles,
+  renderPregnancyIndicator,
+  isWildAnimalOccludedWhenSnorkeling,
+} from './wildAnimalRenderingUtils';
 import type { CaribouBreedingData, WalrusBreedingData } from '../../generated/types';
 import { renderAnimalCorpse, renderAnimalCorpseDestructionEffects } from './animalCorpseRenderingUtils';
 import { renderPlayerCorpse, isCorpseHovered } from './playerCorpseRenderingUtils';
@@ -1078,7 +1083,15 @@ export const renderYSortedEntities = ({
                   // Use the rendered direction so local held-item orientation matches the body instantly.
                   // Pass snorkeling state for underwater teal tint effect
                   const playerIsSnorkelingForItem = isLocalPlayer ? isLocalPlayerSnorkeling : playerForRendering.isSnorkeling;
-                  renderEquippedItem(ctx, playerForRendering, equipment, itemDef!, itemDefinitions, itemImg!, nowMs, jumpOffset, itemImagesRef.current, playerEffects, localPlayerId, playerForRendering.direction, playerIsSnorkelingForItem);
+                  const heldDodgeRollSpinTag = itemDef!.category?.tag;
+                  const toolDodgeRollSpin =
+                    isDodgeRolling &&
+                    (heldDodgeRollSpinTag === 'Tool' ||
+                      heldDodgeRollSpinTag === 'Weapon' ||
+                      heldDodgeRollSpinTag === 'RangedWeapon')
+                      ? { progress: dodgeRollProgress, direction: playerForRendering.direction }
+                      : undefined;
+                  renderEquippedItem(ctx, playerForRendering, equipment, itemDef!, itemDefinitions, itemImg!, nowMs, jumpOffset, itemImagesRef.current, playerEffects, localPlayerId, playerForRendering.direction, playerIsSnorkelingForItem, toolDodgeRollSpin);
             }
             
             // console.log(`[DEBUG] Rendering player ${playerId} - heroImg available:`, !!heroImg, 'direction:', playerForRendering.direction);
@@ -1227,7 +1240,15 @@ export const renderYSortedEntities = ({
                   // Use the rendered direction so local held-item orientation matches the body instantly.
                   // Pass snorkeling state for underwater teal tint effect
                   const playerIsSnorkelingForItem = isLocalPlayer ? isLocalPlayerSnorkeling : playerForRendering.isSnorkeling;
-                  renderEquippedItem(ctx, playerForRendering, equipment, itemDef!, itemDefinitions, itemImg!, nowMs, jumpOffset, itemImagesRef.current, playerEffects, localPlayerId, playerForRendering.direction, playerIsSnorkelingForItem);
+                  const heldDodgeRollSpinTag = itemDef!.category?.tag;
+                  const toolDodgeRollSpin =
+                    isDodgeRolling &&
+                    (heldDodgeRollSpinTag === 'Tool' ||
+                      heldDodgeRollSpinTag === 'Weapon' ||
+                      heldDodgeRollSpinTag === 'RangedWeapon')
+                      ? { progress: dodgeRollProgress, direction: playerForRendering.direction }
+                      : undefined;
+                  renderEquippedItem(ctx, playerForRendering, equipment, itemDef!, itemDefinitions, itemImg!, nowMs, jumpOffset, itemImagesRef.current, playerEffects, localPlayerId, playerForRendering.direction, playerIsSnorkelingForItem, toolDodgeRollSpin);
                   renderMeleeSwipeArcIfSwinging(ctx, playerForRendering, equipment, itemDef!, nowMs, jumpOffset, localPlayerId);
             }
             
@@ -1680,48 +1701,55 @@ export const renderYSortedEntities = ({
           }
       } else if (type === 'wild_animal') {
           const wildAnimal = entity as SpacetimeDBWildAnimal;
-          renderWildAnimal({
-              ctx,
-              animal: wildAnimal,
-              nowMs,
-              cycleProgress,
-              animationFrame,
-              localPlayerPosition: localPlayerPosition || { x: 0, y: 0 },
-              isLocalPlayerSnorkeling, // Pass snorkeling state for underwater rendering (sharks)
-              isOnWaterTile: (worldX: number, worldY: number) => {
-                  if (!connection) return false;
-                  const { tileX, tileY } = worldPosToTileCoords(worldX, worldY);
-                  const tileType = getTileTypeFromChunkData(connection, tileX, tileY);
-                  return isWaterTileTag(tileType);
-              },
-              caribouBreedingData, // Pass breeding data for age-based size scaling
-              walrusBreedingData, // Pass breeding data for age-based size scaling
-          });
-          
-          // Render thought bubbles for tamed animals (hearts, crying, etc.)
-          renderTamingThoughtBubbles({
-              ctx,
-              animal: wildAnimal,
-              nowMs,
-          });
-          
-          // Render pregnancy indicator thought bubble for pregnant caribou/walrus (both wild and tamed)
-          renderPregnancyIndicator({
-              ctx,
-              animal: wildAnimal,
-              nowMs,
-              caribouBreedingData,
-              walrusBreedingData,
-          });
-          
-          // Check if this animal is the closest milkable target
-          const isMilkableTarget = closestInteractableTarget?.type === 'milkable_animal' && 
-                                   closestInteractableTarget?.id === wildAnimal.id;
-          if (isMilkableTarget) {
-              const outlineColor = getInteractionOutlineColor('open');
-              const config = ENTITY_VISUAL_CONFIG.milkable_animal;
-              const outline = getInteractionOutlineParams(wildAnimal.posX, wildAnimal.posY, config);
-              drawInteractionOutline(ctx, outline.x, outline.y, outline.width, outline.height, cycleProgress, outlineColor);
+          const skipWildAnimalUnderwater = isWildAnimalOccludedWhenSnorkeling(
+              wildAnimal,
+              Boolean(isLocalPlayerSnorkeling),
+          );
+
+          if (!skipWildAnimalUnderwater) {
+              renderWildAnimal({
+                  ctx,
+                  animal: wildAnimal,
+                  nowMs,
+                  cycleProgress,
+                  animationFrame,
+                  localPlayerPosition: localPlayerPosition || { x: 0, y: 0 },
+                  isLocalPlayerSnorkeling, // Pass snorkeling state for underwater rendering (sharks)
+                  isOnWaterTile: (worldX: number, worldY: number) => {
+                      if (!connection) return false;
+                      const { tileX, tileY } = worldPosToTileCoords(worldX, worldY);
+                      const tileType = getTileTypeFromChunkData(connection, tileX, tileY);
+                      return isWaterTileTag(tileType);
+                  },
+                  caribouBreedingData, // Pass breeding data for age-based size scaling
+                  walrusBreedingData, // Pass breeding data for age-based size scaling
+              });
+
+              // Render thought bubbles for tamed animals (hearts, crying, etc.)
+              renderTamingThoughtBubbles({
+                  ctx,
+                  animal: wildAnimal,
+                  nowMs,
+              });
+
+              // Render pregnancy indicator thought bubble for pregnant caribou/walrus (both wild and tamed)
+              renderPregnancyIndicator({
+                  ctx,
+                  animal: wildAnimal,
+                  nowMs,
+                  caribouBreedingData,
+                  walrusBreedingData,
+              });
+
+              // Check if this animal is the closest milkable target
+              const isMilkableTarget = closestInteractableTarget?.type === 'milkable_animal' &&
+                  closestInteractableTarget?.id === wildAnimal.id;
+              if (isMilkableTarget) {
+                  const outlineColor = getInteractionOutlineColor('open');
+                  const config = ENTITY_VISUAL_CONFIG.milkable_animal;
+                  const outline = getInteractionOutlineParams(wildAnimal.posX, wildAnimal.posY, config);
+                  drawInteractionOutline(ctx, outline.x, outline.y, outline.width, outline.height, cycleProgress, outlineColor);
+              }
           }
       } else if (type === 'animal_corpse') {
           const animalCorpse = entity as SpacetimeDBAnimalCorpse;

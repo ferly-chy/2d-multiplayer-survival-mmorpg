@@ -14,7 +14,8 @@
  * 3. INTERACTION: PLAYER_CAMPFIRE_INTERACTION_DISTANCE_SQUARED (96px) for
  *    E-key targeting. SERVER_CAMPFIRE_DAMAGE_RADIUS for server logic.
  *
- * 4. PARTICLE EMISSION: FIRE_EMISSION_VISUAL_CENTER_Y_OFFSET for useCampfireParticles.
+ * 4. GPU FIRE OVERLAY: getPlacedCampfireFireAnchorWorld / monument anchor helpers
+ *    for campfireFireOverlayUtils (WebGL2). Steady fire/smoke are not particles.
  */
 
 import { Campfire } from '../../generated/types'; // Import generated Campfire type
@@ -39,10 +40,23 @@ export const PLAYER_CAMPFIRE_INTERACTION_DISTANCE_SQUARED = 96.0 * 96.0; // New 
 export const SERVER_CAMPFIRE_DAMAGE_RADIUS = 25.0;
 export const SERVER_CAMPFIRE_DAMAGE_CENTER_Y_OFFSET = 0.0;
 
-// Particle emission points relative to the campfire's visual center (posY - (HEIGHT/2) - RENDER_Y_OFFSET)
-// These describe where particles START. Positive Y is UP from visual center.
-const FIRE_EMISSION_VISUAL_CENTER_Y_OFFSET = CAMPFIRE_HEIGHT * 0.35; 
-const SMOKE_EMISSION_VISUAL_CENTER_Y_OFFSET = CAMPFIRE_HEIGHT * 0.4;
+/** Gray smoke after extinguish; matches former particle linger duration. */
+export const CAMPFIRE_SMOKE_LINGER_MS = 4000;
+
+/** Monument "fv_campfire" world Y offset (fishing / hunting village). */
+export const STATIC_MONUMENT_CAMPFIRE_Y_OFFSET = -135;
+
+/** Fire column anchor in world pixels for placed campfires (entity base at posY). */
+export function getPlacedCampfireFireAnchorWorld(posX: number, posY: number): { x: number; y: number } {
+  const visualCenterY = posY - CAMPFIRE_HEIGHT / 2 - CAMPFIRE_RENDER_Y_OFFSET;
+  return { x: posX, y: visualCenterY + CAMPFIRE_HEIGHT * 0.12 };
+}
+
+/** Fire anchor for static monument campfires (image centered at world pos). */
+export function getStaticMonumentCampfireFireAnchorWorld(posX: number, posY: number): { x: number; y: number } {
+  const visualCenterY = posY + STATIC_MONUMENT_CAMPFIRE_Y_OFFSET;
+  return { x: posX, y: visualCenterY + CAMPFIRE_HEIGHT * 0.08 };
+}
 
 // --- Other Local Constants ---
 const SHAKE_DURATION_MS = 150; // How long the shake effect lasts

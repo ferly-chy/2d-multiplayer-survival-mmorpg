@@ -1,6 +1,7 @@
 /*!
  * Drone flyover event - periodic eerie drone that crosses the island.
  * Renders as a shadow (like clouds), emits high-distance sound.
+ * Drops one military crate at a random point along the flight path (strictly mid-flight).
  */
 
 use spacetimedb::{ReducerContext, Table, Timestamp, TimeDuration, ScheduleAt, reducer};
@@ -41,6 +42,10 @@ pub struct DroneEvent {
     /// Direction X (normalized) for flight path
     pub direction_x: f32,
     pub direction_y: f32,
+    /// Elapsed time from `start_time` when the military crate is released (open interval: 0 < t < duration).
+    pub crate_drop_elapsed_micros: i64,
+    /// Set true after the single drop attempt for this flight (avoids duplicate crates if ticks repeat).
+    pub military_crate_spawned: bool,
 }
 
 #[spacetimedb::table(accessor = drone_daily_schedule, scheduled(process_drone_daily))]
@@ -80,6 +85,67 @@ fn compute_drone_position(
     let x = start_x + (end_x - start_x) * t;
     let y = start_y + (end_y - start_y) * t;
     Some((x, y))
+}
+
+/// World position on the drone segment at a given elapsed time (may be used for mid-flight drop).
+fn position_on_drone_path_at_elapsed(
+    start_x: f32,
+    start_y: f32,
+    end_x: f32,
+    end_y: f32,
+    duration_micros: i64,
+    elapsed_micros: i64,
+) -> (f32, f32) {
+    if duration_micros <= 0 {
+        return (start_x, start_y);
+    }
+    let t = (elapsed_micros as f32 / duration_micros as f32).clamp(0.0, 1.0);
+    (
+        start_x + (end_x - start_x) * t,
+        start_y + (end_y - start_y) * t,
+    )
+}
+
+/// Uniform random elapsed time strictly inside the flight window (never at start or end).
+fn random_crate_drop_elapsed_micros(rng: &mut impl Rng, duration_micros: i64) -> i64 {
+    if duration_micros <= 2 {
+        return 1.max(duration_micros / 2);
+    }
+    let t = rng.gen_range(0.001f32..0.999f32);
+    let e = ((duration_micros as f32) * t) as i64;
+    e.clamp(1, duration_micros - 1)
+}
+
+/// Spawn military crate at `base` or small offsets along flight direction until dry land is found.
+fn try_spawn_drone_military_crate(
+    ctx: &ReducerContext,
+    base_x: f32,
+    base_y: f32,
+    dir_x: f32,
+    dir_y: f32,
+) -> Result<u32, String> {
+    const STEP_PX: f32 = 72.0;
+    const MARGIN: f32 = 48.0;
+    let w = WORLD_WIDTH_PX;
+    let h = WORLD_HEIGHT_PX;
+
+    let mut offsets: Vec<f32> = vec![0.0];
+    for i in 1..=24 {
+        offsets.push(i as f32 * STEP_PX);
+        offsets.push(-(i as f32 * STEP_PX));
+    }
+
+    for off in offsets {
+        let x = (base_x + dir_x * off).clamp(MARGIN, w - MARGIN);
+        let y = (base_y + dir_y * off).clamp(MARGIN, h - MARGIN);
+        let chunk = crate::environment::calculate_chunk_index(x, y);
+        match crate::military_ration::spawn_military_crate_with_loot(ctx, x, y, chunk) {
+            Ok(id) => return Ok(id),
+            Err(_) => continue,
+        }
+    }
+
+    Err("No dry land along drone path near drop point".to_string())
 }
 
 /// Compute where a line from (sx,sy) in direction (dx,dy) hits the map boundary.
@@ -184,6 +250,7 @@ pub fn spawn_drone_event(
     let duration_secs = distance / DRONE_SPEED_PX_PER_SEC;
     let duration_micros = (duration_secs * 1_000_000.0) as i64;
     let start_time = ctx.timestamp;
+    let crate_drop_elapsed_micros = random_crate_drop_elapsed_micros(&mut rng, duration_micros);
 
     let drone = DroneEvent {
         id: 0,
@@ -195,6 +262,8 @@ pub fn spawn_drone_event(
         duration_micros,
         direction_x: dir_x,
         direction_y: dir_y,
+        crate_drop_elapsed_micros,
+        military_crate_spawned: false,
     };
 
     let inserted = ctx.db.drone_event().try_insert(drone).map_err(|e| format!("{:?}", e))?;
@@ -262,6 +331,38 @@ pub fn process_drone_flight_tick(ctx: &ReducerContext, schedule: DroneFlightSche
         Some(p) => p,
         None => return Ok(()),
     };
+
+    if !drone.military_crate_spawned && elapsed_micros >= drone.crate_drop_elapsed_micros {
+        let (drop_x, drop_y) = position_on_drone_path_at_elapsed(
+            drone.start_x,
+            drone.start_y,
+            drone.end_x,
+            drone.end_y,
+            drone.duration_micros,
+            drone.crate_drop_elapsed_micros,
+        );
+        match try_spawn_drone_military_crate(ctx, drop_x, drop_y, drone.direction_x, drone.direction_y) {
+            Ok(crate_id) => {
+                log::info!(
+                    "Drone {} dropped military crate {} at ({:.0},{:.0}) (path t={:.3})",
+                    drone.id,
+                    crate_id,
+                    drop_x,
+                    drop_y,
+                    drone.crate_drop_elapsed_micros as f32 / drone.duration_micros as f32
+                );
+                let mut updated = drone.clone();
+                updated.military_crate_spawned = true;
+                ctx.db.drone_event().id().update(updated);
+            }
+            Err(e) => {
+                log::warn!("Drone {} military crate drop failed: {}", drone.id, e);
+                let mut updated = drone.clone();
+                updated.military_crate_spawned = true;
+                ctx.db.drone_event().id().update(updated);
+            }
+        }
+    }
 
     // Emit sound at current position with velocity for Doppler effect (every 1s = every 2nd tick)
     if schedule.tick_count % 2 == 0 {

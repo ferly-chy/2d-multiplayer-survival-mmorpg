@@ -35,7 +35,7 @@ use crate::shared_config::{
 const FUEL_ITEM_CONSUME_PER_SECOND: f32 = 0.2; // e.g., 1 wood every 5 seconds
 
 // Season duration constants for plant respawn calculations
-// 240 in-game days per season × 30 min per day = 120 real hours = 5 real days per season
+// 240 in-game days per season × 50 min per day (40+10) = 200 real hours per season at wall clock
 pub const DAYS_PER_SEASON: u32 = 240;
 pub const SEASON_DURATION_HOURS: f32 = 240.0 * 24.0; // 240 days per season * 24 hours per day = 5760 hours
 
@@ -443,7 +443,8 @@ pub fn seed_world_state(ctx: &ReducerContext) -> Result<(), String> {
         log::info!("Seeding initial WorldState.");
         world_states.try_insert(WorldState {
             id: 0, // Autoinc takes care of this, but good practice
-            cycle_progress: 0.25, // Start at morning
+            // ~0.25 in legacy 0.76-day scale → morning after 0.8 twilight boundary remap
+            cycle_progress: 0.2632,
             time_of_day: TimeOfDay::Morning,
             cycle_count: 0,
             is_full_moon: false,
@@ -1059,16 +1060,17 @@ pub fn debug_set_season(ctx: &ReducerContext, season_str: String) -> Result<(), 
 // Debug reducer to manually set time of day (only for testing)
 #[spacetimedb::reducer]
 pub fn debug_set_time(ctx: &ReducerContext, time_type_str: String) -> Result<(), String> {
+    // Progress values match shared/config/gameConfig.json dayNight (40m day + 10m night).
     let (new_progress, new_time_of_day) = match time_type_str.as_str() {
-        "Dawn" => (0.02, TimeOfDay::Dawn),
-        "TwilightMorning" => (0.985, TimeOfDay::TwilightMorning), // Pre-dawn twilight (0.97-1.0, wraps around)
-        "Morning" => (0.20, TimeOfDay::Morning),
-        "Noon" => (0.40, TimeOfDay::Noon),
-        "Afternoon" => (0.55, TimeOfDay::Afternoon),
-        "Dusk" => (0.74, TimeOfDay::Dusk), // Middle of Dusk range (0.72-0.76)
-        "TwilightEvening" => (0.78, TimeOfDay::TwilightEvening), // Evening twilight (0.76-0.80)
-        "Night" => (0.86, TimeOfDay::Night),     // Regular night (0.80-0.92)
-        "Midnight" => (0.945, TimeOfDay::Midnight), // Deep night (0.92-0.97)
+        "Dawn" => (0.021, TimeOfDay::Dawn),
+        "TwilightMorning" => (0.9875, TimeOfDay::TwilightMorning),
+        "Morning" => (0.2105, TimeOfDay::Morning),
+        "Noon" => (0.4211, TimeOfDay::Noon),
+        "Afternoon" => (0.5789, TimeOfDay::Afternoon),
+        "Dusk" => (0.7789, TimeOfDay::Dusk),
+        "TwilightEvening" => (0.8167, TimeOfDay::TwilightEvening),
+        "Night" => (0.8833, TimeOfDay::Night),
+        "Midnight" => (0.9542, TimeOfDay::Midnight),
         _ => return Err(format!("Invalid time type: {}", time_type_str)),
     };
 

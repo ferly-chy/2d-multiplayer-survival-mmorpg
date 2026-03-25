@@ -443,8 +443,8 @@ const CraftingScreen: React.FC<CraftingScreenProps> = ({
     };
 
     const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-        // Including 'y' which opens achievements panel
-        const gameControlKeys = ['f', 'g', ' ', 'e', 'w', 'a', 's', 'd', 'z', 'c', 'm', 'b', 'y'];
+        // 'y' achievements, 'k' ALK board, etc.
+        const gameControlKeys = ['f', 'g', ' ', 'e', 'w', 'a', 's', 'd', 'z', 'c', 'm', 'b', 'y', 'k'];
         const key = event.key.toLowerCase();
 
         if (gameControlKeys.includes(key)) {
@@ -775,8 +775,8 @@ const CraftingScreen: React.FC<CraftingScreenProps> = ({
                                                         max={maxCraftable > 0 ? maxCraftable : 1}
                                                         onKeyDown={(e) => {
                                                             if (e.key === '+' || e.key === '-') e.preventDefault();
-                                                            // Block game control keys (y opens achievements, etc)
-                                                            const gameControlKeys = ['f', 'g', ' ', 'e', 'w', 'a', 's', 'd', 'z', 'c', 'm', 'b', 'y'];
+                                                            // Block game control keys (y/k map panels, etc.)
+                                                            const gameControlKeys = ['f', 'g', ' ', 'e', 'w', 'a', 's', 'd', 'z', 'c', 'm', 'b', 'y', 'k'];
                                                             if (gameControlKeys.includes(e.key.toLowerCase())) {
                                                                 e.stopPropagation();
                                                             }

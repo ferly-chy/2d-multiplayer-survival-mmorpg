@@ -3,12 +3,32 @@
  * All lights (road lampposts, shipwreck glow, ALK compound, rune stones, campfires, etc.)
  * must use these thresholds so they turn on/off at the same time.
  *
- * Aligned with useDayNightCycle keyframes:
- * - 0.15: Morning fully clear (day)
- * - 0.72: Dusk starts (sunset orange overlay)
- * - 0.76: Twilight evening (deep purple)
+ * Full cycle = dayDurationSeconds + nightDurationSeconds (shared/config/gameConfig.json).
+ * Day (dawn through end of dusk) occupies twilightEveningStartProgress of linear progress;
+ * night (twilight evening through twilight morning) occupies the remainder to 1.0.
+ *
+ * Key visual anchors (from gameConfig dayNight):
+ * - morningClearProgress: lights off / clear day
+ * - duskStartProgress: sunset overlay / lights on ramp
+ * - twilightEveningStartProgress: deep evening / full night arc begins
  */
 import { dayNightConfig } from './sharedGameConfig';
+
+/** Keyframes and some client effects were authored when evening twilight started at 0.76. */
+export const LEGACY_TWILIGHT_EVENING_START_PROGRESS = 0.76;
+
+/** Map legacy 0–1 cycle keyframe progress to current shared thresholds (same phase order). */
+export function mapLegacyCycleProgress(p: number): number {
+  const twilight = dayNightConfig.twilightEveningStartProgress;
+  if (p < LEGACY_TWILIGHT_EVENING_START_PROGRESS) {
+    return p * (twilight / LEGACY_TWILIGHT_EVENING_START_PROGRESS);
+  }
+  return (
+    twilight +
+    (p - LEGACY_TWILIGHT_EVENING_START_PROGRESS) *
+      ((1 - twilight) / (1 - LEGACY_TWILIGHT_EVENING_START_PROGRESS))
+  );
+}
 
 /** When lights turn ON at dusk (sunset overlay starts) */
 export const NIGHT_LIGHTS_ON = dayNightConfig.duskStartProgress;

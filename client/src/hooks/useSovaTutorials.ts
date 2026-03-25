@@ -18,6 +18,10 @@
  */
 
 import { useEffect, useRef, useCallback, MutableRefObject } from 'react';
+import {
+    registerSovaTutorialPlaybackAudio,
+    unregisterSovaTutorialPlaybackAudio,
+} from './useSovaSoundBox';
 
 // ============================================================================
 // Types
@@ -299,6 +303,11 @@ function playSovaTutorial(
     try {
         const audio = new Audio(audioFile);
         audio.volume = 0.8;
+
+        const releaseTutorialGuard = () => unregisterSovaTutorialPlaybackAudio(audio);
+        audio.addEventListener('ended', releaseTutorialGuard, { once: true });
+        audio.addEventListener('error', releaseTutorialGuard, { once: true });
+        registerSovaTutorialPlaybackAudio(audio);
         
         // CRITICAL: Show sound box BEFORE calling play() to set the __SOVA_SOUNDBOX_IS_ACTIVE__ flag
         // This prevents notification sounds from sneaking in during the async play() window
@@ -326,6 +335,7 @@ function playSovaTutorial(
                 }
             })
             .catch(err => {
+                releaseTutorialGuard();
                 console.warn(`[SovaTutorials] Failed to play ${soundBoxLabel}:`, err);
                 onError?.(err);
                 // Still send message even if audio fails
@@ -496,37 +506,39 @@ export function useSovaTutorials({
 
     // ========================================================================
     // Part 2: SOVA Tutorial Hint (3.5 minutes after spawn)
-    // Now uses SERVER-SIDE flag instead of localStorage
-    // Only plays for BRAND NEW players (same as intro) - returning players skip
+    // Server-side seenTutorialIds.tutorialHint is the source of truth.
+    // Effect deps intentionally use ONLY whether tutorialHint was seen — not the full
+    // seenTutorialIds list — so adding crashIntro (or other tutorials) does not clear the
+    // 3.5m timer. Mark as seen when the timer fires (before audio) so autoplay failures
+    // still persist and the hint does not replay every login.
     // ========================================================================
+    const tutorialHintSeenOnServer =
+        seenTutorialIds !== undefined && seenTutorialIds.includes(TUTORIALS.tutorialHint.id);
+
     useEffect(() => {
         const { delayMs, audioFile, soundBoxLabel, message } = TUTORIALS.tutorialHint;
-        
-        // Skip if no player yet or waiting for server data
+
         if (!localPlayerId || seenTutorialIds === undefined) {
             return;
         }
-        
-        // Skip if server says already seen
-        if (seenTutorialIds.includes(TUTORIALS.tutorialHint.id)) {
-            return;
-        }
-        
-        // Skip if returning player (intro seen) - tutorial hint is for brand new players only
-        if (seenTutorialIds.includes(TUTORIALS.crashIntro.id)) {
+        if (tutorialHintSeenOnServer) {
             return;
         }
 
-        console.log('[SovaTutorials] 🎓 Scheduling tutorial hint in 3.5 minutes (brand new player only)...');
-        
+        console.log('[SovaTutorials] 🎓 Scheduling tutorial hint in 3.5 minutes (once per player)...');
+
         const timer = setTimeout(() => {
-            // Double-check mount status
             if (!isMountedRef.current) {
                 return;
             }
-            
+
             console.log('[SovaTutorials] 🎓 Playing tutorial hint NOW');
-            
+
+            if (onMarkTutorialSeen) {
+                console.log('[SovaTutorials] 🎓 Marking tutorial hint as seen on server (before audio)');
+                onMarkTutorialSeen(TUTORIALS.tutorialHint.id);
+            }
+
             playSovaTutorial(
                 {
                     audioFile,
@@ -537,20 +549,21 @@ export function useSovaTutorials({
                 showSovaSoundBoxRef.current,
                 sovaMessageAdderRef.current,
                 {
-                    onAudioStart: () => {
-                        // Mark as seen on server AFTER audio starts
-                        if (onMarkTutorialSeen) {
-                            console.log('[SovaTutorials] 🎓 Marking tutorial hint as seen on server');
-                            onMarkTutorialSeen(TUTORIALS.tutorialHint.id);
-                        }
-                    },
                     onError: onSovaError,
                 }
             );
         }, delayMs);
 
         return () => clearTimeout(timer);
-    }, [localPlayerId, seenTutorialIdsKey, showSovaSoundBoxRef, sovaMessageAdderRef, onMarkTutorialSeen, onSovaError]);
+    }, [
+        localPlayerId,
+        tutorialHintSeenOnServer,
+        seenTutorialIds === undefined,
+        showSovaSoundBoxRef,
+        sovaMessageAdderRef,
+        onMarkTutorialSeen,
+        onSovaError,
+    ]);
 
     // ========================================================================
     // Part 3: Memory Shard Tutorial (Event-driven)

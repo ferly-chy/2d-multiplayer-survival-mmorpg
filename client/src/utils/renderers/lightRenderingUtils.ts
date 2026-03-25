@@ -4,7 +4,8 @@ import { Player as SpacetimeDBPlayer, ItemDefinition as SpacetimeDBItemDefinitio
 import { CAMPFIRE_RENDER_Y_OFFSET, CAMPFIRE_HEIGHT } from '../renderers/campfireRenderingUtils';
 import { ROAD_LAMP_LIGHT_Y_OFFSET, ROAD_LAMP_LIGHT_RADIUS_BASE } from '../renderers/roadLamppostRenderingUtils';
 import { BUOY_HEIGHT } from '../renderers/barrelRenderingUtils';
-import { isNightTime } from '../../config/dayNightConstants';
+import { isNightTime, mapLegacyCycleProgress, NIGHT_LIGHTS_OFF } from '../../config/dayNightConstants';
+import { dayNightConfig } from '../../config/sharedGameConfig';
 import { LANTERN_RENDER_Y_OFFSET, LANTERN_HEIGHT, LANTERN_TYPE_LANTERN } from '../renderers/lanternRenderingUtils';
 import { FURNACE_RENDER_Y_OFFSET, FURNACE_HEIGHT, getFurnaceDimensions, FURNACE_TYPE_LARGE } from '../renderers/furnaceRenderingUtils';
 import { BARBECUE_RENDER_Y_OFFSET, BARBECUE_HEIGHT } from '../renderers/barbecueRenderingUtils';
@@ -1233,13 +1234,11 @@ export const SOVA_AURA_FLICKER_AMOUNT = 0; // No flicker for consistent visibili
 export const SOVA_AURA_INNER_COLOR_RGB = { r: 30, g: 60, b: 220 }; // Deep electric blue
 export const SOVA_AURA_OUTER_COLOR_RGB = { r: 15, g: 40, b: 180 }; // Rich blue fade
 
-// Night time detection thresholds based on cycle progress (0.0 to 1.0)
-// Day is approximately 0.15 to 0.68 (when overlay alpha is 0)
-// Night/dusk starts around 0.72, dawn ends around 0.12
-const SOVA_AURA_DUSK_START = 0.70; // Start fading in during golden hour
-const SOVA_AURA_NIGHT_FULL = 0.76; // Full intensity during night
-const SOVA_AURA_DAWN_END = 0.12; // Fade out as morning arrives
-const SOVA_AURA_DAY_START = 0.15; // Completely off during day
+// SOVA aura ramp: legacy-tuned breakpoints remapped to match shared dayNight progress scale
+const SOVA_AURA_DUSK_START = mapLegacyCycleProgress(0.7);
+const SOVA_AURA_NIGHT_FULL = dayNightConfig.twilightEveningStartProgress;
+const SOVA_AURA_DAWN_END = mapLegacyCycleProgress(0.12);
+const SOVA_AURA_DAY_START = NIGHT_LIGHTS_OFF;
 
 /**
  * Calculate SOVA aura intensity based on time of day.

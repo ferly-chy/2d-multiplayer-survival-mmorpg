@@ -954,6 +954,8 @@ export const DroneEvent = __t.object("DroneEvent", {
   durationMicros: __t.i64(),
   directionX: __t.f32(),
   directionY: __t.f32(),
+  crateDropElapsedMicros: __t.i64(),
+  militaryCrateSpawned: __t.bool(),
 });
 export type DroneEvent = __Infer<typeof DroneEvent>;
 

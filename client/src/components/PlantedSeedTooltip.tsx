@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect, memo } from 'react';
 import { PlantedSeed, Cloud, WorldState, WaterPatch, Campfire, Lantern, Furnace, Tree, RuneStone, ChunkWeather, PlantType, FertilizerPatch, WorldChunkData } from '../generated/types';
 import styles from './PlantedSeedTooltip.module.css';
 import { calculateChunkIndex } from '../utils/chunkUtils';
@@ -21,7 +21,6 @@ interface PlantedSeedTooltipProps {
   seed: PlantedSeed;
   visible: boolean;
   position: { x: number; y: number };
-  currentTime: number; // Current timestamp in milliseconds
   // Environmental data for growth modifiers
   clouds: Map<string, Cloud>;
   worldState: WorldState | null;
@@ -36,11 +35,10 @@ interface PlantedSeedTooltipProps {
   worldChunkData?: Map<string, WorldChunkData>; // Added for checking soil type
 }
 
-const PlantedSeedTooltip: React.FC<PlantedSeedTooltipProps> = ({ 
-  seed, 
-  visible, 
-  position, 
-  currentTime,
+/** Heavy tooltip body: memoized so cursor movement (wrapper reposition) does not re-scan all world tables. */
+const PlantedSeedTooltipBody = memo(function PlantedSeedTooltipBody({
+  seed,
+  visible,
   clouds,
   worldState,
   chunkWeather,
@@ -51,17 +49,23 @@ const PlantedSeedTooltip: React.FC<PlantedSeedTooltipProps> = ({
   trees,
   runeStones,
   fertilizerPatches,
-  worldChunkData
-}) => {
+  worldChunkData,
+}: Omit<PlantedSeedTooltipProps, 'position'>) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const seedChunkWeather = useMemo(() => {
+    if (!seed) return null;
+    const chunkIndex = calculateChunkIndex(seed.posX, seed.posY);
+    return chunkWeather.get(chunkIndex.toString()) || null;
+  }, [seed, seed?.posX, seed?.posY, chunkWeather]);
+
   if (!visible || !seed) {
     return null;
   }
-  
-  // Get chunk-specific weather for this seed's location
-  const seedChunkWeather = useMemo(() => {
-    const chunkIndex = calculateChunkIndex(seed.posX, seed.posY);
-    return chunkWeather.get(chunkIndex.toString()) || null;
-  }, [seed.posX, seed.posY, chunkWeather]);
 
   // Calculate growth percentage
   const growthPercent = Math.round(seed.growthProgress * 100);
@@ -70,7 +74,7 @@ const PlantedSeedTooltip: React.FC<PlantedSeedTooltipProps> = ({
   const isFullyGrown = seed.growthProgress >= 1.0;
   
   // Calculate time already spent growing
-  const timeSpentGrowingMs = currentTime - seed.plantedAt.toDate().getTime();
+  const timeSpentGrowingMs = nowMs - seed.plantedAt.toDate().getTime();
   
   // Note: timeUntilMatureMs will be calculated dynamically below after we compute growth multiplier
   
@@ -606,15 +610,9 @@ const PlantedSeedTooltip: React.FC<PlantedSeedTooltipProps> = ({
   };
   
   const growthStage = getGrowthStage();
-  
-  // Position tooltip slightly offset from cursor
-  const tooltipStyle = {
-    left: `${position.x + 15}px`,
-    top: `${position.y + 15}px`,
-  };
 
   return (
-    <div className={styles.tooltipContainer} style={tooltipStyle}>
+    <>
       {/* Header with plant type */}
       <div className={`${styles.header} ${styles[growthStage]}`}>
         {plantImageSource ? (
@@ -837,8 +835,23 @@ const PlantedSeedTooltip: React.FC<PlantedSeedTooltipProps> = ({
           )}
         </div>
       )}
+    </>
+  );
+});
+
+export default function PlantedSeedTooltip({
+  position,
+  ...rest
+}: PlantedSeedTooltipProps) {
+  if (!rest.visible || !rest.seed) {
+    return null;
+  }
+  return (
+    <div
+      className={styles.tooltipContainer}
+      style={{ left: `${position.x + 15}px`, top: `${position.y + 15}px` }}
+    >
+      <PlantedSeedTooltipBody {...rest} />
     </div>
   );
-};
-
-export default PlantedSeedTooltip;
+}

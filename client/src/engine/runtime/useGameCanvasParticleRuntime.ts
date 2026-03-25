@@ -1,5 +1,6 @@
 import { useMemo, useRef, useCallback } from 'react';
 import { useCampfireParticles } from '../../hooks/useCampfireParticles';
+import { useCampfireFireOverlayEmitters } from '../../hooks/useCampfireFireOverlayEmitters';
 import { useTorchParticles } from '../../hooks/useTorchParticles';
 import { useWardParticles } from '../../hooks/useWardParticles';
 import { useResourceSparkleParticles } from '../../hooks/useResourceSparkleParticles';
@@ -63,6 +64,11 @@ export function useGameCanvasParticleRuntime({
     });
     return positions;
   }, [sceneRuntime.monumentParts]);
+
+  const computeCampfireFireOverlayEmitters = useCampfireFireOverlayEmitters({
+    visibleCampfiresMap: sceneRuntime.visibleCampfiresMap,
+    staticCampfires: villageCampfirePositions,
+  });
 
   const campfireParticles = useCampfireParticles({
     visibleCampfiresMap: sceneRuntime.visibleCampfiresMap,
@@ -135,6 +141,7 @@ export function useGameCanvasParticleRuntime({
 
   return {
     renderParticles,
+    computeCampfireFireOverlayEmitters,
     campfireParticles,
     torchParticles,
     fireArrowParticles,

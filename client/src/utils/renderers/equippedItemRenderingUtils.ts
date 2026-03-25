@@ -17,6 +17,9 @@
  *    Client-authoritative for local player; server timestamps for others.
  *
  * 4. USE ANIMATIONS: Bandaging, Selo Olive Oil, water drinking wobble/rotation.
+ *
+ * 5. DODGE ROLL: Held Tool / Weapon / RangedWeapon items spin one full turn over the roll,
+ *    signed from dodge direction (passed from renderYSortedEntities).
  */
 
 import { Player as SpacetimeDBPlayer, ActiveEquipment as SpacetimeDBActiveEquipment, ItemDefinition as SpacetimeDBItemDefinition, ActiveConsumableEffect, EffectType } from '../../generated/types';
@@ -29,6 +32,9 @@ import {
   SPEAR_MELEE_ARC_DEGREES,
   SPEAR_MELEE_ATTACK_RANGE,
 } from '../../config/combatConstants';
+
+/** Passed from player render when dodge is active (Tool, Weapon, or RangedWeapon). */
+export type ToolDodgeRollSpin = { progress: number; direction: string };
 
 // --- Constants ---
 const SWING_DURATION_MS = 150;
@@ -156,6 +162,49 @@ const getFacingAngleRad = (dir: string): number => {
     case 'right': return 0;
     default: return Math.PI / 2;
   }
+};
+
+/**
+ * Spin direction from dodge travel (world/cardinal). Canvas apply order uses mirror scales after/before
+ * rotate depending on item branch — multiply by dodgeRollSpinOrientationFactor for correct screen sense.
+ */
+const toolDodgeRollSpinSign = (dodgeDirection: string): number => {
+  const d = dodgeDirection?.toLowerCase() ?? '';
+  switch (d) {
+    case 'right': return 1;
+    case 'left': return -1;
+    case 'down': return -1; // was +1; reversed so roll matches motion (up/left/right unchanged)
+    case 'up': return -1;
+    default: return 1;
+  }
+};
+
+/**
+ * Generic held items: translate, then scale(-1,1) for right/up, then inner rotate — i.e. rotation is
+ * applied before the horizontal mirror in the effective transform (T·M·R on points), which inverts
+ * apparent spin; negate dodge ω to compensate. Spear/bow/harpoon use rotate-before-scale (T·R·S), so
+ * they do not use this factor here (see ctx.translate/rotate/scale order below).
+ */
+const dodgeRollSpinOrientationFactor = (
+  itemDef: SpacetimeDBItemDefinition,
+  facing: string
+): number => {
+  const d = facing?.toLowerCase() ?? 'down';
+  const usesGenericHeldMirrorBeforeInnerRotate =
+    itemDef.name !== 'Wooden Spear' &&
+    itemDef.name !== 'Stone Spear' &&
+    itemDef.name !== 'Reed Harpoon' &&
+    itemDef.name !== 'Hunting Bow' &&
+    itemDef.name !== 'Crossbow' &&
+    itemDef.name !== 'Reed Harpoon Gun';
+  if (!usesGenericHeldMirrorBeforeInnerRotate) {
+    return 1;
+  }
+  if (itemDef.name === 'Bandage' || itemDef.name === 'Selo Olive Oil') {
+    return 1;
+  }
+  if (d === 'right' || d === 'up') return -1;
+  return 1;
 };
 
 /** Weapon-specific range and arc. Must match server active_equipment.rs. */
@@ -300,7 +349,8 @@ export const renderEquippedItem = (
   activeConsumableEffects?: Map<string, ActiveConsumableEffect>,
   localPlayerId?: string,
   serverSyncedDirection?: string, // Optional: Server-synced direction for accurate attack arc display
-  applyUnderwaterTint?: boolean // NEW: Apply teal underwater tint when snorkeling
+  applyUnderwaterTint?: boolean, // Apply teal underwater tint when snorkeling
+  toolDodgeRollSpin?: ToolDodgeRollSpin | null
 ) => {
   // DEBUG: Log item being rendered
   // if (localPlayerId && player.identity.toHexString() === localPlayerId) {
@@ -317,6 +367,19 @@ export const renderEquippedItem = (
   if (!equipment.equippedItemInstanceId) {
     return;
   }
+
+  const catTag = itemDef.category?.tag;
+  const appliesEquippedDodgeRollSpin =
+    catTag === 'Tool' || catTag === 'Weapon' || catTag === 'RangedWeapon';
+  const dodgeSpinRad =
+    appliesEquippedDodgeRollSpin && toolDodgeRollSpin
+      ? Math.max(0, Math.min(1, toolDodgeRollSpin.progress)) *
+        Math.PI *
+        2 *
+        toolDodgeRollSpinSign(toolDodgeRollSpin.direction) *
+        dodgeRollSpinOrientationFactor(itemDef, player.direction)
+      : 0;
+
   const playerId = player.identity.toHexString();
   const isLocalPlayer = localPlayerId && playerId === localPlayerId;
   // --- Calculate Shake Offset (Only if alive) ---
@@ -831,16 +894,16 @@ export const renderEquippedItem = (
 
   // Apply general orientation/scaling based on player direction (and spear specifics)
   if (itemDef.name === "Wooden Spear" || itemDef.name === "Stone Spear" || itemDef.name === "Reed Harpoon") {
-    ctx.rotate(rotation); // `rotation` is pre-calculated spearRotation
+    ctx.rotate(rotation + dodgeSpinRad); // spear aim + dodge roll spin
     ctx.scale(spearScaleX, spearScaleY);
   } else if (itemDef.name === "Hunting Bow") {
-    ctx.rotate(rotation); // Apply calculated bow rotation
+    ctx.rotate(rotation + dodgeSpinRad);
     ctx.scale(-1, 1); // Flip horizontally
   } else if (itemDef.name === "Crossbow") {
-    ctx.rotate(rotation); // Apply calculated crossbow rotation
+    ctx.rotate(rotation + dodgeSpinRad);
     ctx.scale(-1, 1); // Flip horizontally
   } else if (itemDef.name === "Reed Harpoon Gun") {
-    ctx.rotate(rotation); // Apply calculated harpoon gun rotation
+    ctx.rotate(rotation + dodgeSpinRad);
     // Apply direction-specific flipping for proper orientation
     switch (player.direction) {
       case 'up':
@@ -991,11 +1054,24 @@ export const renderEquippedItem = (
   // --- REGULAR ITEM DRAWING (AND SWING FOR NON-SPEAR/NON-BANDAGE-ANIMATING) --- 
   if (!bandageDrawnWithAnimation && !seloOliveOilDrawnWithAnimation && !waterDrinkingDrawnWithAnimation) {
     ctx.save(); // Save for regular item drawing / swing
-    if (itemDef.name !== "Wooden Spear" && itemDef.name !== "Stone Spear" && itemDef.name !== "Reed Harpoon" && itemDef.name !== "Bandage" && itemDef.name !== "Selo Olive Oil"
-        && itemDef.name?.toLowerCase() !== "hunting bow" && itemDef.category?.tag !== "RangedWeapon") {
-      ctx.rotate(currentAngle); 
+    const excludedFromInnerSwingRotate =
+      itemDef.name === "Wooden Spear" ||
+      itemDef.name === "Stone Spear" ||
+      itemDef.name === "Reed Harpoon" ||
+      itemDef.name === "Bandage" ||
+      itemDef.name === "Selo Olive Oil";
+    const rangedWithDedicatedOuterRotate =
+      itemDef.name === "Hunting Bow" ||
+      itemDef.name === "Crossbow" ||
+      itemDef.name === "Reed Harpoon Gun";
+    if (!excludedFromInnerSwingRotate && !rangedWithDedicatedOuterRotate) {
+      if (itemDef.category?.tag !== "RangedWeapon") {
+        ctx.rotate(currentAngle + dodgeSpinRad);
+      } else {
+        ctx.rotate(rotation + currentAngle + dodgeSpinRad);
+      }
     }
-    
+
     ctx.drawImage(imageToRender, -displayItemWidth / 2, -displayItemHeight / 2, displayItemWidth, displayItemHeight); // Draw centered
 
     // --- NEW: Draw Loaded Arrow on Bow ---

@@ -814,6 +814,14 @@ function getSpeciesRenderingProps(species: AnimalSpecies) {
     }
 }
 
+/** True when the local player is snorkeling and this animal is only sensible above the water surface (flying birds, bees). */
+export function isWildAnimalOccludedWhenSnorkeling(animal: WildAnimal, isSnorkeling: boolean): boolean {
+    if (!isSnorkeling) return false;
+    const tag = animal.species.tag;
+    if (tag === 'Bee') return true;
+    return animal.isFlying === true && (tag === 'Tern' || tag === 'Crow' || tag === 'SnowyOwl');
+}
+
 // Main wild animal rendering function
 export function renderWildAnimal({
     ctx,
@@ -835,6 +843,10 @@ export function renderWildAnimal({
     // This is used by voles to hide from predators and players
     if (animal.state.tag === 'Burrowed') {
         return; // Don't render - animal is underground
+    }
+
+    if (isWildAnimalOccludedWhenSnorkeling(animal, isLocalPlayerSnorkeling)) {
+        return;
     }
 
     const animalId = animal.id.toString();

@@ -29,12 +29,36 @@ import SovaSoundBox from '../components/SovaSoundBox';
 import { isCairnAudioPlaying } from '../utils/cairnAudioUtils';
 import { stopNotificationSound } from '../utils/notificationSoundQueue';
 
+/** Tutorial clips from useSovaTutorials — tracked separately so error SFX stay muted even if SoundBox skips or is late. */
+const activeTutorialPlaybackAudios = new Set<HTMLAudioElement>();
+
+export function registerSovaTutorialPlaybackAudio(audio: HTMLAudioElement): void {
+  activeTutorialPlaybackAudios.add(audio);
+  if (typeof window !== 'undefined') {
+    window.__SOVA_TUTORIAL_AUDIO_ACTIVE__ = true;
+  }
+}
+
+export function unregisterSovaTutorialPlaybackAudio(audio: HTMLAudioElement): void {
+  activeTutorialPlaybackAudios.delete(audio);
+  if (typeof window !== 'undefined' && activeTutorialPlaybackAudios.size === 0) {
+    window.__SOVA_TUTORIAL_AUDIO_ACTIVE__ = false;
+  }
+}
+
+function syncTutorialActiveWindowFlag(): void {
+  if (typeof window === 'undefined') return;
+  window.__SOVA_TUTORIAL_AUDIO_ACTIVE__ = activeTutorialPlaybackAudios.size > 0;
+}
+
 // Declare global window functions for checking SOVA playback state
 declare global {
   interface Window {
     __SOVA_SOUNDBOX_IS_PLAYING__?: () => boolean;
     __SOVA_SOUNDBOX_AUDIO_REF__?: HTMLAudioElement | null;
     __SOVA_SOUNDBOX_IS_ACTIVE__?: boolean; // Flag set immediately when showSovaSoundBox is called
+    /** True while a useSovaTutorials clip is registered (playing or about to play). */
+    __SOVA_TUTORIAL_AUDIO_ACTIVE__?: boolean;
     __CYBERPUNK_LOADING_SOVA_STATE__?: {
       hasStarted: boolean;
       active: boolean;
@@ -81,11 +105,15 @@ export function isLoadingScreenAudioPlaying(): boolean {
  * This is the main function to use when checking if short notification sounds should be skipped.
  * 
  * Checks multiple sources:
- * 1. SovaSoundBox component (tutorials, insanity whispers, etc.)
- * 2. Loading screen intro audio
- * 3. Cairn lore audio (belt-and-suspenders check in case cairn audio bypasses SovaSoundBox)
+ * 1. useSovaTutorials playback registry (from clip start until ended/error/replace)
+ * 2. SovaSoundBox component (tutorials, insanity whispers, etc.)
+ * 3. Loading screen intro audio
+ * 4. Cairn lore audio (belt-and-suspenders check in case cairn audio bypasses SovaSoundBox)
  */
 export function isAnySovaAudioPlaying(): boolean {
+  if (activeTutorialPlaybackAudios.size > 0) {
+    return true;
+  }
   // Check SovaSoundBox (includes the "is active" flag for race condition prevention)
   if (isSovaSoundBoxPlaying()) {
     return true;
@@ -149,6 +177,7 @@ export function useSovaSoundBox(): UseSovaSoundBoxReturn {
   useEffect(() => {
     window.__SOVA_SOUNDBOX_AUDIO_REF__ = audioRef.current;
     window.__SOVA_SOUNDBOX_IS_ACTIVE__ = false; // Initialize active flag
+    syncTutorialActiveWindowFlag();
     
     window.__SOVA_SOUNDBOX_IS_PLAYING__ = () => {
       const audio = audioRef.current;
@@ -169,6 +198,7 @@ export function useSovaSoundBox(): UseSovaSoundBoxReturn {
       delete window.__SOVA_SOUNDBOX_IS_PLAYING__;
       delete window.__SOVA_SOUNDBOX_AUDIO_REF__;
       window.__SOVA_SOUNDBOX_IS_ACTIVE__ = false;
+      syncTutorialActiveWindowFlag();
     };
   }, []);
 
@@ -234,6 +264,7 @@ export function useSovaSoundBox(): UseSovaSoundBoxReturn {
     
     // Stop any existing SovaSoundBox audio first (unless we're the intro replacing something - shouldn't happen)
     if (activeAudio) {
+      unregisterSovaTutorialPlaybackAudio(activeAudio);
       detachAudioCleanup();
       if (currentPriority === 'loading') {
         clearLoadingScreenAudioStateIfNeeded(activeAudio);
@@ -293,6 +324,7 @@ export function useSovaSoundBox(): UseSovaSoundBoxReturn {
     detachAudioCleanup();
     
     if (audioRef.current) {
+      unregisterSovaTutorialPlaybackAudio(audioRef.current);
       if (currentPriorityRef.current === 'loading') {
         clearLoadingScreenAudioStateIfNeeded(audioRef.current);
       }

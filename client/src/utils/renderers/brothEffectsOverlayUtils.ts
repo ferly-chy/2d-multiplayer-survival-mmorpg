@@ -7,6 +7,7 @@
  */
 
 import type { ActiveConsumableEffect } from '../../generated/types';
+import { dayNightConfig } from '../../config/sharedGameConfig';
 
 // Animation state for effects
 interface EffectAnimationState {
@@ -28,26 +29,19 @@ let nightVisionState: EffectAnimationState = {
 };
 
 
-// Day/Night cycle constants
-// Night periods: Twilight Evening (0.76-0.80), Night (0.80-0.92), Midnight (0.92-0.97), Twilight Morning (0.97-1.0)
-const NIGHT_START_PROGRESS = 0.76;
-const DUSK_START_PROGRESS = 0.72; // Start fading in slightly before full night
-
 /**
- * Checks if it's currently night time based on cycle progress
+ * Night vision overlay: from twilight evening onward (shared gameConfig dayNight).
  */
 export function isNightTime(cycleProgress: number): boolean {
-  return cycleProgress >= NIGHT_START_PROGRESS;
+  return cycleProgress >= dayNightConfig.twilightEveningStartProgress;
 }
 
-/**
- * Gets the night intensity (0.0 during day, ramps up from dusk, 1.0 at full night)
- */
 function getNightIntensity(cycleProgress: number): number {
-  if (cycleProgress < DUSK_START_PROGRESS) return 0.0;
-  if (cycleProgress >= NIGHT_START_PROGRESS) return 1.0;
-  // Fade in during dusk (0.72-0.76)
-  return (cycleProgress - DUSK_START_PROGRESS) / (NIGHT_START_PROGRESS - DUSK_START_PROGRESS);
+  const dusk = dayNightConfig.duskStartProgress;
+  const twilightEvening = dayNightConfig.twilightEveningStartProgress;
+  if (cycleProgress < dusk) return 0.0;
+  if (cycleProgress >= twilightEvening) return 1.0;
+  return (cycleProgress - dusk) / (twilightEvening - dusk);
 }
 
 /**

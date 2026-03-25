@@ -303,7 +303,7 @@ const AchievementsPanel: React.FC = () => {
             }}
             onKeyDown={(e) => {
               // Block game control keys from bubbling up to the game
-              const gameControlKeys = ['f', 'g', ' ', 'e', 'w', 'a', 's', 'd', 'z', 'c', 'm', 'y', 'r', 'q', 'tab'];
+              const gameControlKeys = ['f', 'g', ' ', 'e', 'w', 'a', 's', 'd', 'z', 'c', 'm', 'y', 'k', 'r', 'q', 'tab'];
               const key = e.key.toLowerCase();
               
               if (gameControlKeys.includes(key)) {

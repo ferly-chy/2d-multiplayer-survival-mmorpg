@@ -20,7 +20,6 @@ const staticRoutes = [
   '/privacy',
   '/terms',
   '/cookies',
-  '/ai-disclosure',
 ];
 
 // Extract slugs by reading blog post files directly

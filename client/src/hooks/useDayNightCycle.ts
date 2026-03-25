@@ -19,7 +19,16 @@ import { CAMPFIRE_LIGHT_RADIUS_BASE, CAMPFIRE_FLICKER_AMOUNT, LANTERN_LIGHT_RADI
 import { ROAD_LAMP_LIGHT_RADIUS_BASE, ROAD_LAMP_LIGHT_Y_OFFSET } from '../utils/renderers/roadLamppostRenderingUtils';
 import { BUOY_HEIGHT } from '../utils/renderers/barrelRenderingUtils';
 import { BUOY_LIGHT_RADIUS_BASE } from '../utils/renderers/lightRenderingUtils';
-import { FULL_MOON_CYCLE_INTERVAL, isNightTime, NIGHT_LIGHTS_ON, LIGHT_FADE_FULL_AT, TWILIGHT_MORNING_FADE_START, TWILIGHT_MORNING_END } from '../config/dayNightConstants';
+import {
+    FULL_MOON_CYCLE_INTERVAL,
+    isNightTime,
+    NIGHT_LIGHTS_ON,
+    LIGHT_FADE_FULL_AT,
+    TWILIGHT_MORNING_FADE_START,
+    TWILIGHT_MORNING_END,
+    mapLegacyCycleProgress,
+} from '../config/dayNightConstants';
+import { dayNightConfig } from '../config/sharedGameConfig';
 import { CAMPFIRE_HEIGHT } from '../utils/renderers/campfireRenderingUtils';
 import { LANTERN_HEIGHT, LANTERN_RENDER_Y_OFFSET, LANTERN_TYPE_LANTERN } from '../utils/renderers/lanternRenderingUtils';
 import { FURNACE_HEIGHT, FURNACE_RENDER_Y_OFFSET, getFurnaceDimensions, FURNACE_TYPE_LARGE } from '../utils/renderers/furnaceRenderingUtils';
@@ -53,19 +62,22 @@ export const defaultTransitionNightColor: ColorPoint = { r: 25, g: 35, b: 65, a:
 export const fullMoonPeakMidnightColor: ColorPoint = { r: 70, g: 90, b: 140, a: 0.42 };
 export const fullMoonTransitionNightColor: ColorPoint = { r: 55, g: 80, b: 130, a: 0.52 };
 
-// Base keyframes (simplified reference for other systems)
-export const baseKeyframes: Record<number, ColorPoint> = {
-  0.00: { r: 140, g: 90, b: 130, a: 0.52 },    // Lavender pre-dawn
-  0.08: { r: 255, g: 200, b: 120, a: 0.12 },   // Morning warmth
-  0.15: { r: 0, g: 0, b: 0, a: 0.0 },          // Day clear
-  0.50: { r: 0, g: 0, b: 0, a: 0.0 },          // Noon clear
-  0.72: { r: 255, g: 140, b: 70, a: 0.22 },    // Sunset orange
-  0.80: { r: 45, g: 40, b: 110, a: 0.78 },     // Night indigo
-  0.92: { r: 12, g: 18, b: 50, a: 0.90 },      // Pre-midnight blue
-  0.945: { r: 0, g: 0, b: 0, a: 1.0 },         // TRUE BLACK midnight
-  0.97: { r: 25, g: 30, b: 70, a: 0.84 },      // Pre-dawn blue
-  1.00: { r: 140, g: 90, b: 130, a: 0.52 },    // Lavender (wrap)
+// Base keyframes (legacy 0.76 day-end authoring → mapLegacyCycleProgress for shared gameConfig)
+const baseKeyframesLegacy: Record<number, ColorPoint> = {
+  0.00: { r: 140, g: 90, b: 130, a: 0.52 },
+  0.08: { r: 255, g: 200, b: 120, a: 0.12 },
+  0.15: { r: 0, g: 0, b: 0, a: 0.0 },
+  0.50: { r: 0, g: 0, b: 0, a: 0.0 },
+  0.72: { r: 255, g: 140, b: 70, a: 0.22 },
+  0.80: { r: 45, g: 40, b: 110, a: 0.78 },
+  0.92: { r: 12, g: 18, b: 50, a: 0.90 },
+  0.945: { r: 0, g: 0, b: 0, a: 1.0 },
+  0.97: { r: 25, g: 30, b: 70, a: 0.84 },
+  1.00: { r: 140, g: 90, b: 130, a: 0.52 },
 };
+export const baseKeyframes: Record<number, ColorPoint> = Object.fromEntries(
+  Object.entries(baseKeyframesLegacy).map(([k, v]) => [mapLegacyCycleProgress(Number(k)), v])
+) as Record<number, ColorPoint>;
 // --- END Day/Night Cycle Constants ---
 
 // Define TORCH_LIGHT_RADIUS_BASE locally
@@ -87,7 +99,7 @@ interface ColorAlphaKeyframe {
 // Helper for daytime (effectively transparent)
 const DAY_COLOR_CONFIG = { rgb: [0, 0, 0] as [number, number, number], alpha: 0.0 }; // Color doesn't matter when alpha is 0
 
-const REGULAR_CYCLE_KEYFRAMES: ColorAlphaKeyframe[] = [
+const REGULAR_CYCLE_KEYFRAMES_LEGACY: ColorAlphaKeyframe[] = [
   // ============================================================================
   // SEA OF STARS INSPIRED - Rich, saturated, cinematic colors
   // Night is deep blue (never black!), dawn/dusk are vibrant gold/magenta/teal
@@ -147,7 +159,12 @@ const REGULAR_CYCLE_KEYFRAMES: ColorAlphaKeyframe[] = [
   { progress: 1.0, rgb: [140, 90, 130],    alpha: 0.52 },   // Soft lavender (matches 0.0)
 ];
 
-const FULL_MOON_NIGHT_KEYFRAMES: ColorAlphaKeyframe[] = [
+const REGULAR_CYCLE_KEYFRAMES: ColorAlphaKeyframe[] = REGULAR_CYCLE_KEYFRAMES_LEGACY.map((kf) => ({
+  ...kf,
+  progress: mapLegacyCycleProgress(kf.progress),
+}));
+
+const FULL_MOON_NIGHT_KEYFRAMES_LEGACY: ColorAlphaKeyframe[] = [
   // ============================================================================
   // FULL MOON - Ethereal silver-blue magical atmosphere
   // Brighter nights with mystical moonlit glow, cool blue-silver tones
@@ -205,6 +222,11 @@ const FULL_MOON_NIGHT_KEYFRAMES: ColorAlphaKeyframe[] = [
   { progress: 0.995, rgb: [165, 160, 198], alpha: 0.26 }, // Soft lavender
   { progress: 1.0, rgb: [180, 170, 200],  alpha: 0.22 },   // Silver-lavender (matches 0.0)
 ];
+
+const FULL_MOON_NIGHT_KEYFRAMES: ColorAlphaKeyframe[] = FULL_MOON_NIGHT_KEYFRAMES_LEGACY.map((kf) => ({
+  ...kf,
+  progress: mapLegacyCycleProgress(kf.progress),
+}));
 
 // --- Indoor Light Containment Utilities ---
 
@@ -317,6 +339,12 @@ function renderClippedLightCutout(
 
 // --- End Indoor Light Containment Utilities ---
 
+function nearestColorAlphaKeyframe(keyframes: ColorAlphaKeyframe[], progress: number): ColorAlphaKeyframe {
+    return keyframes.reduce((best, kf) =>
+        Math.abs(kf.progress - progress) < Math.abs(best.progress - progress) ? kf : best
+    );
+}
+
 function calculateOverlayRgbaString(
     cycleProgress: number,
     worldState: SpacetimeDBWorldState | null // Pass the whole worldState or null
@@ -324,8 +352,8 @@ function calculateOverlayRgbaString(
     const isCurrentlyFullMoon = worldState?.isFullMoon ?? false;
     const currentCycleCount = worldState?.cycleCount ?? 0;
 
-    const GRACE_PERIOD_END_PROGRESS = 0.05; // Dawn period ends at 0.05 in the shared 50-minute cycle
-    const REGULAR_DAWN_PEAK_PROGRESS = REGULAR_CYCLE_KEYFRAMES.find(kf => kf.progress === 0.125)?.progress ?? 0.125; // Updated to match new sunrise peak
+    const GRACE_PERIOD_END_PROGRESS = dayNightConfig.dawnEndProgress;
+    const REGULAR_DAWN_PEAK_PROGRESS = mapLegacyCycleProgress(0.125);
 
     // --- Special Transition 1: Full Moon cycle STARTS, but PREVIOUS was Regular (or first cycle) ---
     const prevCycleWasRegularOrDefault = currentCycleCount === 0 || ((currentCycleCount - 1) % FULL_MOON_CYCLE_INTERVAL !== 0);
@@ -349,7 +377,7 @@ function calculateOverlayRgbaString(
     const prevCycleWasFullMoon = currentCycleCount > 0 && ((currentCycleCount - 1) % FULL_MOON_CYCLE_INTERVAL === 0);
     if (!isCurrentlyFullMoon && cycleProgress < REGULAR_DAWN_PEAK_PROGRESS && prevCycleWasFullMoon) {
         const fromKf = FULL_MOON_NIGHT_KEYFRAMES[FULL_MOON_NIGHT_KEYFRAMES.length - 1]; 
-        const toKf = REGULAR_CYCLE_KEYFRAMES.find(kf => kf.progress === REGULAR_DAWN_PEAK_PROGRESS) ?? REGULAR_CYCLE_KEYFRAMES[1]; 
+        const toKf = nearestColorAlphaKeyframe(REGULAR_CYCLE_KEYFRAMES, REGULAR_DAWN_PEAK_PROGRESS); 
         let t = 0;
         if (REGULAR_DAWN_PEAK_PROGRESS > 0) { 
             t = cycleProgress / REGULAR_DAWN_PEAK_PROGRESS;
@@ -365,16 +393,14 @@ function calculateOverlayRgbaString(
     // --- Default Interpolation (covers all other cases) ---
     const keyframesToUse = isCurrentlyFullMoon ? FULL_MOON_NIGHT_KEYFRAMES : REGULAR_CYCLE_KEYFRAMES;
     
-    // Handle wrap-around: TwilightMorning (0.97-1.0) wraps to Dawn (0.0-0.05)
-    // If we're in the wrap-around zone (0.97-1.0), interpolate from last keyframe to first Dawn keyframe
-    if (cycleProgress >= 0.97) {
-        // Find the last keyframe (should be around 0.97 or 1.0)
+    const twilightMorningStart = dayNightConfig.twilightMorningStartProgress;
+    // Twilight morning through cycle wrap: interpolate from last keyframe toward first dawn keyframe
+    if (cycleProgress >= twilightMorningStart) {
         const lastKf = keyframesToUse[keyframesToUse.length - 1];
-        // Find the first Dawn keyframe (should be 0.0 or 0.025)
-        const firstDawnKf = keyframesToUse.find(kf => kf.progress <= 0.05) || keyframesToUse[0];
-        
-        // Normalize progress: 0.97-1.0 maps to 0.0-1.0 for interpolation
-        const normalizedProgress = (cycleProgress - 0.97) / (1.0 - 0.97);
+        const firstDawnKf =
+            keyframesToUse.find((kf) => kf.progress <= GRACE_PERIOD_END_PROGRESS) || keyframesToUse[0];
+
+        const normalizedProgress = (cycleProgress - twilightMorningStart) / (1.0 - twilightMorningStart);
         const t = Math.max(0, Math.min(normalizedProgress, 1));
         
         const r = Math.round(lastKf.rgb[0] * (1 - t) + firstDawnKf.rgb[0] * t);
@@ -1300,10 +1326,7 @@ export function useDayNightCycle({
         // It is purely visual - no gameplay effects, not visible to remote players, not on minimap.
         // ============================================================================
         if (typeof currentCycleProgress === 'number' && localPlayerId && predictedPosition) {
-            // Aura is only visible during nighttime: after dusk (0.72) and before dawn (0.05, wrapping around 1.0)
-            const isNightTimeForAura = currentCycleProgress >= 0.72 || currentCycleProgress <= 0.05;
-            
-            if (isNightTimeForAura) {
+            if (isNightTime(currentCycleProgress)) {
                 const lightScreenX = predictedPosition.x + cameraOffsetX;
                 const lightScreenY = predictedPosition.y + cameraOffsetY;
                 
