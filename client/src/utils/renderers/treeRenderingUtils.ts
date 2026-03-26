@@ -340,7 +340,10 @@ interface TreeHitEffect {
     y: number;
     duration: number;
     particles: TreeHitParticle[];
+    lastIntegratedWallMs?: number;
 }
+
+const TREE_HIT_LEGACY_STEP_MS = 1000 / 60;
 
 // Track active tree hit effects
 const activeTreeHitEffects = new Map<string, TreeHitEffect>();
@@ -444,6 +447,33 @@ export function renderTreeHitEffects(ctx: CanvasRenderingContext2D, nowMs: numbe
             treeHitEffectsToRemove.push(effectKey);
             return;
         }
+
+        const firstIntegrate = effect.lastIntegratedWallMs === undefined;
+        const prevIntegrated = effect.lastIntegratedWallMs ?? effect.startTime;
+        let dtWall = nowMs - prevIntegrated;
+        if (dtWall < 0) dtWall = 0;
+        if (dtWall === 0 && firstIntegrate) {
+            dtWall = TREE_HIT_LEGACY_STEP_MS;
+        }
+        effect.lastIntegratedWallMs = nowMs;
+        if (dtWall > 0) {
+            dtWall = Math.min(dtWall, 150);
+            const k = dtWall / TREE_HIT_LEGACY_STEP_MS;
+            const particles = effect.particles;
+            const particleCount = particles.length;
+            for (let i = 0; i < particleCount; i++) {
+                const p = particles[i];
+                p.vy += p.gravity * k;
+                p.x += p.vx * k;
+                p.y += p.vy * k;
+                p.rotation += p.rotationSpeed * k;
+                p.vx *= Math.pow(0.98, k);
+                if (p.type === 'leaf') {
+                    p.vx *= Math.pow(0.95, k);
+                    p.vy *= Math.pow(0.98, k);
+                }
+            }
+        }
         
         // Pre-compute fade values
         const fadeStart = 0.5;
@@ -456,19 +486,6 @@ export function renderTreeHitEffects(ctx: CanvasRenderingContext2D, nowMs: numbe
         
         for (let i = 0; i < particleCount; i++) {
             const particle = particles[i];
-            
-            // Update physics
-            particle.vy += particle.gravity;
-            particle.x += particle.vx;
-            particle.y += particle.vy;
-            particle.rotation += particle.rotationSpeed;
-            particle.vx *= 0.98;
-            
-            // Leaves have more air resistance
-            if (particle.type === 'leaf') {
-                particle.vx *= 0.95;
-                particle.vy *= 0.98;
-            }
             
             // Fade out
             const particleAlpha = particle.alpha * fadeMultiplier;

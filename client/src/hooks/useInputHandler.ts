@@ -77,12 +77,12 @@ import { wasAlkPanelJustClosed } from '../components/AlkDeliveryPanel';
 import { CAIRN_LORE_TIDBITS, CairnLoreEntry } from '../data/cairnLoreData';
 import { Cairn as SpacetimeDBCairn } from '../generated/types';
 import { createCairnLoreAudio, isCairnAudioPlaying, getTotalCairnLoreCount, stopCairnLoreAudio } from '../utils/cairnAudioUtils';
-import { previewSeaweedHarvestBlockedIfNeeded } from './useSoundSystem';
+import { previewSeaweedHarvestBlockedIfNeeded, playImmediateSound } from './useSoundSystem';
 import { CairnNotification } from '../components/CairnUnlockNotification';
 import { registerLocalPlayerRangedShot, registerLocalPlayerSwing } from '../utils/renderers/equippedItemRenderingUtils';
-import { triggerTreeShakeOptimistic } from '../utils/renderers/treeRenderingUtils';
-import { triggerStoneShakeOptimistic, getStoneOreType } from '../utils/renderers/stoneRenderingUtils';
-import { triggerCoralShakeOptimistic } from '../utils/renderers/livingCoralRenderingUtils';
+import { triggerTreeShakeOptimistic, triggerTreeHitEffect } from '../utils/renderers/treeRenderingUtils';
+import { triggerStoneShakeOptimistic, getStoneOreType, triggerStoneHitEffect } from '../utils/renderers/stoneRenderingUtils';
+import { triggerCoralShakeOptimistic, triggerCoralHitEffect } from '../utils/renderers/livingCoralRenderingUtils';
 import { triggerBarrelShakeOptimistic } from '../utils/renderers/barrelRenderingUtils';
 import { triggerAnimalCorpseShakeOptimistic } from '../utils/renderers/animalCorpseRenderingUtils';
 import { triggerPlayerCorpseShakeOptimistic } from '../utils/renderers/playerCorpseRenderingUtils';
@@ -91,6 +91,21 @@ import { triggerAnimalShakeOptimistic } from '../utils/renderers/wildAnimalRende
 import { runtimeEngine } from '../engine/runtimeEngine';
 
 // --- Constants (Copied from GameCanvas) ---
+/** Immediate hit SFX on optimistic harvest target (matches server barrel variant rules in barrel.rs). */
+type HarvestHitPredictSound = 'tree_chop' | 'stone_hit' | 'barrel_hit' | 'hit_wood' | 'hit_trash';
+
+type OptimisticHarvestPick = {
+    d2: number;
+    trigger: () => void;
+    predictHarvestSound?: HarvestHitPredictSound;
+};
+
+function barrelHarvestPredictSound(variant: number): HarvestHitPredictSound {
+    if (variant === 4) return 'hit_trash';
+    if (variant === 3) return 'hit_wood';
+    return 'barrel_hit';
+}
+
 const SWING_COOLDOWN_MS = 500;
 const PLAYER_RADIUS = 32;
 const TREE_COLLISION_Y_OFFSET = 60; // Match server tree.rs
@@ -298,7 +313,10 @@ export const useInputHandler = ({
     const keysPressed = useRef<Set<string>>(new Set());
     const isEHeldDownRef = useRef<boolean>(false);
     const isMouseDownRef = useRef<boolean>(false);
-    const lastClientSwingAttemptRef = useRef<number>(0);
+    /** Monotonic next swing time (performance.now); single source of truth for held-attack cadence. */
+    const nextMeleeSwingAllowedPerfRef = useRef<number>(0);
+    /** When equipped weapon (or unarmed) changes, reset cadence so the first swing on the new item is immediate. */
+    const lastMeleeCooldownKeyRef = useRef<string>('');
     const lastRangedFireTimeRef = useRef<number>(0); // ADDED: Track last ranged weapon fire time for auto-fire
     /** Skip one game-loop melee tick after mousedown (mousedown + processInputs both used to swing). */
     const suppressMeleeHeldTickAfterMouseDownRef = useRef<boolean>(false);
@@ -772,19 +790,34 @@ export const useInputHandler = ({
         const localEquipment = activeEquipmentsRef.current?.get(localPlayerId);
         const itemDef = itemDefinitionsRef.current?.get(String(localEquipment?.equippedItemDefId));
 
+        const cooldownKey =
+            !localEquipment ||
+            localEquipment.equippedItemDefId === null ||
+            localEquipment.equippedItemInstanceId === null
+                ? 'unarmed'
+                : String(localEquipment.equippedItemDefId);
+
+        if (lastMeleeCooldownKeyRef.current !== cooldownKey) {
+            lastMeleeCooldownKeyRef.current = cooldownKey;
+            nextMeleeSwingAllowedPerfRef.current = 0;
+        }
+
         if (!localEquipment || localEquipment.equippedItemDefId === null || localEquipment.equippedItemInstanceId === null) {
             // Unarmed
-            const nowUnarmed = Date.now();
-            if (nowUnarmed - lastClientSwingAttemptRef.current < SWING_COOLDOWN_MS) return;
-            if (nowUnarmed - Number(localEquipment?.swingStartTimeMs || 0) < SWING_COOLDOWN_MS) return;
-            lastClientSwingAttemptRef.current = nowUnarmed;
+            const nowPerf = performance.now();
+            if (nowPerf < nextMeleeSwingAllowedPerfRef.current) return;
+            const attackIntervalMs = SWING_COOLDOWN_MS;
             suppressMeleeHeldTickAfterMouseDownRef.current = true;
             try {
                 // 🎬 CLIENT-AUTHORITATIVE ANIMATION: Register swing immediately for smooth visuals
                 registerLocalPlayerSwing();
+                // Whoosh aligned with animation; server echo skipped for local in useSoundSystem (avoids RTT + doubles).
+                playImmediateSound('weapon_swing', 0.8);
                 connectionRef.current.reducers.useEquippedItem({});
+                nextMeleeSwingAllowedPerfRef.current = nowPerf + attackIntervalMs;
             } catch (err) {
                 console.error("[attemptSwing Unarmed] Error calling useEquippedItem reducer:", err);
+                nextMeleeSwingAllowedPerfRef.current = performance.now() + 50;
             }
         } else {
             // Armed (melee/tool)
@@ -793,57 +826,74 @@ export const useInputHandler = ({
                 // Ranged/Bandage/Selo Olive Oil should not be triggered by swing
                 return;
             }
-            const now = Date.now();
-            const attackIntervalMs = itemDef.attackIntervalSecs ? itemDef.attackIntervalSecs * 1000 : SWING_COOLDOWN_MS;
-            if (now - lastClientSwingAttemptRef.current < attackIntervalMs) return;
-            if (now - Number(localEquipment.swingStartTimeMs) < attackIntervalMs) return;
-            lastClientSwingAttemptRef.current = now;
+            const nowPerf = performance.now();
+            if (nowPerf < nextMeleeSwingAllowedPerfRef.current) return;
+            const attackIntervalMs = Math.max(
+                50,
+                itemDef.attackIntervalSecs ? itemDef.attackIntervalSecs * 1000 : SWING_COOLDOWN_MS
+            );
             suppressMeleeHeldTickAfterMouseDownRef.current = true;
             try {
                 // 🎬 CLIENT-AUTHORITATIVE ANIMATION: Register swing immediately for smooth visuals
                 registerLocalPlayerSwing();
-                // 🔊 IMMEDIATE SOUND: Only play generic swing for non-resource tools
-                const activeItem = activeEquipmentsRef.current.get(localPlayerId || '');
-                const itemDef = itemDefinitionsRef.current.get(activeItem?.equippedItemDefId?.toString() || '');
-                
-                // Don't play immediate sounds for resource gathering tools - let server handle those
-                const isResourceTool = itemDef?.name && (
-                    itemDef.name.toLowerCase().includes('hatchet') || 
-                    itemDef.name.toLowerCase().includes('axe') ||
-                    itemDef.name.toLowerCase().includes('pickaxe') ||
-                    itemDef.name.toLowerCase().includes('pick')
-                );
-                if (!isResourceTool) {
-                    // playWeaponSwingSound(0.8);
-                }
+                playImmediateSound('weapon_swing', 0.8);
                 // Optimistic shake: any melee weapon can damage trees/stones/corals - find closest in attack cone
                 const player = localPlayerRef.current;
                 if (player) {
                     const px = predictedPositionRef.current?.x ?? player.positionX;
                     const py = predictedPositionRef.current?.y ?? player.positionY;
                     const dir = player.direction ?? 'down';
-                    let best: { d2: number; trigger: () => void } | null = null;
+                    let best: OptimisticHarvestPick | null = null;
                     const attackAngle = 90;
                     const attackRange = OPTIMISTIC_AXE_RANGE; // Default melee range
                     // Trees - any weapon can hit
                     treesRef.current?.forEach((tree) => {
                         if (tree.health === 0) return;
                         const { inCone, distSq } = isInAttackCone(px, py, dir, tree.posX, tree.posY, TREE_COLLISION_Y_OFFSET, attackRange, attackAngle);
-                        if (inCone && (!best || distSq < best.d2)) best = { d2: distSq, trigger: () => { triggerTreeShakeOptimistic(tree.id.toString(), tree.posX, tree.posY); } };
+                        if (inCone && (!best || distSq < best.d2))
+                            best = {
+                                d2: distSq,
+                                predictHarvestSound: 'tree_chop',
+                                trigger: () => {
+                                    const tid = tree.id.toString();
+                                    triggerTreeShakeOptimistic(tid, tree.posX, tree.posY);
+                                    triggerTreeHitEffect(tid, tree.posX, tree.posY);
+                                },
+                            };
                     });
                     // Stones - any weapon can hit
                     const STONE_COLLISION_Y_OFFSET = 50;
                     stonesRef.current?.forEach((stone) => {
                         if (stone.health === 0) return;
                         const { inCone, distSq } = isInAttackCone(px, py, dir, stone.posX, stone.posY, STONE_COLLISION_Y_OFFSET, attackRange, attackAngle);
-                        if (inCone && (!best || distSq < best.d2)) best = { d2: distSq, trigger: () => { triggerStoneShakeOptimistic(stone.id.toString(), stone.posX, stone.posY, getStoneOreType(stone as any)); } };
+                        if (inCone && (!best || distSq < best.d2))
+                            best = {
+                                d2: distSq,
+                                predictHarvestSound: 'stone_hit',
+                                trigger: () => {
+                                    const sid = stone.id.toString();
+                                    const ore = getStoneOreType(stone as any);
+                                    triggerStoneShakeOptimistic(sid, stone.posX, stone.posY, ore);
+                                    triggerStoneHitEffect(sid, stone.posX, stone.posY, ore);
+                                },
+                            };
                     });
                     // Corals - only when snorkeling (underwater)
                     if (player.isSnorkeling) {
                         const CORAL_COLLISION_Y_OFFSET = 60;
                         livingCoralsRef.current?.forEach((coral) => {
                             const { inCone, distSq } = isInAttackCone(px, py, dir, coral.posX, coral.posY, CORAL_COLLISION_Y_OFFSET, OPTIMISTIC_SPEAR_RANGE, 60);
-                            if (inCone && (!best || distSq < best.d2)) best = { d2: distSq, trigger: () => { triggerCoralShakeOptimistic(coral.id.toString(), coral.posX, coral.posY, Number(coral.id) % 4); } };
+                            if (inCone && (!best || distSq < best.d2))
+                                best = {
+                                    d2: distSq,
+                                    predictHarvestSound: 'stone_hit',
+                                    trigger: () => {
+                                        const cid = coral.id.toString();
+                                        const v = Number(coral.id) % 4;
+                                        triggerCoralShakeOptimistic(cid, coral.posX, coral.posY, v);
+                                        triggerCoralHitEffect(cid, coral.posX, coral.posY, v);
+                                    },
+                                };
                         });
                     }
                     // Barrels - any weapon can hit (variant 6 = buoy uses different collision offset)
@@ -852,7 +902,16 @@ export const useInputHandler = ({
                         const barrelVariant = (barrel as { variant?: number }).variant ?? 0;
                         const barrelCollisionYOffset = barrelVariant === 6 ? 110 : barrelVariant === 4 ? 96 : 48;
                         const { inCone, distSq } = isInAttackCone(px, py, dir, barrel.posX, barrel.posY, barrelCollisionYOffset, attackRange, attackAngle);
-                        if (inCone && (!best || distSq < best.d2)) best = { d2: distSq, trigger: () => { triggerBarrelShakeOptimistic(barrel.id.toString()); } };
+                        if (inCone && (!best || distSq < best.d2)) {
+                            const bvs = barrelVariant;
+                            best = {
+                                d2: distSq,
+                                predictHarvestSound: barrelHarvestPredictSound(bvs),
+                                trigger: () => {
+                                    triggerBarrelShakeOptimistic(barrel.id.toString());
+                                },
+                            };
+                        }
                     });
                     // Animal corpses - any weapon can hit
                     const ANIMAL_CORPSE_COLLISION_Y_OFFSET = 8;
@@ -883,11 +942,20 @@ export const useInputHandler = ({
                         const { inCone, distSq } = isInAttackCone(px, py, dir, animal.posX, animal.posY, WILD_ANIMAL_COLLISION_Y_OFFSET, attackRange, attackAngle);
                         if (inCone && (!best || distSq < best.d2)) best = { d2: distSq, trigger: () => triggerAnimalShakeOptimistic(animal.id.toString()) };
                     });
-                    (best as { trigger: () => void } | null)?.trigger();
+                    // forEach mutations aren't tracked — `best` stays `null` in control flow; cast for use below.
+                    const harvestPick = best as OptimisticHarvestPick | null;
+                    if (harvestPick) {
+                        harvestPick.trigger();
+                        if (harvestPick.predictHarvestSound) {
+                            playImmediateSound(harvestPick.predictHarvestSound, 0.85);
+                        }
+                    }
                 }
                 connectionRef.current.reducers.useEquippedItem({});
+                nextMeleeSwingAllowedPerfRef.current = nowPerf + attackIntervalMs;
             } catch (err) {
                 console.error("[attemptSwing Armed] Error calling useEquippedItem reducer:", err);
+                nextMeleeSwingAllowedPerfRef.current = performance.now() + 50;
             }
         }
     }, [localPlayerId, isFishing]); // 🎣 FISHING INPUT FIX: Add isFishing dependency
@@ -2529,15 +2597,13 @@ export const useInputHandler = ({
                     heldMeleeSwingUnlessDuplicateOfMouseDown();
                 }
             }
-        }
-
-        // Handle auto-attack
-        // NOTE: Auto-attack works regardless of UI state (inventory, chat, etc.)
-        // This enables AFK harvesting of trees/ores while managing inventory
-        if (isAutoAttacking && !placementInfo) {
-            // 🎣 FISHING INPUT FIX: Disable auto-attack while fishing
+        } else if (isAutoAttacking && !placementInfo) {
+            // Auto-attack only when mouse is not driving combat this frame.
+            // If mouse is held (melee), the block above already calls attemptSwing — running both
+            // in the same tick could double-register swing visuals before cooldown logic runs.
+            // NOTE: Auto-attack works regardless of UI state (inventory, chat, etc.)
             if (!isFishing) {
-                attemptSwing(); // Call internal attemptSwing function for auto-attack
+                attemptSwing();
             }
         }
     }, [

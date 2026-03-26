@@ -48,7 +48,8 @@ function normalizeOreType(oreType: string | undefined): StoneOreType {
 export function triggerStoneShakeOptimistic(stoneId: string, posX: number, posY: number, oreType?: string): void {
   const now = Date.now();
   clientStoneShakeStartTimes.set(stoneId, now);
-  lastKnownServerStoneShakeTimes.set(stoneId, now);
+  // Do not touch lastKnownServerStoneShakeTimes here — server lastHitTime must drive sync for remotes;
+  // hit particles are fired optimistically from input (see useInputHandler).
 }
 
 // ============================================================================
@@ -146,7 +147,12 @@ interface StoneHitEffect {
     y: number;
     duration: number;
     particles: StoneHitParticle[];
+    /** Wall ms when we last applied physics (renderYSortedEntities runs once per swim batch / frame). */
+    lastIntegratedWallMs?: number;
 }
+
+/** ~60fps legacy tick; hit FX used one Euler step per render call before multi-batch fix. */
+const HIT_EFFECT_LEGACY_STEP_MS = 1000 / 60;
 
 // Track active hit effects
 const activeStoneHitEffects = new Map<string, StoneHitEffect>();
@@ -245,6 +251,29 @@ export function renderStoneHitEffects(ctx: CanvasRenderingContext2D, nowMs: numb
             stoneHitEffectsToRemove.push(effectKey);
             return;
         }
+
+        const firstIntegrate = effect.lastIntegratedWallMs === undefined;
+        const prevIntegrated = effect.lastIntegratedWallMs ?? effect.startTime;
+        let dtWall = nowMs - prevIntegrated;
+        if (dtWall < 0) dtWall = 0;
+        if (dtWall === 0 && firstIntegrate) {
+            dtWall = HIT_EFFECT_LEGACY_STEP_MS;
+        }
+        effect.lastIntegratedWallMs = nowMs;
+        if (dtWall > 0) {
+            dtWall = Math.min(dtWall, 150);
+            const k = dtWall / HIT_EFFECT_LEGACY_STEP_MS;
+            const particles = effect.particles;
+            const particleCount = particles.length;
+            for (let i = 0; i < particleCount; i++) {
+                const p = particles[i];
+                p.vy += p.gravity * k;
+                p.x += p.vx * k;
+                p.y += p.vy * k;
+                p.rotation += p.rotationSpeed * k;
+                p.vx *= Math.pow(0.98, k);
+            }
+        }
         
         // Pre-compute fade multiplier
         const fadeStart = 0.5;
@@ -257,13 +286,6 @@ export function renderStoneHitEffects(ctx: CanvasRenderingContext2D, nowMs: numb
         
         for (let i = 0; i < particleCount; i++) {
             const particle = particles[i];
-            
-            // Update physics
-            particle.vy += particle.gravity;
-            particle.x += particle.vx;
-            particle.y += particle.vy;
-            particle.rotation += particle.rotationSpeed;
-            particle.vx *= 0.98;
             
             const particleAlpha = particle.alpha * fadeMultiplier;
             if (particleAlpha < 0.01) continue;
@@ -716,8 +738,12 @@ const stoneConfig: GroundEntityConfig<Stone> = {
             if (serverShakeTime !== lastKnownServerTime) {
                 const clientStartTime = clientStoneShakeStartTimes.get(stoneId);
                 const alreadyShaking = clientStartTime && (Date.now() - clientStartTime < SHAKE_DURATION_MS);
+                // Match tree calculateShakeOffsets: skip server-driven hit FX if local already showed optimistic (chips + shake)
+                const RECENT_OPTIMISTIC_WINDOW_MS = 2000;
+                const recentlyHadOptimisticShake =
+                    clientStartTime !== undefined && Date.now() - clientStartTime < RECENT_OPTIMISTIC_WINDOW_MS;
                 lastKnownServerStoneShakeTimes.set(stoneId, serverShakeTime);
-                if (!alreadyShaking) {
+                if (!alreadyShaking && !recentlyHadOptimisticShake) {
                     clientStoneShakeStartTimes.set(stoneId, Date.now());
                     const oreType = getStoneOreType(entity);
                     triggerStoneHitEffect(stoneId, entity.posX, entity.posY, oreType);

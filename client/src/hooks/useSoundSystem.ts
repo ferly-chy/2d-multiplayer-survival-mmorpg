@@ -131,6 +131,16 @@ const SOUND_DEFINITIONS = {
 
 type SoundType = keyof typeof SOUND_DEFINITIONS;
 
+/** Server echoes skipped for the instigator — same clips are played immediately in useInputHandler with swing/harvest. */
+const LOCAL_PREDICT_SPATIAL_SKIP_SOUNDS = new Set<SoundType>([
+    'weapon_swing',
+    'tree_chop',
+    'stone_hit',
+    'barrel_hit',
+    'hit_wood',
+    'hit_trash',
+]);
+
 /** PascalCase→snake via `_` before each cap breaks interior words: ErrorSeeweedAboveWater → error_seeweed_above_water. */
 function normalizeSoundTypeKeyFromEnumTag(s: string): SoundType {
     if (s === 'error_seeweed_above_water') return 'error_seaweed_above_water';
@@ -380,6 +390,8 @@ const PRELOAD_SOUNDS = [
     'bandaging.mp3',                                        // 1 bandaging variation
     'barrel_hit.mp3',                                       // 1 barrel hit variation
     'barrel_destroyed.mp3',                                 // 1 barrel destroyed variation
+    'hit_wood.mp3',
+    'hit_trash.mp3',
     'growl_wolf.mp3',                                       // 1 wolf growl variation
     'growl_fox.mp3',                                        // 1 fox growl variation
     'growl_snake.mp3',                                      // 1 snake growl variation
@@ -783,6 +795,10 @@ const playLocalSound = async (
                 variationCount = 1; // barrel_hit.mp3
             } else if (soundType === 'barrel_destroyed') {
                 variationCount = 1; // barrel_destroyed.mp3
+            } else if (soundType === 'hit_trash') {
+                variationCount = 1; // hit_trash.mp3
+            } else if (soundType === 'hit_wood') {
+                variationCount = 1; // hit_wood.mp3
             } else if (soundType === 'growl_wolf') {
                 variationCount = 1; // growl_wolf.mp3
             } else if (soundType === 'growl_fox') {
@@ -1358,6 +1374,10 @@ const activeViewportCappedSounds = new Map<string, {
     seamlessSound: boolean;
 }>();
 
+/** Duplicate weapon_swing rows or processed-set trimming can replay the same whoosh; cap per player. */
+const WEAPON_SWING_SPATIAL_DEBOUNCE_MS = 85;
+const lastWeaponSwingSpatialPlayAtMs = new Map<string, number>();
+
 // Main sound system hook
 const SOVA_SOUND_PATTERN = /sova|error_tilling|error_mobile|error_memory|tutorial_memory/;
 
@@ -1449,6 +1469,25 @@ export const useSoundSystem = ({
             }
             soundType = normalizeSoundTypeKeyFromEnumTag(soundType as string);
             const definition = SOUND_DEFINITIONS[soundType];
+
+            const triggerHexLower = soundEvent.triggeredBy?.toHexString?.()?.toLowerCase?.();
+            const localHexLower = localPlayerIdentity?.toHexString?.()?.toLowerCase?.();
+            if (
+                LOCAL_PREDICT_SPATIAL_SKIP_SOUNDS.has(soundType) &&
+                triggerHexLower &&
+                localHexLower &&
+                triggerHexLower === localHexLower
+            ) {
+                return;
+            }
+            if (soundType === 'weapon_swing' && triggerHexLower) {
+                const pr = performance.now();
+                const prev = lastWeaponSwingSpatialPlayAtMs.get(triggerHexLower) ?? 0;
+                if (pr - prev < WEAPON_SWING_SPATIAL_DEBOUNCE_MS) {
+                    return;
+                }
+                lastWeaponSwingSpatialPlayAtMs.set(triggerHexLower, pr);
+            }
             
             // Debug logging for error_resources sounds
             if (soundType === 'error_resources' || (soundEvent.soundType && typeof soundEvent.soundType === 'object' && (soundEvent.soundType as any).tag === 'ErrorResources')) {
@@ -1624,10 +1663,19 @@ export const useSoundSystem = ({
             previousSoundEventsRef.current = new Map(soundEvents);
         }
         
-        // Cleanup old processed events - cap to prevent unbounded memory growth
+        // Drop processed IDs for rows removed from the table; then cap size. Trimming arbitrary IDs while
+        // rows still exist caused the same event to be treated as "new" and play again (double whoosh).
+        for (const id of Array.from(processedSoundEventsRef.current)) {
+            if (!soundEvents.has(id)) {
+                processedSoundEventsRef.current.delete(id);
+            }
+        }
         if (processedSoundEventsRef.current.size > PROCESSED_EVENTS_MAX_SIZE) {
             const eventsArray = Array.from(processedSoundEventsRef.current);
-            processedSoundEventsRef.current = new Set(eventsArray.slice(-1000)); // Keep most recent 1000
+            const drop = eventsArray.length - PROCESSED_EVENTS_MAX_SIZE;
+            for (let i = 0; i < drop; i++) {
+                processedSoundEventsRef.current.delete(eventsArray[i]);
+            }
         }
         
     }, [soundEvents, localPlayerPosition, localPlayerIdentity, masterVolume]);

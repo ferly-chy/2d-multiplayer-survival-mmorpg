@@ -25,7 +25,7 @@ const lastKnownServerCoralShakeTimes = new Map<string, number>(); // coralId -> 
 export function triggerCoralShakeOptimistic(coralId: string, posX: number, posY: number, variantIndex: number = 0): void {
   const now = Date.now();
   clientCoralShakeStartTimes.set(coralId, now);
-  lastKnownServerCoralShakeTimes.set(coralId, now);
+  // Do not touch lastKnownServerCoralShakeTimes — server lastHitTime sync for remotes; particles from input when local hits.
 }
 
 // ============================================================================
@@ -53,6 +53,27 @@ interface CoralHitEffect {
     y: number;
     duration: number;
     particles: CoralHitParticle[];
+    lastIntegratedWallMs?: number;
+}
+
+const CORAL_HIT_LEGACY_STEP_MS = 1000 / 60;
+const CORAL_HIT_MAX_INTEGRATION_TICKS = 24;
+
+function integrateCoralHitParticlesStep(particles: CoralHitParticle[]): void {
+    const n = particles.length;
+    for (let i = 0; i < n; i++) {
+        const particle = particles[i];
+        particle.vx *= particle.drag;
+        particle.vy *= particle.drag;
+        if (particle.type === 'bubble') {
+            particle.vy -= 0.05;
+        } else {
+            particle.vy += 0.03;
+        }
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+        particle.rotation += particle.rotationSpeed;
+    }
 }
 
 // Track active coral hit effects
@@ -135,25 +156,29 @@ export function renderCoralHitEffects(ctx: CanvasRenderingContext2D, nowMs: numb
             effectsToRemove.push(effectKey);
             return;
         }
+
+        const firstIntegrate = effect.lastIntegratedWallMs === undefined;
+        const prevIntegrated = effect.lastIntegratedWallMs ?? effect.startTime;
+        let dtWall = nowMs - prevIntegrated;
+        if (dtWall < 0) dtWall = 0;
+        if (dtWall === 0 && firstIntegrate) {
+            dtWall = CORAL_HIT_LEGACY_STEP_MS;
+        }
+        effect.lastIntegratedWallMs = nowMs;
+        if (dtWall > 0) {
+            dtWall = Math.min(dtWall, 150);
+            const ticks = Math.min(
+                CORAL_HIT_MAX_INTEGRATION_TICKS,
+                Math.max(1, Math.round(dtWall / CORAL_HIT_LEGACY_STEP_MS)),
+            );
+            for (let t = 0; t < ticks; t++) {
+                integrateCoralHitParticlesStep(effect.particles);
+            }
+        }
         
         ctx.save();
         
         effect.particles.forEach((particle) => {
-            // Update with water physics
-            particle.vx *= particle.drag;
-            particle.vy *= particle.drag;
-            
-            // Bubbles continue rising
-            if (particle.type === 'bubble') {
-                particle.vy -= 0.05; // Buoyancy
-            } else {
-                particle.vy += 0.03; // Slight sink
-            }
-            
-            particle.x += particle.vx;
-            particle.y += particle.vy;
-            particle.rotation += particle.rotationSpeed;
-            
             // Fade out
             const fadeStart = 0.4;
             const particleAlpha = progress > fadeStart
@@ -689,8 +714,11 @@ const livingCoralConfig: GroundEntityConfig<LivingCoral> = {
             if (serverShakeTime !== lastKnownServerTime) {
                 const clientStartTime = clientCoralShakeStartTimes.get(coralId);
                 const alreadyShaking = clientStartTime && (Date.now() - clientStartTime < SHAKE_DURATION_MS);
+                const RECENT_OPTIMISTIC_WINDOW_MS = 2000;
+                const recentlyHadOptimisticShake =
+                    clientStartTime !== undefined && Date.now() - clientStartTime < RECENT_OPTIMISTIC_WINDOW_MS;
                 lastKnownServerCoralShakeTimes.set(coralId, serverShakeTime);
-                if (!alreadyShaking) {
+                if (!alreadyShaking && !recentlyHadOptimisticShake) {
                     clientCoralShakeStartTimes.set(coralId, Date.now());
                     const variantIndex = Number(entity.id) % 4;
                     triggerCoralHitEffect(coralId, entity.posX, entity.posY, variantIndex);

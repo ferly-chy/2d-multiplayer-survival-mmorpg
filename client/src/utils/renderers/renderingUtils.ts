@@ -2003,7 +2003,9 @@ export const renderYSortedEntities = ({
   });
 
   // PASS 1.5: Render particle effects (AFTER entities so particles appear on top)
-  
+  // Note: this function runs once per swim-split batch in renderEntityWorldPasses; tree/stone/coral
+  // hit FX integrate physics by wall-clock delta so batches do not multiply simulation speed.
+
   // Hit impact effects (small chips flying off when attacking - triggered every hit)
   renderTreeHitEffects(ctx, nowMs);    // Bark chips, leaves, splinters
   renderStoneHitEffects(ctx, nowMs);   // Rock chips, sparks

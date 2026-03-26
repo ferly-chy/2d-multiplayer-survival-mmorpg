@@ -14,7 +14,8 @@
  *    match server (90°, 60°, 150°).
  *
  * 3. OPTIMISTIC SWING: registerLocalPlayerSwing for immediate swing feedback.
- *    Client-authoritative for local player; server timestamps for others.
+ *    Local melee/tool/spear swing is client-only (no server replay — avoids double-swing
+ *    when ack is late). Remote players still use server swingStartTimeMs.
  *
  * 4. USE ANIMATIONS: Bandaging, Selo Olive Oil, water drinking wobble/rotation.
  *
@@ -77,15 +78,10 @@ const clientSwingStartTimes = new Map<string, number>(); // playerId -> client t
 const lastKnownServerSwingTimes = new Map<string, number>(); // playerId -> last known server timestamp for the swing
 
 // --- CLIENT-AUTHORITATIVE SWING TRACKING (for local player only) ---
-// This allows the local player's swing animation to start IMMEDIATELY on click,
-// without waiting for server round-trip. Other players still use server timestamps.
+// Local swing visuals use only this clock — server swingStartTimeMs is not replayed for
+// the local player (late acks no longer cause a second swing). Remotes use server time.
 let localPlayerClientSwingStartTime: number = 0; // When local player initiated swing (client time)
 let localPlayerSwingDuration: number = SWING_DURATION_MS; // How long the swing should last
-let localPlayerSwingGracePeriodEnd: number = 0; // Time until we should ignore server swing updates
-
-// Grace period after client animation completes where we ignore server swing timestamps
-// This prevents the "double swing" bug where server confirmation triggers a second animation
-const SERVER_SWING_GRACE_PERIOD_MS = 300;
 
 /**
  * Call this from the input handler when the local player initiates a swing.
@@ -93,10 +89,9 @@ const SERVER_SWING_GRACE_PERIOD_MS = 300;
  * @param duration - Optional custom swing duration (defaults to SWING_DURATION_MS)
  */
 export function registerLocalPlayerSwing(duration?: number): void {
+  const dur = duration ?? SWING_DURATION_MS;
   localPlayerClientSwingStartTime = performance.now();
-  localPlayerSwingDuration = duration ?? SWING_DURATION_MS;
-  // Grace period extends past animation end to account for server round-trip latency
-  localPlayerSwingGracePeriodEnd = localPlayerClientSwingStartTime + localPlayerSwingDuration + SERVER_SWING_GRACE_PERIOD_MS;
+  localPlayerSwingDuration = dur;
 }
 
 /**
@@ -112,15 +107,6 @@ export function getLocalPlayerSwingElapsed(): number {
     return -1;
   }
   return elapsed;
-}
-
-/**
- * Check if we should ignore server swing timestamps.
- * Returns true if we're within the grace period after a client-authoritative swing.
- * This prevents the server confirmation from triggering a second animation.
- */
-export function shouldIgnoreServerSwing(): boolean {
-  return performance.now() < localPlayerSwingGracePeriodEnd;
 }
 
 const localPlayerLoadedAmmoHideUntilByWeapon = new Map<string, number>();
@@ -291,26 +277,12 @@ export function renderMeleeSwipeArcIfSwinging(
 
   if (isLocalPlayer) {
     const clientSwingElapsed = getLocalPlayerSwingElapsed();
-    const isInGracePeriod = shouldIgnoreServerSwing();
-    if (clientSwingElapsed >= 0) {
-      elapsedSwingTime = clientSwingElapsed;
-    } else if (isInGracePeriod) {
-      return;
-    } else if (swingStartTime > 0) {
-      const clientStartTime = clientSwingStartTimes.get(playerId);
-      const lastKnownServerTime = lastKnownServerSwingTimes.get(playerId) || 0;
-      if (swingStartTime !== lastKnownServerTime) {
-        clientSwingStartTimes.set(playerId, now_ms);
-        lastKnownServerSwingTimes.set(playerId, swingStartTime);
-        elapsedSwingTime = 0;
-      } else if (clientStartTime) {
-        elapsedSwingTime = now_ms - clientStartTime;
-      } else {
-        return;
-      }
-    } else {
+    if (clientSwingElapsed < 0) {
+      clientSwingStartTimes.delete(playerId);
+      lastKnownServerSwingTimes.delete(playerId);
       return;
     }
+    elapsedSwingTime = clientSwingElapsed;
   } else {
     if (swingStartTime <= 0) return;
     const clientStartTime = clientSwingStartTimes.get(playerId);
@@ -770,53 +742,16 @@ export const renderEquippedItem = (
   let currentAngle = 0; 
   let thrustDistance = 0; 
 
-  // CLIENT-AUTHORITATIVE SWING FOR LOCAL PLAYER
-  // For the local player, check client-initiated swing FIRST for immediate feedback.
-  // This eliminates the "bunched up swings" problem on high-latency connections.
+  // Local player: swing pose is 100% client-predicted (registerLocalPlayerSwing on input).
+  // Server swingStartTimeMs is still used for bow/crossbow reload timing above, not for this pose.
   if (isLocalPlayer) {
     const clientSwingElapsed = getLocalPlayerSwingElapsed();
-    const isInGracePeriod = shouldIgnoreServerSwing();
-    
     if (clientSwingElapsed >= 0) {
-      // Client-initiated swing is active - use it for immediate animation
       elapsedSwingTime = clientSwingElapsed;
-      // IMPORTANT: Track the server swing time during client animation
-      // so we don't replay it after animation ends or grace period expires
-      if (swingStartTime > 0) {
-        lastKnownServerSwingTimes.set(playerId, swingStartTime);
-      }
-    } else if (isInGracePeriod) {
-      // In grace period after client animation completed - suppress any animation
-      // but keep tracking server time to prevent re-triggering when grace period ends
-      if (swingStartTime > 0) {
-        lastKnownServerSwingTimes.set(playerId, swingStartTime);
-      }
-      // Set elapsed time beyond duration to ensure isSwinging = false
-      // This prevents the "second swing" visual during grace period
-      elapsedSwingTime = SWING_DURATION_MS + 1;
-    } else if (swingStartTime > 0) {
-      // Not in client animation or grace period - use server timestamps
-      // This path is for server-authoritative swings that weren't covered by client animation
-      const clientStartTime = clientSwingStartTimes.get(playerId);
-      const lastKnownServerTime = lastKnownServerSwingTimes.get(playerId) || 0;
-      
-      if (swingStartTime !== lastKnownServerTime) {
-        // NEW swing detected from server (different timestamp than what we tracked)
-        lastKnownServerSwingTimes.set(playerId, swingStartTime);
-        clientSwingStartTimes.set(playerId, now_ms);
-        elapsedSwingTime = 0;
-      } else if (clientStartTime) {
-        // Continue existing server-tracked swing animation
-        elapsedSwingTime = now_ms - clientStartTime;
-      } else {
-        // Server has a swing time we've already handled via client animation - don't animate
-        elapsedSwingTime = SWING_DURATION_MS + 1;
-      }
     } else {
-      // No active swing at all (server swing time is 0) - clean up tracking
       clientSwingStartTimes.delete(playerId);
       lastKnownServerSwingTimes.delete(playerId);
-      elapsedSwingTime = SWING_DURATION_MS + 1; // Ensure no animation
+      elapsedSwingTime = SWING_DURATION_MS + 1;
     }
   } else {
     // SERVER-AUTHORITATIVE for other players (we don't predict their actions)
