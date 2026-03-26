@@ -567,6 +567,8 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
       origin: [
           'http://localhost:3008', 
           'http://localhost:3009',
+          'http://localhost:5173',
+          'http://127.0.0.1:5173',
           'https://brothandbullets.com',
           'https://www.brothandbullets.com',
           'https://broth-and-bullets-production-client-production.up.railway.app'

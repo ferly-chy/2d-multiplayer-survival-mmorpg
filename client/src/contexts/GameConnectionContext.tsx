@@ -2,21 +2,16 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { Identity as SpacetimeDBIdentity } from 'spacetimedb';
 import { DbConnection } from '../generated';
 import { useAuth } from './AuthContext'; // Import useAuth
+import {
+    spacetimeWsUrl,
+    spacetimeDatabaseName,
+    useLocalSpacetimeSocket,
+    getSpacetimeBackendLogLabel,
+} from '../config/backendEnv';
 
-// --- Environment-based SpacetimeDB Configuration ---
-const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost';
-
-const SPACETIME_DB_ADDRESS = isDevelopment 
-  ? 'ws://localhost:3000' 
-  : 'wss://maincloud.spacetimedb.com'; // SpacetimeDB Maincloud
-
-const SPACETIME_DB_NAME = isDevelopment
-  ? 'broth-bullets-local'
-  : 'broth-bullets'; // Your Maincloud database name
-
-console.log(`[SpacetimeDB] Environment: ${isDevelopment ? 'development' : 'production'}`);
-console.log(`[SpacetimeDB] Using server: ${SPACETIME_DB_ADDRESS}`);
-console.log(`[SpacetimeDB] Database name: ${SPACETIME_DB_NAME}`);
+console.log(`[SpacetimeDB] Backends: ${getSpacetimeBackendLogLabel()}`);
+console.log(`[SpacetimeDB] Using server: ${spacetimeWsUrl}`);
+console.log(`[SpacetimeDB] Database name: ${spacetimeDatabaseName}`);
 
 // Define connection state enum for better state management
 enum ConnectionState {
@@ -163,7 +158,7 @@ export const GameConnectionProvider: React.FC<GameConnectionProviderProps> = ({ 
         abortControllerRef.current = abortController;
         
         // Set up connection timeout with better error handling
-        const connectionTimeoutMs = isDevelopment ? 5000 : 8000;
+        const connectionTimeoutMs = useLocalSpacetimeSocket ? 5000 : 8000;
         const timeoutId = setTimeout(() => {
             if (abortController.signal.aborted) return;
             
@@ -181,8 +176,8 @@ export const GameConnectionProvider: React.FC<GameConnectionProviderProps> = ({ 
 
         try {
             const builder = DbConnection.builder()
-                .withUri(SPACETIME_DB_ADDRESS)
-                .withDatabaseName(SPACETIME_DB_NAME)
+                .withUri(spacetimeWsUrl)
+                .withDatabaseName(spacetimeDatabaseName)
                 .withToken(spacetimeToken)
                 .onConnect((conn: DbConnection, identity: SpacetimeDBIdentity) => {
                     if (abortController.signal.aborted) return;

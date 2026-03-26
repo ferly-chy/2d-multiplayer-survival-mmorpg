@@ -338,7 +338,7 @@ To get authentication working during local development, follow these steps:
   - Open a **separate terminal**.
   - Run `spacetime start`.
   - Keep this terminal running.
-6. **Client Configuration:** No changes are needed in the client code. `AuthContext.tsx` is configured to use the auth server at `http://localhost:4001`.
+6. **Client Configuration:** No changes are needed for default local play. Auth and Spacetime endpoints are resolved in `client/src/config/backendEnv.ts` (localhost + Vite dev use `http://localhost:4001` and `ws://localhost:3000`). See [Client Configuration](#️-client-configuration) for optional env overrides.
 7. **Run Client:**
   - Open a terminal in the project **root** directory.
   - Run `npm run dev`.
@@ -348,7 +348,7 @@ Now, when you sign in via the client's login screen, the full authentication flo
 ### Production Deployment
 
 - **Auth Server:** Deploy the `auth-server-openauth` Node.js application to a hosting provider. Ensure the `keys/private.pem` and `keys/public.pem` files are securely deployed alongside the application (or manage keys via environment variables/secrets management if your host supports it). Ensure it's served over HTTPS.
-- **Client:** Update `AUTH_SERVER_URL` in `client/src/contexts/AuthContext.tsx` to point to your *deployed* auth server URL (using HTTPS).
+- **Client:** Set production auth and Spacetime defaults via Vite env at build time (see [Client Configuration](#️-client-configuration)), or use `VITE_AUTH_SERVER_URL` / `VITE_SPACETIME_*` overrides for your deployed auth server URL (HTTPS) and database.
 - **SpacetimeDB:** Configure your SpacetimeDB Maincloud/Enterprise instance with the *production* `issuer` and `jwks_uri` of your deployed auth server, and the correct `audience`.
 
 ### Limitations & Future Improvements
@@ -378,22 +378,32 @@ While the project is still evolving, a key goal is maintainability. As features 
 
 ## ⚙️ Client Configuration
 
-### SpacetimeDB Connection (`client/src/contexts/GameConnectionContext.tsx`)
+Auth and SpacetimeDB WebSocket URLs are resolved in [`client/src/config/backendEnv.ts`](client/src/config/backendEnv.ts) and consumed by `AuthContext.tsx` and `GameConnectionContext.tsx`.
 
-The SpacetimeDB connection is configured in `GameConnectionContext.tsx` and automatically selects the correct address and database name based on the environment:
+**Default behavior**
 
-```typescript
-const SPACETIME_DB_ADDRESS = isDevelopment
-  ? 'ws://localhost:3000'
-  : 'wss://maincloud.spacetimedb.com';
+- **Vite dev or `localhost`:** Auth `http://localhost:4001`, Spacetime `ws://localhost:3000`, database `broth-bullets-local`.
+- **Deployed site (not localhost):** Auth `https://broth-and-bullets-production.up.railway.app`, Spacetime `wss://maincloud.spacetimedb.com`, database `broth-bullets`.
 
-const SPACETIME_DB_NAME = isDevelopment
-  ? 'broth-bullets-local'
-  : 'broth-bullets';
+**Local UI with production backends (no local Spacetime or auth)**
+
+Create `.env.local` in the **project root** (next to `vite.config.ts`) or set env vars before `npm run dev`:
+
+```bash
+VITE_USE_PRODUCTION_BACKENDS=true
 ```
 
-- **For Local Development:** No changes needed. The client auto-detects `localhost` and connects to `ws://localhost:3000` with database `broth-bullets-local`.
-- **For Maincloud Deployment:** Update the production values in `GameConnectionContext.tsx` to match your Maincloud database name.
+Restart the dev server after changing env files. The client uses the production auth server and Maincloud; ensure the deployed auth server allows CORS from your dev origin (e.g. `http://localhost:5173`).
+
+**Optional overrides** (highest precedence; use for forks or staging)
+
+| Variable | Purpose |
+|----------|---------|
+| `VITE_AUTH_SERVER_URL` | Full auth issuer base URL. |
+| `VITE_SPACETIME_WS_URL` | SpacetimeDB WebSocket URI. |
+| `VITE_SPACETIME_DATABASE` | Database name. |
+
+See [`.env.example`](.env.example) in the project root for commented templates (including backend overrides).
 
 ## 🤖 SOVA AI Assistant Configuration
 

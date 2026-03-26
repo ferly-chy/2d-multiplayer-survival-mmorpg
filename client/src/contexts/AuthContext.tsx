@@ -6,16 +6,10 @@ import { parseJwt } from '../utils/auth/jwt'; // Corrected import path
 // import { Buffer } from 'buffer'; 
 // import crypto from 'crypto'; 
 
-// --- Environment-based Configuration ---
-// const isDevelopment = false; // TEMPORARILY FORCE PRODUCTION FOR TESTING
-const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost';
+import { authServerUrl, getAuthBackendLogLabel } from '../config/backendEnv';
 
-const AUTH_SERVER_URL = isDevelopment 
-  ? 'http://localhost:4001' 
-  : 'https://broth-and-bullets-production.up.railway.app';
-
-console.log(`[Auth] Environment: ${isDevelopment ? 'development' : 'production'}`);
-console.log(`[Auth] Using auth server: ${AUTH_SERVER_URL}`);
+console.log(`[Auth] Backends: ${getAuthBackendLogLabel()}`);
+console.log(`[Auth] Using auth server: ${authServerUrl}`);
 const OIDC_CLIENT_ID = 'vibe-survival-game-client'; // An identifier for this React app
 const REDIRECT_URI = window.location.origin + '/callback'; // Where OpenAuth redirects back after login
 const LOCAL_STORAGE_KEYS = {
@@ -113,7 +107,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Initialize OpenAuth client
   const [oidcClient] = useState(() => createClient({
-      issuer: AUTH_SERVER_URL,
+      issuer: authServerUrl,
       clientID: OIDC_CLIENT_ID,
   }));
 
@@ -135,7 +129,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Optional: Store state locally if needed for validation on callback
 
         // 3. Construct Authorization URL
-        const authUrl = new URL('/authorize', AUTH_SERVER_URL);
+        const authUrl = new URL('/authorize', authServerUrl);
         authUrl.searchParams.set('client_id', OIDC_CLIENT_ID);
         authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
         authUrl.searchParams.set('response_type', 'code');
@@ -213,7 +207,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         tokenRequestBody.append('code_verifier', verifier); // Verifier is guaranteed to exist here
 
         // Make the POST request to the token endpoint
-        const tokenResponse = await fetch(`${AUTH_SERVER_URL}/token`, {
+        const tokenResponse = await fetch(`${authServerUrl}/token`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
@@ -279,7 +273,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     // Optional: Redirect to OpenAuth end session endpoint if available/needed
     // This might require constructing a URL with id_token_hint and post_logout_redirect_uri
-    // const endSessionUrl = `${AUTH_SERVER_URL}/protocol/openid-connect/logout?client_id=${OIDC_CLIENT_ID}&post_logout_redirect_uri=${encodeURIComponent(window.location.origin)}`;
+    // const endSessionUrl = `${authServerUrl}/protocol/openid-connect/logout?client_id=${OIDC_CLIENT_ID}&post_logout_redirect_uri=${encodeURIComponent(window.location.origin)}`;
     // window.location.assign(endSessionUrl); 
     
     // For simplicity now, just clear client-side state
