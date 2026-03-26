@@ -1030,6 +1030,11 @@ export const renderYSortedEntities = ({
           ? (waterTileLookup?.get(tileKey) ?? playerForRendering.isOnWater)
           : playerForRendering.isOnWater;
         const effectiveIsOnWater = (localPredictedIsOnWater && !isOnSeaTransitionTile) || playerIsSnorkelingEarly;
+        const tileTypeAtPlayer = connection
+          ? getTileTypeFromChunkData(connection, tileX, tileY)
+          : null;
+        const isSwimmingInHotSpringWater =
+          Boolean(effectiveIsOnWater && tileTypeAtPlayer === 'HotSpringWater');
          
          // Choose sprite based on priority: dodge roll > water > crouching > default
          let heroImg: HTMLImageElement | null;
@@ -1181,7 +1186,8 @@ export const renderYSortedEntities = ({
                 isLocalPlayerSnorkeling,
                 playerActiveTitle,
                 effectiveIsOnWater,
-                isOnSeaTransitionTile
+                isOnSeaTransitionTile,
+                isSwimmingInHotSpringWater
               );
             }
             // Swipe arc drawn AFTER player so it's visible on top (up/left: item beneath player)
@@ -1255,7 +1261,8 @@ export const renderYSortedEntities = ({
                 isLocalPlayerSnorkeling,
                 playerActiveTitle2,
                 effectiveIsOnWater,
-                isOnSeaTransitionTile
+                isOnSeaTransitionTile,
+                isSwimmingInHotSpringWater
               );
             }
             // heroImg not loaded yet - skip rendering silently (will render once loaded)

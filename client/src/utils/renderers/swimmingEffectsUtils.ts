@@ -55,6 +55,16 @@ const SWIMMING_EFFECTS_CONFIG = {
   SHIMMER_FREQUENCY: 0.005, // Frequency of shimmer effects
 };
 
+/** Open water wake stroke (pale cyan). */
+const WAKE_RGB_SEA = { r: 160, g: 200, b: 220 };
+/** Hot spring pool ripples — dark teal aligned with shorelineOverlayUtils HOT_SPRING_WAVE_COLOR. */
+const WAKE_RGB_HOT_SPRING = { r: 32, g: 118, b: 128 };
+
+function wakeStrokeRgba(alpha: number, isHotSpringWater: boolean): string {
+  const c = isHotSpringWater ? WAKE_RGB_HOT_SPRING : WAKE_RGB_SEA;
+  return `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
+}
+
 // Interface for tracking individual wake effects
 interface WakeEffect {
   id: number;
@@ -63,6 +73,7 @@ interface WakeEffect {
   createdAt: number;
   directionAngle: number;
   thickness: number; // Line thickness - thicker when moving
+  isHotSpringWater: boolean;
 }
 
 // Global wake tracking
@@ -306,14 +317,22 @@ export function drawShorelineWaterLine(
 /**
  * Creates a new wake effect when player moves or idles in water
  */
-function createWakeEffect(centerX: number, centerY: number, directionAngle: number, currentTimeMs: number, thickness: number = WAKE_THICKNESS): void {
+function createWakeEffect(
+  centerX: number,
+  centerY: number,
+  directionAngle: number,
+  currentTimeMs: number,
+  thickness: number = WAKE_THICKNESS,
+  isHotSpringWater: boolean = false
+): void {
   wakeEffects.push({
     id: nextWakeId++,
     originX: centerX,
     originY: centerY,
     createdAt: currentTimeMs,
     directionAngle: directionAngle,
-    thickness: thickness
+    thickness: thickness,
+    isHotSpringWater,
   });
 }
 
@@ -326,7 +345,8 @@ function manageWakeCreation(
   centerY: number,
   player: SpacetimeDBPlayer,
   currentTimeMs: number,
-  isMoving: boolean
+  isMoving: boolean,
+  isHotSpringWater: boolean
 ): void {
   const playerId = player.identity.toHexString();
   const currentPos = { x: centerX, y: centerY };
@@ -357,7 +377,7 @@ function manageWakeCreation(
       // Only create wake when we reach the randomized threshold
       if (playerState.movementCounter >= playerState.nextWakeThreshold) {
         const directionAngle = getDirectionAngle(player.direction);
-        createWakeEffect(currentPos.x, currentPos.y, directionAngle, currentTimeMs, WAKE_THICKNESS);
+        createWakeEffect(currentPos.x, currentPos.y, directionAngle, currentTimeMs, WAKE_THICKNESS, isHotSpringWater);
         
         // 25% chance to create a second wake immediately for dopamine burst
         if (Math.random() < 0.25) {
@@ -366,7 +386,14 @@ function manageWakeCreation(
           const offsetY = (Math.random() - 0.5) * 20;
           const secondWakeDelay = 300 + Math.random() * 200; // 300-500ms delay - longer pause
           setTimeout(() => {
-            createWakeEffect(currentPos.x + offsetX, currentPos.y + offsetY, directionAngle, currentTimeMs + secondWakeDelay, WAKE_THICKNESS);
+            createWakeEffect(
+              currentPos.x + offsetX,
+              currentPos.y + offsetY,
+              directionAngle,
+              currentTimeMs + secondWakeDelay,
+              WAKE_THICKNESS,
+              isHotSpringWater
+            );
           }, secondWakeDelay);
         }
         
@@ -383,7 +410,7 @@ function manageWakeCreation(
       if (timeSinceLastIdleWake >= IDLE_WAKE_INTERVAL_MS) {
         // Create a gentle idle wake with random direction (treading water effect)
         const idleAngle = Math.random() * Math.PI * 2; // Random direction for idle
-        createWakeEffect(currentPos.x, currentPos.y, idleAngle, currentTimeMs, WAKE_THICKNESS);
+        createWakeEffect(currentPos.x, currentPos.y, idleAngle, currentTimeMs, WAKE_THICKNESS, isHotSpringWater);
         
         playerState.lastIdleWakeTime = currentTimeMs;
       }
@@ -391,7 +418,7 @@ function manageWakeCreation(
   } else {
     // First time seeing this player - initialize position and create initial wake
     const directionAngle = getDirectionAngle(player.direction);
-    createWakeEffect(currentPos.x, currentPos.y, directionAngle, currentTimeMs, WAKE_THICKNESS);
+    createWakeEffect(currentPos.x, currentPos.y, directionAngle, currentTimeMs, WAKE_THICKNESS, isHotSpringWater);
     playerState.lastPosition = currentPos;
     playerState.movementCounter = 0;
     playerState.nextWakeThreshold = generateNextWakeThreshold();
@@ -425,7 +452,7 @@ function drawExpandingWakes(
     const alpha = (1 - ageProgress) * 0.5;
     
     // Draw semi-circle wake with opening facing the player (toward direction of movement)
-    ctx.strokeStyle = `rgba(160, 200, 220, ${alpha * 0.6})`; // More muted, less bright water color
+    ctx.strokeStyle = wakeStrokeRgba(alpha * 0.6, wake.isHotSpringWater);
     ctx.lineWidth = wake.thickness * (1 - ageProgress * 0.2); // Use wake's thickness, fade slightly over time
     ctx.lineCap = 'round';
     
@@ -622,7 +649,8 @@ export function drawSwimmingEffectsUnder(
   cycleProgress?: number,
   spriteImage?: CanvasImageSource,
   spriteSx?: number,
-  spriteSy?: number
+  spriteSy?: number,
+  isHotSpringWater: boolean = false
 ): void {
   const centerX = spriteDrawX + spriteWidth / 2;
   const centerY = spriteDrawY + spriteHeight / 2;
@@ -631,7 +659,7 @@ export function drawSwimmingEffectsUnder(
   // No longer drawing it here to avoid appearing above water surface
   
   // Manage wake creation based on player movement
-  manageWakeCreation(centerX, centerY, player, currentTimeMs, isMoving);
+  manageWakeCreation(centerX, centerY, player, currentTimeMs, isMoving, isHotSpringWater);
   
   // Draw all active expanding wake semi-circles (above water surface)
   drawExpandingWakes(ctx, currentTimeMs);
@@ -675,8 +703,23 @@ export function drawSwimmingEffects(
   cycleProgress?: number,
   spriteImage?: CanvasImageSource,
   spriteSx?: number,
-  spriteSy?: number
+  spriteSy?: number,
+  isHotSpringWater: boolean = false
 ): void {
-  drawSwimmingEffectsUnder(ctx, player, currentTimeMs, isMoving, spriteDrawX, spriteDrawY, spriteWidth, spriteHeight, cycleProgress, spriteImage, spriteSx, spriteSy);
+  drawSwimmingEffectsUnder(
+    ctx,
+    player,
+    currentTimeMs,
+    isMoving,
+    spriteDrawX,
+    spriteDrawY,
+    spriteWidth,
+    spriteHeight,
+    cycleProgress,
+    spriteImage,
+    spriteSx,
+    spriteSy,
+    isHotSpringWater
+  );
   drawSwimmingEffectsOver(ctx, player, currentTimeMs, spriteDrawX, spriteDrawY, spriteWidth, spriteHeight);
 } 

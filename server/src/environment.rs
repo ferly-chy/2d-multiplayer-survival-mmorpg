@@ -523,6 +523,115 @@ pub fn is_position_in_hot_spring_area(ctx: &ReducerContext, pos_x: f32, pos_y: f
     false
 }
 
+/// True if a cairn must not spawn here: near any monument part, large/small quarry, hot spring, reed marsh, or tide pool.
+pub fn is_position_too_close_to_cairn_landmarks(ctx: &ReducerContext, pos_x: f32, pos_y: f32) -> bool {
+    use crate::cairn::{
+        MIN_CAIRN_LARGE_QUARRY_BUFFER_PX, MIN_CAIRN_MONUMENT_PART_DISTANCE_SQ,
+        MIN_CAIRN_QUARRY_TILE_PROXIMITY_SQ, MIN_CAIRN_REED_MARSH_BUFFER_PX,
+        MIN_CAIRN_TIDE_POOL_BUFFER_PX,
+    };
+
+    for part in ctx.db.monument_part().iter() {
+        let dx = pos_x - part.world_x;
+        let dy = pos_y - part.world_y;
+        if dx * dx + dy * dy < MIN_CAIRN_MONUMENT_PART_DISTANCE_SQ {
+            return true;
+        }
+    }
+
+    for q in ctx.db.large_quarry().iter() {
+        let radius_px = q.radius_tiles as f32 * TILE_SIZE_PX as f32;
+        let min_dist = radius_px + MIN_CAIRN_LARGE_QUARRY_BUFFER_PX;
+        let min_dist_sq = min_dist * min_dist;
+        let dx = pos_x - q.world_x;
+        let dy = pos_y - q.world_y;
+        if dx * dx + dy * dy < min_dist_sq {
+            return true;
+        }
+    }
+
+    if is_position_in_hot_spring_area(ctx, pos_x, pos_y) {
+        return true;
+    }
+
+    if is_position_near_quarry_tiles_for_cairn(ctx, pos_x, pos_y) {
+        return true;
+    }
+
+    for marsh in ctx.db.reed_marsh().iter() {
+        let min_dist = marsh.radius_px + MIN_CAIRN_REED_MARSH_BUFFER_PX;
+        let min_dist_sq = min_dist * min_dist;
+        let dx = pos_x - marsh.world_x;
+        let dy = pos_y - marsh.world_y;
+        if dx * dx + dy * dy < min_dist_sq {
+            return true;
+        }
+    }
+
+    for pool in ctx.db.tide_pool().iter() {
+        let min_dist = pool.radius_px + MIN_CAIRN_TIDE_POOL_BUFFER_PX;
+        let min_dist_sq = min_dist * min_dist;
+        let dx = pos_x - pool.world_x;
+        let dy = pos_y - pool.world_y;
+        if dx * dx + dy * dy < min_dist_sq {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Small quarry pits use `TileType::Quarry`; stay outside a radius of any such tile near the candidate.
+fn is_position_near_quarry_tiles_for_cairn(ctx: &ReducerContext, pos_x: f32, pos_y: f32) -> bool {
+    use crate::cairn::MIN_CAIRN_QUARRY_TILE_PROXIMITY_SQ;
+
+    let tile_x = (pos_x / TILE_SIZE_PX as f32).floor() as i32;
+    let tile_y = (pos_y / TILE_SIZE_PX as f32).floor() as i32;
+    let check_radius = 14;
+
+    for dy in -check_radius..=check_radius {
+        for dx in -check_radius..=check_radius {
+            let check_x = tile_x + dx;
+            let check_y = tile_y + dy;
+            if check_x < 0
+                || check_y < 0
+                || check_x >= WORLD_WIDTH_TILES as i32
+                || check_y >= WORLD_HEIGHT_TILES as i32
+            {
+                continue;
+            }
+
+            let tile_type = if let Some(t) = crate::get_tile_type_at_position(ctx, check_x, check_y) {
+                t
+            } else {
+                let world_tiles = ctx.db.world_tile();
+                let mut found = None;
+                for tile in world_tiles.idx_world_position().filter((check_x, check_y)) {
+                    found = Some(tile.tile_type);
+                    break;
+                }
+                match found {
+                    Some(t) => t,
+                    None => continue,
+                }
+            };
+
+            if tile_type != crate::TileType::Quarry {
+                continue;
+            }
+
+            let tile_center_x = (check_x as f32 + 0.5) * TILE_SIZE_PX as f32;
+            let tile_center_y = (check_y as f32 + 0.5) * TILE_SIZE_PX as f32;
+            let dxp = pos_x - tile_center_x;
+            let dyp = pos_y - tile_center_y;
+            if dxp * dxp + dyp * dyp < MIN_CAIRN_QUARRY_TILE_PROXIMITY_SQ {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Finds hot spring centers by clustering HotSpringWater tiles
 /// Returns (center_x, center_y, tile_count) in world pixel coordinates.
 /// Small clusters (tile_count < MIN_FULL_HOT_SPRING_TILES) are "tiny" springs with no shack/campfire/barrels.
@@ -1760,7 +1869,7 @@ fn seed_cairns(ctx: &ReducerContext) -> Result<(), String> {
     
     let mut spawned_cairn_count = 0;
     let mut cairn_attempts = 0;
-    let max_cairn_attempts = target_cairn_count * 50; // More attempts for rare spawns
+    let max_cairn_attempts = target_cairn_count * 120; // Extra attempts: many landmark exclusion zones
     
     // Shuffle lore IDs to randomize which cairn gets which lore
     use rand::seq::SliceRandom;
@@ -1860,34 +1969,11 @@ fn seed_cairns(ctx: &ReducerContext) -> Result<(), String> {
             continue;
         }
         
-        // Check minimum distance from shipwreck parts
-        let too_close_to_shipwreck = ctx.db.monument_part().iter().any(|part| {
-            if part.monument_type != MonumentType::Shipwreck {
-                return false;
-            }
-            let dx = pos_x - part.world_x;
-            let dy = pos_y - part.world_y;
-            dx * dx + dy * dy < crate::cairn::MIN_CAIRN_SHIPWRECK_DISTANCE_SQ
-        });
-        
-        if too_close_to_shipwreck {
+        // Monuments, large/small quarries, hot springs, reed marshes, tide pools
+        if is_position_too_close_to_cairn_landmarks(ctx, pos_x, pos_y) {
             continue;
         }
-        
-        // Check minimum distance from fishing village parts
-        let too_close_to_fishing_village = ctx.db.monument_part().iter().any(|part| {
-            if part.monument_type != MonumentType::FishingVillage {
-                return false;
-            }
-            let dx = pos_x - part.world_x;
-            let dy = pos_y - part.world_y;
-            dx * dx + dy * dy < crate::cairn::MIN_CAIRN_FISHING_VILLAGE_DISTANCE_SQ
-        });
-        
-        if too_close_to_fishing_village {
-            continue;
-        }
-        
+
         // All checks passed - spawn the cairn
         let chunk_idx = calculate_chunk_index(pos_x, pos_y);
         let lore_id = shuffled_lore_ids[spawned_cairn_count as usize].clone();

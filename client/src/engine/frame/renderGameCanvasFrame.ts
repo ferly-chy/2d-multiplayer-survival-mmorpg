@@ -403,6 +403,7 @@ export function renderGameCanvasFrame(args: any): void {
     localPlayerIsCrouching,
     localWaterEntryGraceActive,
     waterSurfaceEffectsEnabled,
+    connection,
   });
 
   const isOnSeaTileForBarrels = (worldX: number, worldY: number): boolean => {

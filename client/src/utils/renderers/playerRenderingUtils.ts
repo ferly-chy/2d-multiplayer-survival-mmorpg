@@ -522,7 +522,8 @@ export const renderPlayer = (
   isViewerUnderwater?: boolean, // NEW: Whether the local player (viewer) is underwater - affects remote snorkeling player rendering
   activeTitle?: string | null,
   effectiveIsOnWaterFromCaller?: boolean,
-  isOnSeaTransitionTile?: boolean // Standing on Beach/Sea, Beach/HotSpringWater, or Asphalt/Sea: draw feet-level water line
+  isOnSeaTransitionTile?: boolean, // Standing on Beach/Sea, Beach/HotSpringWater, or Asphalt/Sea: draw feet-level water line
+  isSwimmingInHotSpringWater?: boolean // HotSpringWater tile: dark-teal surface ripples
 ) => {
   // Use caller's stabilized value when provided; otherwise use player.isOnWater (for swimming bottom-half pass)
   const effectiveIsOnWater = effectiveIsOnWaterFromCaller !== undefined
@@ -1224,7 +1225,8 @@ export const renderPlayer = (
         cycleProgress,
         currentSpriteImg, // Pass the current sprite image for shadow shape
         sx, // Pass sprite frame x coordinate
-        sy  // Pass sprite frame y coordinate
+        sy, // Pass sprite frame y coordinate
+        isSwimmingInHotSpringWater ?? false
       );
     }
 

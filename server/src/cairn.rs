@@ -36,10 +36,16 @@ pub(crate) const MIN_CAIRN_TREE_DISTANCE_SQ: f32 = 300.0 * 300.0; // Minimum dis
 pub(crate) const MIN_CAIRN_STONE_DISTANCE_SQ: f32 = 100.0 * 100.0; // Minimum distance from stones
 pub(crate) const MIN_CAIRN_RUNE_STONE_DISTANCE_SQ: f32 = 800.0 * 800.0; // Minimum distance from rune stones
 
-// Monument avoidance distances - keep cairns away from major monuments
-pub(crate) const MIN_CAIRN_ALK_STATION_DISTANCE_SQ: f32 = 600.0 * 600.0; // Keep away from ALK stations
-pub(crate) const MIN_CAIRN_SHIPWRECK_DISTANCE_SQ: f32 = 500.0 * 500.0; // Keep away from shipwreck hulls
-pub(crate) const MIN_CAIRN_FISHING_VILLAGE_DISTANCE_SQ: f32 = 800.0 * 800.0; // Keep away from fishing village (larger zone)
+// Monument / landmark avoidance (see environment::is_position_too_close_to_cairn_landmarks)
+pub(crate) const MIN_CAIRN_ALK_STATION_DISTANCE_SQ: f32 = 600.0 * 600.0; // ALK compound + substations
+/// Minimum distance from any `monument_part` (shipwreck, villages, graveyard, drone, weather station, wolf den, etc.)
+pub(crate) const MIN_CAIRN_MONUMENT_PART_DISTANCE_SQ: f32 = 800.0 * 800.0;
+/// Extra clearance beyond a large quarry’s pit radius (large quarries are minimap landmarks)
+pub(crate) const MIN_CAIRN_LARGE_QUARRY_BUFFER_PX: f32 = 400.0;
+/// Min distance to the center of any small-quarry `TileType::Quarry` tile near the candidate
+pub(crate) const MIN_CAIRN_QUARRY_TILE_PROXIMITY_SQ: f32 = 550.0 * 550.0;
+pub(crate) const MIN_CAIRN_REED_MARSH_BUFFER_PX: f32 = 250.0; // Beyond marsh disc radius
+pub(crate) const MIN_CAIRN_TIDE_POOL_BUFFER_PX: f32 = 250.0; // Beyond tide pool disc radius
 
 // --- Signal Classification Reward Constants ---
 // Diegetic tier system based on SOVA's data classification

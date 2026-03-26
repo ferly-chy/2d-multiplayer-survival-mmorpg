@@ -53,7 +53,7 @@ use crate::active_equipment::active_equipment as ActiveEquipmentTableTrait;
 use crate::dropped_item;
 use crate::player_corpse::{PlayerCorpse, PlayerCorpseDespawnSchedule, NUM_CORPSE_SLOTS, create_player_corpse, player_corpse as PlayerCorpseTableTrait, player_corpse_despawn_schedule as PlayerCorpseDespawnScheduleTableTrait};
 use crate::inventory_management::ItemContainer;
-use crate::environment::calculate_chunk_index;
+use crate::environment::{calculate_chunk_index, is_position_on_water};
 use crate::campfire::{Campfire, campfire as CampfireTableTrait};
 use crate::lantern::{Lantern, lantern as LanternTableTrait};
 use crate::turret::{Turret, turret as TurretTableTrait, NUM_AMMO_SLOTS};
@@ -4257,6 +4257,18 @@ pub fn process_attack(
     // Get attacker position
     let attacker = ctx.db.player().identity().find(&attacker_id)
         .ok_or_else(|| "Attacker not found".to_string())?;
+
+    // Melee from water cannot connect with targets on dry land (no reach onto shore).
+    // Applies to every weapon (torch, harpoon, etc.), wading or snorkeling — not torch-only.
+    // Use tile query from position so we don't rely on a possibly stale `is_on_water` cache.
+    let attacker_on_water = crate::is_player_on_water(ctx, attacker.position_x, attacker.position_y);
+    if attacker_on_water && !is_position_on_water(ctx, target_x, target_y) {
+        return Ok(AttackResult {
+            hit: false,
+            target_type: None,
+            resource_granted: None,
+        });
+    }
 
     // Check if melee attack hits a wall first (walls block attacks AND take damage)
     // EXCEPTION: If the target itself is a wall, skip this check (handle direct wall damage below)

@@ -5,7 +5,7 @@ import { renderWaterPatches } from '../../utils/renderers/waterPatchRenderingUti
 import { renderFertilizerPatches } from '../../utils/renderers/fertilizerPatchRenderingUtils';
 import { renderFirePatches } from '../../utils/renderers/firePatchRenderingUtils';
 import { renderPlacedExplosives } from '../../utils/renderers/explosiveRenderingUtils';
-import { isPlacementTooFar, worldPosToTileCoords } from '../../utils/renderers/placementRenderingUtils';
+import { getTileTypeFromChunkData, isPlacementTooFar, worldPosToTileCoords } from '../../utils/renderers/placementRenderingUtils';
 import { renderCampfire } from '../../utils/renderers/campfireRenderingUtils';
 import { renderBarbecue } from '../../utils/renderers/barbecueRenderingUtils';
 import {
@@ -26,7 +26,7 @@ import {
   renderPlayer,
   getSpriteCoordinates,
 } from '../../utils/renderers/playerRenderingUtils';
-import { isPlayerMoving } from '../../config/gameConfig';
+import { gameConfig, isPlayerMoving } from '../../config/gameConfig';
 import { renderWaterOverlay } from '../../utils/renderers/waterOverlayUtils';
 import { setShelterClippingData, setGlobalShadowsEnabled } from '../../utils/renderers/shadowUtils';
 
@@ -86,6 +86,7 @@ interface RenderWorldPreparationPassesOptions {
   localPlayerIsCrouching: boolean;
   localWaterEntryGraceActive: boolean;
   waterSurfaceEffectsEnabled: boolean;
+  connection?: any | null;
 }
 
 export function renderWorldPreparationPasses({
@@ -141,6 +142,7 @@ export function renderWorldPreparationPasses({
   localPlayerIsCrouching,
   localWaterEntryGraceActive,
   waterSurfaceEffectsEnabled,
+  connection,
 }: RenderWorldPreparationPassesOptions) {
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
   renderCyberpunkGridBackground(ctx, canvasWidth, canvasHeight, cameraOffsetX, cameraOffsetY);
@@ -263,6 +265,11 @@ export function renderWorldPreparationPasses({
       const isHovered = worldMousePos ? isPlayerHovered(worldMousePos.x, worldMousePos.y, playerForRendering) : false;
       const forceFullSpriteForLocalWaterEntry = isLocalPlayer && localWaterEntryGraceActive;
 
+      const hsTileX = Math.floor(playerForRendering.positionX / gameConfig.tileSize);
+      const hsTileY = Math.floor(playerForRendering.positionY / gameConfig.tileSize);
+      const hsTileType = connection ? getTileTypeFromChunkData(connection, hsTileX, hsTileY) : null;
+      const isSwimmingInHotSpringWater = hsTileType === 'HotSpringWater';
+
       renderPlayer(
         ctx,
         playerForRendering,
@@ -291,6 +298,8 @@ export function renderWorldPreparationPasses({
         isSnorkeling,
         undefined,
         true,
+        undefined,
+        isSwimmingInHotSpringWater,
       );
     }
   });

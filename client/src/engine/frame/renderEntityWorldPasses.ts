@@ -13,7 +13,8 @@ import {
   renderWallTargetIndicator,
   renderFenceTargetIndicator,
 } from '../../utils/renderers/foundationRenderingUtils';
-import { isPlayerMoving } from '../../config/gameConfig';
+import { gameConfig, isPlayerMoving } from '../../config/gameConfig';
+import { getTileTypeFromChunkData } from '../../utils/renderers/placementRenderingUtils';
 import type { MutableRefObject } from 'react';
 
 const LOCAL_DODGE_ROLL_VISUAL_DURATION_MS = 180;
@@ -313,6 +314,11 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
         renderSwimmingEquippedItem();
       }
 
+      const topHsTileX = Math.floor(player.positionX / gameConfig.tileSize);
+      const topHsTileY = Math.floor(player.positionY / gameConfig.tileSize);
+      const topHsType = connection ? getTileTypeFromChunkData(connection, topHsTileX, topHsTileY) : null;
+      const isSwimmingInHotSpringWater = topHsType === 'HotSpringWater';
+
       renderPlayer(
         ctx,
         player,
@@ -341,6 +347,8 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
         isSnorkeling,
         undefined,
         true,
+        undefined,
+        isSwimmingInHotSpringWater,
       );
 
       lastPositionsRef.current?.set(playerId, { x: player.positionX, y: player.positionY });
