@@ -650,7 +650,7 @@ function isWaterPlacementBlocked(connection: DbConnection | null, placementInfo:
     }
 
     // List of items that cannot be placed on water
-    const waterBlockedItems = ['Camp Fire', 'Furnace', 'Large Furnace', 'Barbecue', 'Lantern', 'Ancestral Ward', 'Signal Disruptor', 'Memory Resonance Beacon', 'Tallow Steam Turret', 'Wooden Storage Box', 'Scarecrow', 'Sleeping Bag', 'Stash', 'Shelter', 'Reed Rain Collector', 'Repair Bench', 'Cooking Station', "Babushka's Surprise", "Matriarch's Wrath", 'Wooden Beehive'];
+    const waterBlockedItems = ['Camp Fire', 'Furnace', 'Large Furnace', 'Barbecue', 'Lantern', 'Ancestral Ward', 'Signal Disruptor', 'Memory Resonance Beacon', 'Tallow Steam Turret', 'Wooden Storage Box', 'Large Wooden Storage Box', 'Pantry', 'Compost', 'Tanning Rack', 'Scarecrow', 'Sleeping Bag', 'Stash', 'Shelter', 'Reed Rain Collector', 'Repair Bench', 'Cooking Station', "Babushka's Surprise", "Matriarch's Wrath", 'Wooden Beehive'];
     
     // Seeds that don't require water or beach (most seeds) cannot be planted on water
     const isSeedButNotSpecialSeed = isSeedItemValid(placementInfo.itemName) && 
@@ -1082,7 +1082,8 @@ export function isPlacementTooFar(
     } else if (placementInfo.iconAssetName === 'cooking_station.png' ||
                placementInfo.iconAssetName === 'repair_bench.png' ||
                placementInfo.iconAssetName === 'scarecrow.png' ||
-               placementInfo.iconAssetName === 'compost.png') {
+               placementInfo.iconAssetName === 'compost.png' ||
+               placementInfo.iconAssetName === 'tanning_rack.png') {
         // Medium-large objects (160-192px) need increased placement range (200px)
         const MEDIUM_LARGE_OBJECT_PLACEMENT_MAX_DISTANCE = 200.0;
         clientPlacementRangeSq = MEDIUM_LARGE_OBJECT_PLACEMENT_MAX_DISTANCE * MEDIUM_LARGE_OBJECT_PLACEMENT_MAX_DISTANCE;
@@ -2022,6 +2023,8 @@ export function renderPlacementPreview({
     } else if (placementInfo.itemName === 'Compost' || placementInfo.iconAssetName === 'compost.png') {
         // For compost, use the compost.png from doodads folder (matches actual placement rendering)
         previewImg = doodadImagesRef.current?.get('compost.png');
+    } else if (placementInfo.itemName === 'Tanning Rack' || placementInfo.iconAssetName === 'tanning_rack.png') {
+        previewImg = doodadImagesRef.current?.get('tanning_rack.png');
     } else if (placementInfo.iconAssetName === 'barbecue.png') {
         // For barbecue, use the barbecue.png from doodads folder (matches actual placement rendering)
         previewImg = doodadImagesRef.current?.get('barbecue.png');
@@ -2134,6 +2137,9 @@ export function renderPlacementPreview({
         // Compost preview dimensions (matches actual rendering: 128px x 128px)
         drawWidth = COMPOST_WIDTH; // 128px
         drawHeight = COMPOST_HEIGHT; // 128px
+    } else if (placementInfo.itemName === 'Tanning Rack' || placementInfo.iconAssetName === 'tanning_rack.png') {
+        drawWidth = COMPOST_WIDTH;
+        drawHeight = COMPOST_HEIGHT;
     } else if (placementInfo.iconAssetName === 'wooden_storage_box.png') {
         // Regular wooden storage box uses campfire dimensions for preview
         drawWidth = CAMPFIRE_WIDTH_PREVIEW; 
@@ -2512,6 +2518,13 @@ export function renderPlacementPreview({
         adjustedX = preview.x;
         adjustedY = preview.y;
         // Override draw dimensions from config
+        drawWidth = preview.width;
+        drawHeight = preview.height;
+    } else if (placementInfo.itemName === 'Tanning Rack' || placementInfo.iconAssetName === 'tanning_rack.png') {
+        const config = ENTITY_VISUAL_CONFIG.tanning_rack;
+        const preview = getPlacementPreviewPosition(snappedX, snappedY, config);
+        adjustedX = preview.x;
+        adjustedY = preview.y;
         drawWidth = preview.width;
         drawHeight = preview.height;
     } else if (placementInfo.iconAssetName === 'refrigerator.png') {

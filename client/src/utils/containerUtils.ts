@@ -100,15 +100,17 @@ export function getDragDropReducerNames(containerType: ContainerType, entity?: C
     
     // Check if this is a compost or refrigerator box (needs special reducer names)
     let isCompost = false;
+    let isTanningRack = false;
     let isRefrigerator = false;
     if (containerType === 'wooden_storage_box' && entity) {
         const box = entity as WoodenStorageBox;
         isCompost = box.boxType === BOX_TYPE_COMPOST;
+        isTanningRack = box.boxType === BOX_TYPE_TANNING_RACK;
         isRefrigerator = box.boxType === BOX_TYPE_REFRIGERATOR;
     }
     
-    // Use compost/refrigerator-specific type name if applicable
-    const typeName = isCompost ? 'Compost' : isRefrigerator ? 'Refrigerator' : typeMap[containerType];
+    // Use compost/tanning/refrigerator-specific type name if applicable
+    const typeName = isCompost ? 'Compost' : isTanningRack ? 'TanningRack' : isRefrigerator ? 'Refrigerator' : typeMap[containerType];
     
     // Determine if this is a fuel container (different naming pattern)
     // Note: Fumarole is HYBRID - uses storage pattern for moveFromPlayer, fuel pattern for moveToPlayer
@@ -718,6 +720,7 @@ export const BOX_TYPE_FISH_TRAP = 10;
 export const BOX_TYPE_WILD_BEEHIVE = 11;
 export const BOX_TYPE_PLAYER_BEEHIVE = 12;
 export const BOX_TYPE_MILITARY_CRATE = 13; // Weather station - 1 high-tier weapon, 1hr respawn
+export const BOX_TYPE_TANNING_RACK = 18;
 export const NUM_BOX_SLOTS = 18;
 export const NUM_REPAIR_BENCH_SLOTS = 1;
 export const NUM_COOKING_STATION_SLOTS = 0; // No inventory - proximity crafting only
@@ -728,6 +731,7 @@ export const FURNACE_TYPE_LARGE = 1;
 export const NUM_LARGE_FURNACE_SLOTS = 18;
 export const NUM_REFRIGERATOR_SLOTS = 30;
 export const NUM_COMPOST_SLOTS = 20;
+export const NUM_TANNING_RACK_SLOTS = 20;
 export const NUM_BACKPACK_SLOTS = 35; // Matches NUM_CORPSE_SLOTS (30 + 5 = 35 slots)
 export const NUM_MILITARY_RATION_SLOTS = 3;
 export const NUM_MILITARY_CRATE_SLOTS = 1; // Single slot for high-tier weapon
@@ -767,6 +771,9 @@ export function getContainerConfig(containerType: ContainerType, entity?: Contai
                 break;
             case BOX_TYPE_COMPOST:
                 slots = NUM_COMPOST_SLOTS;
+                break;
+            case BOX_TYPE_TANNING_RACK:
+                slots = NUM_TANNING_RACK_SLOTS;
                 break;
             case BOX_TYPE_BACKPACK:
                 slots = NUM_BACKPACK_SLOTS;
@@ -844,6 +851,8 @@ export function getContainerDisplayName(containerType: ContainerType, entity?: C
                 return 'PANTRY';
             case BOX_TYPE_COMPOST:
                 return isCompoundMonument(box.isMonument, box.posX, box.posY) ? 'BIO PROCESSOR' : 'COMPOST';
+            case BOX_TYPE_TANNING_RACK:
+                return 'TANNING RACK';
             case BOX_TYPE_BACKPACK:
                 return 'BACKPACK';
             case BOX_TYPE_REPAIR_BENCH:

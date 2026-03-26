@@ -29,6 +29,7 @@ todos:
   - id: client-integration
     content: Update client to call open/close reducers when container UI opens/closes
     status: completed
+isProject: false
 ---
 
 # Monument Placeables and Safe Zone Container Exclusivity
@@ -41,15 +42,15 @@ Add a boolean field to each container table to mark it as a permanent monument p
 
 **Files to modify:**
 
-- [`server/src/campfire.rs`](server/src/campfire.rs) - Add `pub is_monument: bool` to `Campfire` struct
-- [`server/src/furnace.rs`](server/src/furnace.rs) - Add `pub is_monument: bool` to `Furnace` struct  
-- [`server/src/barbecue.rs`](server/src/barbecue.rs) - Add `pub is_monument: bool` to `Barbecue` struct
-- [`server/src/rain_collector.rs`](server/src/rain_collector.rs) - Add `pub is_monument: bool` to `RainCollector` struct
-- [`server/src/wooden_storage_box.rs`](server/src/wooden_storage_box.rs) - Add `pub is_monument: bool` to `WoodenStorageBox` struct (covers Compost, Repair Bench, Cooking Station)
+- `[server/src/campfire.rs](server/src/campfire.rs)` - Add `pub is_monument: bool` to `Campfire` struct
+- `[server/src/furnace.rs](server/src/furnace.rs)` - Add `pub is_monument: bool` to `Furnace` struct  
+- `[server/src/barbecue.rs](server/src/barbecue.rs)` - Add `pub is_monument: bool` to `Barbecue` struct
+- `[server/src/rain_collector.rs](server/src/rain_collector.rs)` - Add `pub is_monument: bool` to `RainCollector` struct
+- `[server/src/wooden_storage_box.rs](server/src/wooden_storage_box.rs)` - Add `pub is_monument: bool` to `WoodenStorageBox` struct (covers Compost, Repair Bench, Cooking Station)
 
 ### 1.2 Monument Placeable Configuration
 
-Create a new configuration module in [`server/src/monument.rs`](server/src/monument.rs):
+Create a new configuration module in `[server/src/monument.rs](server/src/monument.rs)`:
 
 ```rust
 #[derive(Clone, Debug)]
@@ -90,7 +91,7 @@ pub fn get_fishing_village_placeables() -> Vec<MonumentPlaceableConfig> { ... }
 
 ### 1.3 Spawn Monument Placeables
 
-Add spawn function in [`server/src/monument.rs`](server/src/monument.rs):
+Add spawn function in `[server/src/monument.rs](server/src/monument.rs)`:
 
 ```rust
 pub fn spawn_monument_placeables(
@@ -101,11 +102,11 @@ pub fn spawn_monument_placeables(
 ) -> Result<(), String>
 ```
 
-Call from [`server/src/world_generation.rs`](server/src/world_generation.rs) after monument positions are determined.
+Call from `[server/src/world_generation.rs](server/src/world_generation.rs)` after monument positions are determined.
 
 ### 1.4 Make Monument Placeables Indestructible
 
-Modify combat damage handlers in [`server/src/combat.rs`](server/src/combat.rs) to skip damage for monument placeables:
+Modify combat damage handlers in `[server/src/combat.rs](server/src/combat.rs)` to skip damage for monument placeables:
 
 ```rust
 // In damage_campfire, damage_furnace, etc.
@@ -239,3 +240,4 @@ if let Some(user_id) = campfire.active_user_id {
 
 - Call `open_*_container` when UI opens
 - Call `close_*_container` when UI closes
+

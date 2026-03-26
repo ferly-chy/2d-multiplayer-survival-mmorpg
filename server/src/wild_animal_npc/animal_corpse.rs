@@ -313,7 +313,7 @@ pub fn get_harvest_loot(
             AnimalSpecies::Tern => Some("Tern Feathers"), // Birds drop feathers
             AnimalSpecies::Crow => Some("Crow Feathers"), // Birds drop feathers
             AnimalSpecies::Vole => None, // Voles are too small for usable fur
-            AnimalSpecies::Wolverine => None, // Wolverines don't drop special fur (use generic Animal Leather instead)
+            AnimalSpecies::Wolverine => None, // Wolverines don't drop special fur (use generic Animal Hide instead)
             AnimalSpecies::Caribou => Some("Caribou Hide"), // Large herbivore - valuable hide
             // SalmonShark - no cloth/fur drops (sharks don't have fur)
             AnimalSpecies::SalmonShark => None,
@@ -334,18 +334,15 @@ pub fn get_harvest_loot(
         }
     }
     
-    // NEW: Universal Animal Leather drop for most animals (like Animal Fat/Bone)
-    // This gives animals a chance to drop the universal leather resource (except crabs, birds, voles, and bees which are too small)
+    // Universal Animal Hide drop for most animals (tan at tanning rack for leather)
     if !matches!(animal_species, AnimalSpecies::BeachCrab | AnimalSpecies::Tern | AnimalSpecies::Crow | AnimalSpecies::Vole | AnimalSpecies::Bee) {
-        // Wolverines have higher leather chance since they don't drop special fur
-        let base_leather_chance = if animal_species == AnimalSpecies::Wolverine { 0.70 } else { 0.40 };
-        let mut animal_leather_chance = (base_leather_chance * effectiveness_multiplier).clamp(0.0, 0.70);
-        // Apply minimum floor for animal leather when using non-primary tools
+        let base_hide_chance = if animal_species == AnimalSpecies::Wolverine { 0.70 } else { 0.40 };
+        let mut animal_hide_chance = (base_hide_chance * effectiveness_multiplier).clamp(0.0, 0.70);
         if is_non_primary_tool {
-            animal_leather_chance = animal_leather_chance.max(MIN_BASIC_RESOURCE_CHANCE);
+            animal_hide_chance = animal_hide_chance.max(MIN_BASIC_RESOURCE_CHANCE);
         }
-        if rng.gen_bool(animal_leather_chance) {
-            loot.push(("Animal Leather".to_string(), base_quantity));
+        if rng.gen_bool(animal_hide_chance) {
+            loot.push(("Animal Hide".to_string(), base_quantity));
         }
     }
     

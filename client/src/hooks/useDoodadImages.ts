@@ -52,6 +52,9 @@ export function useDoodadImages() {
     // Compost
     loadDoodadImage(import('../assets/doodads/compost.png'), 'compost.png');
 
+    // Tanning rack (placement preview uses doodad sprite)
+    loadDoodadImage(import('../assets/doodads/tanning_rack.png'), 'tanning_rack.png');
+
     // Barbecue
     loadDoodadImage(import('../assets/doodads/barbecue.png'), 'barbecue.png');
 

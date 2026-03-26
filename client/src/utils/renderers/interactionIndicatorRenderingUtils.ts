@@ -46,6 +46,7 @@ function getConfigKey(
 ): string {
   if (entityType === 'box') {
     if (boxType === 3) return 'compost';
+    if (boxType === 18) return 'compost'; // tanning rack — same tall sprite / indicator as compost
     if (boxType === 2) return 'refrigerator';
     return 'wooden_storage_box';
   }
@@ -133,7 +134,7 @@ export function renderInteractionIndicators(params: RenderInteractionIndicatorsP
     { type: 'furnace', map: visibleFurnacesMap, getInfo: (e) => ({ id: e.id, posX: e.posX, posY: e.posY, height: getFurnaceDimensions(e.furnaceType, isCompoundMonument(e.isMonument, e.posX, e.posY)).height, boxType: undefined }) },
     { type: 'barbecue', map: visibleBarbecuesMap, getInfo: (e) => ({ id: e.id, posX: e.posX, posY: e.posY, height: getIndicatorHeight('barbecue'), boxType: undefined }) },
     { type: 'lantern', map: visibleLanternsMap, getInfo: (e) => ({ id: e.id, posX: e.posX, posY: e.posY, height: getIndicatorHeight('lantern'), boxType: undefined }) },
-    { type: 'box', map: visibleBoxesMap, getInfo: (e) => ({ id: e.id, posX: e.posX, posY: e.posY, height: e.boxType === 3 ? getIndicatorHeight('compost') : e.boxType === 2 ? getIndicatorHeight('refrigerator') : getIndicatorHeight('wooden_storage_box'), boxType: e.boxType }) },
+    { type: 'box', map: visibleBoxesMap, getInfo: (e) => ({ id: e.id, posX: e.posX, posY: e.posY, height: e.boxType === 3 || e.boxType === 18 ? getIndicatorHeight('compost') : e.boxType === 2 ? getIndicatorHeight('refrigerator') : getIndicatorHeight('wooden_storage_box'), boxType: e.boxType }) },
     { type: 'stash', map: stashes instanceof Map ? stashes : emptyMap, getInfo: (e) => ({ id: e.id, posX: e.posX, posY: e.posY, height: getIndicatorHeight('stash'), boxType: undefined }) },
     { type: 'door', map: visibleDoorsMap, getInfo: (e) => ({ id: e.id, posX: e.posX, posY: e.posY, height: getIndicatorHeight('door'), boxType: undefined }) },
     { type: 'homestead_hearth', map: visibleHomesteadHearthsMap, getInfo: (e) => ({ id: e.id, posX: e.posX, posY: e.posY - 15, height: getIndicatorHeight('homestead_hearth'), boxType: undefined }) },

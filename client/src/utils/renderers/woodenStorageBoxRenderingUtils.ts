@@ -3,6 +3,7 @@ import boxImage from '../../assets/doodads/wooden_storage_box.png'; // Direct im
 import largeBoxImage from '../../assets/doodads/large_wood_box.png'; // Large box image
 import refrigeratorImage from '../../assets/doodads/refrigerator.png'; // Refrigerator image
 import compostImage from '../../assets/doodads/compost.png'; // Compost image
+import tanningRackImage from '../../assets/doodads/tanning_rack.png';
 import backpackImage from '../../assets/doodads/burlap_sack.png'; // Backpack image
 import repairBenchImage from '../../assets/doodads/repair_bench.png'; // Repair bench image
 import cookingStationImage from '../../assets/doodads/cooking_station.png'; // Cooking station image
@@ -86,6 +87,7 @@ export const BOX_TYPE_WOLF_PELT = 14;
 export const BOX_TYPE_FOX_PELT = 15;
 export const BOX_TYPE_POLAR_BEAR_PELT = 16;
 export const BOX_TYPE_WALRUS_PELT = 17;
+export const BOX_TYPE_TANNING_RACK = 18;
 export const PLAYER_BOX_INTERACTION_DISTANCE_SQUARED = 96.0 * 96.0; // Added interaction distance
 export const PLAYER_BEEHIVE_INTERACTION_DISTANCE_SQUARED = 140.0 * 140.0; // Tall structures - allow interaction from bottom
 export const PLAYER_TALL_BOX_INTERACTION_DISTANCE_SQUARED = 140.0 * 140.0; // Repair bench, cooking station, compost - allow interaction from bottom (192px sprites)
@@ -111,6 +113,8 @@ const boxConfig: GroundEntityConfig<WoodenStorageBox> = {
                 return refrigeratorImage;
             case BOX_TYPE_COMPOST:
                 return isCompoundMonument(entity.isMonument, entity.posX, entity.posY) ? alkCompostImage : compostImage;
+            case BOX_TYPE_TANNING_RACK:
+                return tanningRackImage;
             case BOX_TYPE_BACKPACK:
                 return backpackImage;
             case BOX_TYPE_REPAIR_BENCH:
@@ -153,6 +157,8 @@ const boxConfig: GroundEntityConfig<WoodenStorageBox> = {
                 return { width: REFRIGERATOR_WIDTH, height: REFRIGERATOR_HEIGHT };
             case BOX_TYPE_COMPOST:
                 if (isCompoundMonument(entity.isMonument, entity.posX, entity.posY)) return { width: MONUMENT_COMPOST_WIDTH, height: MONUMENT_COMPOST_HEIGHT };
+                return { width: COMPOST_WIDTH, height: COMPOST_HEIGHT };
+            case BOX_TYPE_TANNING_RACK:
                 return { width: COMPOST_WIDTH, height: COMPOST_HEIGHT };
             case BOX_TYPE_BACKPACK:
                 return { width: BACKPACK_WIDTH, height: BACKPACK_HEIGHT };
@@ -298,6 +304,8 @@ export function getBoxDimensions(boxType: number): { width: number; height: numb
             return { width: REFRIGERATOR_WIDTH, height: REFRIGERATOR_HEIGHT };
         case BOX_TYPE_COMPOST:
             return { width: COMPOST_WIDTH, height: COMPOST_HEIGHT };
+        case BOX_TYPE_TANNING_RACK:
+            return { width: COMPOST_WIDTH, height: COMPOST_HEIGHT };
         case BOX_TYPE_BACKPACK:
             return { width: BACKPACK_WIDTH, height: BACKPACK_HEIGHT };
         case BOX_TYPE_REPAIR_BENCH:
@@ -333,6 +341,7 @@ imageManager.preloadImage(boxImage);
 imageManager.preloadImage(largeBoxImage);
 imageManager.preloadImage(refrigeratorImage);
 imageManager.preloadImage(compostImage);
+imageManager.preloadImage(tanningRackImage);
 imageManager.preloadImage(backpackImage);
 imageManager.preloadImage(repairBenchImage);
 imageManager.preloadImage(cookingStationImage);

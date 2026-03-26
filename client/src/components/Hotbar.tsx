@@ -1170,8 +1170,11 @@ const Hotbar: React.FC<HotbarProps> = ({
                       const BOX_TYPE_REFRIGERATOR = 2; // Match server constant
                       const BOX_TYPE_COMPOST = 3; // Match server constant
                       const BOX_TYPE_FISH_TRAP = 10; // Match server constant
+                      const BOX_TYPE_TANNING_RACK = 18; // Match server constant
                       if (boxEntity?.boxType === BOX_TYPE_COMPOST) {
                           connection.reducers.quickMoveToCompost({ boxId: containerId, itemInstanceId });
+                      } else if (boxEntity?.boxType === BOX_TYPE_TANNING_RACK) {
+                          connection.reducers.quickMoveToTanningRack({ boxId: containerId, itemInstanceId });
                       } else if (boxEntity?.boxType === BOX_TYPE_REFRIGERATOR) {
                           connection.reducers.quickMoveToRefrigerator({ boxId: containerId, itemInstanceId });
                       } else if (boxEntity?.boxType === BOX_TYPE_FISH_TRAP) {

@@ -185,6 +185,7 @@ import MoveItemToRainCollectorReducer from "./move_item_to_rain_collector_reduce
 import MoveItemToRefrigeratorReducer from "./move_item_to_refrigerator_reducer";
 import MoveItemToRepairBenchReducer from "./move_item_to_repair_bench_reducer";
 import MoveItemToStashReducer from "./move_item_to_stash_reducer";
+import MoveItemToTanningRackReducer from "./move_item_to_tanning_rack_reducer";
 import MoveItemToTurretReducer from "./move_item_to_turret_reducer";
 import MoveItemWithinBarbecueReducer from "./move_item_within_barbecue_reducer";
 import MoveItemWithinBoxReducer from "./move_item_within_box_reducer";
@@ -262,6 +263,7 @@ import ProcessMatronagePayoutReducer from "./process_matronage_payout_reducer";
 import ProcessPlayerStatsReducer from "./process_player_stats_reducer";
 import ProcessSleepingBagDeteriorationReducer from "./process_sleeping_bag_deterioration_reducer";
 import ProcessSpawnZoneMaintenanceReducer from "./process_spawn_zone_maintenance_reducer";
+import ProcessTanningConversionReducer from "./process_tanning_conversion_reducer";
 import ProcessTilledTileReversionsReducer from "./process_tilled_tile_reversions_reducer";
 import ProcessTorchDurabilityReducer from "./process_torch_durability_reducer";
 import ProcessTurretLogicScheduledReducer from "./process_turret_logic_scheduled_reducer";
@@ -300,6 +302,7 @@ import QuickMoveToLanternReducer from "./quick_move_to_lantern_reducer";
 import QuickMoveToRefrigeratorReducer from "./quick_move_to_refrigerator_reducer";
 import QuickMoveToRepairBenchReducer from "./quick_move_to_repair_bench_reducer";
 import QuickMoveToStashReducer from "./quick_move_to_stash_reducer";
+import QuickMoveToTanningRackReducer from "./quick_move_to_tanning_rack_reducer";
 import QuickMoveToTurretReducer from "./quick_move_to_turret_reducer";
 import RefreshMyDailyQuestsReducer from "./refresh_my_daily_quests_reducer";
 import RegenerateCompressedChunksReducer from "./regenerate_compressed_chunks_reducer";
@@ -379,6 +382,7 @@ import SplitStackIntoHearthReducer from "./split_stack_into_hearth_reducer";
 import SplitStackIntoLanternReducer from "./split_stack_into_lantern_reducer";
 import SplitStackIntoRefrigeratorReducer from "./split_stack_into_refrigerator_reducer";
 import SplitStackIntoStashReducer from "./split_stack_into_stash_reducer";
+import SplitStackIntoTanningRackReducer from "./split_stack_into_tanning_rack_reducer";
 import SplitStackIntoTurretReducer from "./split_stack_into_turret_reducer";
 import SplitStackWithinBarbecueReducer from "./split_stack_within_barbecue_reducer";
 import SplitStackWithinBoxReducer from "./split_stack_within_box_reducer";
@@ -598,6 +602,7 @@ import SpawnZoneScheduleRow from "./spawn_zone_schedule_table";
 import StashRow from "./stash_table";
 import StatThresholdsConfigRow from "./stat_thresholds_config_table";
 import StoneRow from "./stone_table";
+import TanningProcessScheduleRow from "./tanning_process_schedule_table";
 import TeamMessageRow from "./team_message_table";
 import ThunderEventRow from "./thunder_event_table";
 import ThunderEventCleanupScheduleRow from "./thunder_event_cleanup_schedule_table";
@@ -2598,6 +2603,17 @@ const tablesSchema = __schema({
       { name: 'stone_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, StoneRow),
+  tanning_process_schedule: __table({
+    name: 'tanning_process_schedule',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'tanning_process_schedule_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, TanningProcessScheduleRow),
   team_message: __table({
     name: 'team_message',
     indexes: [
@@ -3108,6 +3124,7 @@ const reducersSchema = __reducers(
   __reducerSchema("move_item_to_refrigerator", MoveItemToRefrigeratorReducer),
   __reducerSchema("move_item_to_repair_bench", MoveItemToRepairBenchReducer),
   __reducerSchema("move_item_to_stash", MoveItemToStashReducer),
+  __reducerSchema("move_item_to_tanning_rack", MoveItemToTanningRackReducer),
   __reducerSchema("move_item_to_turret", MoveItemToTurretReducer),
   __reducerSchema("move_item_within_barbecue", MoveItemWithinBarbecueReducer),
   __reducerSchema("move_item_within_box", MoveItemWithinBoxReducer),
@@ -3185,6 +3202,7 @@ const reducersSchema = __reducers(
   __reducerSchema("process_player_stats", ProcessPlayerStatsReducer),
   __reducerSchema("process_sleeping_bag_deterioration", ProcessSleepingBagDeteriorationReducer),
   __reducerSchema("process_spawn_zone_maintenance", ProcessSpawnZoneMaintenanceReducer),
+  __reducerSchema("process_tanning_conversion", ProcessTanningConversionReducer),
   __reducerSchema("process_tilled_tile_reversions", ProcessTilledTileReversionsReducer),
   __reducerSchema("process_torch_durability", ProcessTorchDurabilityReducer),
   __reducerSchema("process_turret_logic_scheduled", ProcessTurretLogicScheduledReducer),
@@ -3223,6 +3241,7 @@ const reducersSchema = __reducers(
   __reducerSchema("quick_move_to_refrigerator", QuickMoveToRefrigeratorReducer),
   __reducerSchema("quick_move_to_repair_bench", QuickMoveToRepairBenchReducer),
   __reducerSchema("quick_move_to_stash", QuickMoveToStashReducer),
+  __reducerSchema("quick_move_to_tanning_rack", QuickMoveToTanningRackReducer),
   __reducerSchema("quick_move_to_turret", QuickMoveToTurretReducer),
   __reducerSchema("refresh_my_daily_quests", RefreshMyDailyQuestsReducer),
   __reducerSchema("regenerate_compressed_chunks", RegenerateCompressedChunksReducer),
@@ -3302,6 +3321,7 @@ const reducersSchema = __reducers(
   __reducerSchema("split_stack_into_lantern", SplitStackIntoLanternReducer),
   __reducerSchema("split_stack_into_refrigerator", SplitStackIntoRefrigeratorReducer),
   __reducerSchema("split_stack_into_stash", SplitStackIntoStashReducer),
+  __reducerSchema("split_stack_into_tanning_rack", SplitStackIntoTanningRackReducer),
   __reducerSchema("split_stack_into_turret", SplitStackIntoTurretReducer),
   __reducerSchema("split_stack_within_barbecue", SplitStackWithinBarbecueReducer),
   __reducerSchema("split_stack_within_box", SplitStackWithinBoxReducer),

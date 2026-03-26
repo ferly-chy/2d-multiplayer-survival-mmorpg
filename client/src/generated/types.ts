@@ -3086,6 +3086,12 @@ export const Stone = __t.object("Stone", {
 });
 export type Stone = __Infer<typeof Stone>;
 
+export const TanningProcessSchedule = __t.object("TanningProcessSchedule", {
+  id: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type TanningProcessSchedule = __Infer<typeof TanningProcessSchedule>;
+
 // The tagged union or sum type for the algebraic type `TargetType`.
 export const TargetType = __t.enum("TargetType", {
   Tree: __t.unit(),

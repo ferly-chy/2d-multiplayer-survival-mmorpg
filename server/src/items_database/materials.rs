@@ -314,7 +314,13 @@ pub fn get_material_definitions() -> Vec<ItemDefinition> {
             .icon("caribou_antlers.png")
             .build(),
 
-        // Animal Leather - Universal leather resource
+        // Animal Hide - Raw skin from animals; tan with bark at a tanning rack to make leather
+        basic_material("Animal Hide", "Raw animal skin. Stack it in a tanning rack with pine or birch bark to cure into animal leather over time.", 50)
+            .icon("animal_hide.png")
+            .respawn_time(300)
+            .build(),
+
+        // Animal Leather - Universal leather resource (produced at tanning rack)
         basic_material("Animal Leather", "Processed leather from various animal hides. A versatile material for crafting clothing, armor, and equipment.", 50)
             .icon("animal_leather.png")
             .build(),

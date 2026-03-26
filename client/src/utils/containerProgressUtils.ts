@@ -6,9 +6,10 @@
  */
 
 import { Campfire, Furnace, Barbecue, Fumarole, WoodenStorageBox, Lantern, CookingProgress, InventoryItem } from '../generated/types';
-import { ContainerType, ContainerEntity } from './containerUtils';
+import { ContainerType, ContainerEntity, BOX_TYPE_TANNING_RACK } from './containerUtils';
 
 const COMPOST_CONVERSION_TIME_SECS = 300; // 5 minutes (matching server constant)
+const TANNING_CONVERSION_TIME_SECS = 300; // Same as server tanning rack
 const FISH_TRAP_CONVERSION_TIME_SECS = 600; // 10 minutes (matching server constant)
 
 // === LANTERN/WARD BURN DURATIONS (must match server constants) ===
@@ -114,6 +115,24 @@ export function getCompostProgress(
     }
 }
 
+/** Tanning rack: progress for animal hide stacks (item_data tanning_placed_at). */
+export function getTanningRackHideProgress(
+    item: InventoryItem | null | undefined,
+    currentTimeMs: number
+): number {
+    if (!item || !item.itemData) return 0;
+    try {
+        const dataMap = JSON.parse(item.itemData);
+        const placedAtMicros = dataMap?.tanning_placed_at;
+        if (!placedAtMicros || typeof placedAtMicros !== 'number') return 0;
+        const placedAtMs = placedAtMicros / 1000;
+        const elapsedSecs = (currentTimeMs - placedAtMs) / 1000;
+        return Math.min(1.0, Math.max(0, elapsedSecs / TANNING_CONVERSION_TIME_SECS));
+    } catch {
+        return 0;
+    }
+}
+
 /**
  * Calculate fishing progress for a fish trap slot
  * Returns progress as 0.0 to 1.0 (0% to 100%)
@@ -205,6 +224,15 @@ export function getAllSlotProgress(
                 if (item?.instance) {
                     const progress = getFishTrapProgress(item.instance, currentTimeMs);
                     if (progress > 0 && progress < 1.0) { // Only show if actively fishing
+                        progressMap.set(index, progress);
+                    }
+                }
+            });
+        } else if (storageBox.boxType === BOX_TYPE_TANNING_RACK) {
+            items.forEach((item, index) => {
+                if (item?.instance && item?.definition?.name === 'Animal Hide') {
+                    const progress = getTanningRackHideProgress(item.instance, currentTimeMs);
+                    if (progress > 0 && progress < 1.0) {
                         progressMap.set(index, progress);
                     }
                 }

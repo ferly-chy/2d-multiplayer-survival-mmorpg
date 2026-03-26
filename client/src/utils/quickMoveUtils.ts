@@ -15,6 +15,7 @@ const BOX_TYPE_REFRIGERATOR = 2;
 const BOX_TYPE_COMPOST = 3;
 const BOX_TYPE_REPAIR_BENCH = 5;
 const BOX_TYPE_FISH_TRAP = 10;
+const BOX_TYPE_TANNING_RACK = 18;
 
 export interface QuickMoveContext {
     connection: DbConnection;
@@ -59,6 +60,8 @@ export function quickMoveToContainer(
                 const boxEntity = woodenStorageBoxes?.get(containerId.toString());
                 if (boxEntity?.boxType === BOX_TYPE_COMPOST) {
                     connection.reducers.quickMoveToCompost({ boxId: containerId, itemInstanceId });
+                } else if (boxEntity?.boxType === BOX_TYPE_TANNING_RACK) {
+                    connection.reducers.quickMoveToTanningRack({ boxId: containerId, itemInstanceId });
                 } else if (boxEntity?.boxType === BOX_TYPE_REFRIGERATOR) {
                     connection.reducers.quickMoveToRefrigerator({ boxId: containerId, itemInstanceId });
                 } else if (boxEntity?.boxType === BOX_TYPE_REPAIR_BENCH) {

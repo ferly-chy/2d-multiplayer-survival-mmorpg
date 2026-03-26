@@ -61,6 +61,7 @@ import olivesIcon from '../assets/items/olives.png';
 import olivePitIcon from '../assets/items/olive_pit.png';
 
 // Animal materials
+import animalHideIcon from '../assets/items/animal_hide.png';
 import animalLeatherIcon from '../assets/items/animal_leather.png';
 import cableViperGlandIcon from '../assets/items/cable_viper_gland.png';
 import foxFurIcon from '../assets/items/fox_fur.png';
@@ -595,6 +596,7 @@ import woodenStorageBoxIcon from '../assets/items/wooden_storage_box.png';
 import largeWoodenStorageBoxIcon from '../assets/items/large_wood_box.png';
 import refrigeratorIcon from '../assets/items/refrigerator.png';
 import compostIcon from '../assets/items/compost.png';
+import tanningRackIcon from '../assets/items/tanning_rack.png';
 import repairBenchIcon from '../assets/items/repair_bench.png';
 import cookingStationIcon from '../assets/items/cooking_station.png';
 import barbecueIcon from '../assets/items/barbecue.png';
@@ -691,6 +693,7 @@ const iconMap: { [key: string]: string | undefined } = {
   'olive_pit.png': olivePitIcon,
   
   // Animal materials
+  'animal_hide.png': animalHideIcon,
   'animal_leather.png': animalLeatherIcon,
   'cable_viper_gland.png': cableViperGlandIcon,
   'fox_fur.png': foxFurIcon,
@@ -1165,6 +1168,7 @@ const iconMap: { [key: string]: string | undefined } = {
   'large_wood_box.png': largeWoodenStorageBoxIcon,
   'refrigerator.png': refrigeratorIcon,
   'compost.png': compostIcon,
+  'tanning_rack.png': tanningRackIcon,
   'repair_bench.png': repairBenchIcon,
   'cooking_station.png': cookingStationIcon,
   'barbecue.png': barbecueIcon,

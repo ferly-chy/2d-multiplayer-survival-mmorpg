@@ -1045,7 +1045,7 @@ fn seed_item_alk_tags(ctx: &ReducerContext) -> Result<(), String> {
             item_name.contains("Venom") || item_name.contains("Fur") ||
             // Processed materials
             item_name == "Metal Fragments" || item_name == "Charcoal" ||
-            item_name == "Cloth" || item_name == "Animal Leather" ||
+            item_name == "Cloth" || item_name == "Animal Leather" || item_name == "Animal Hide" ||
             item_name == "Gunpowder" || item_name == "Sulfur";
         
         if is_high_value {
@@ -1186,6 +1186,7 @@ const BASE_MATERIALS: &[&str] = &[
     "Bone Fragments",
     "Animal Fat",
     "Animal Leather",
+    "Animal Hide",
     "Fertilizer",
     "Limestone",
     "Gunpowder",
@@ -1558,7 +1559,7 @@ fn generate_seasonal_harvest_contracts(ctx: &ReducerContext, world_day: u32, sea
     const MATERIAL_EXCLUSIONS: &[&str] = &[
         "Wood", "Stone", "Metal Ore", "Metal Fragments", "Sulfur", "Sulfur Ore", 
         "Charcoal", "Plant Fiber", "Cloth", "Rope", "Animal Bone", "Bone Fragments",
-        "Animal Leather", "Animal Fat", "Wolf Fur", "Fox Fur", "Viper Scale",
+        "Animal Leather", "Animal Hide", "Animal Fat", "Wolf Fur", "Fox Fur", "Viper Scale",
         "Tin Can", "Scrap Batteries", "Gunpowder", "Memory Shard" // Materials, not harvest plants
     ];
     
@@ -1723,6 +1724,7 @@ fn generate_buyorder_contracts(ctx: &ReducerContext, world_day: u32) -> Result<(
         "Gunpowder",
         "Rope",
         "Animal Leather",
+        "Animal Hide",
         "Animal Fat",
         "Limestone",
         "Fertilizer",
@@ -1806,7 +1808,8 @@ fn get_material_contract_params(item_name: &str) -> (u32, u32) {
         "Bone Fragments" => (40, 50),      // Processed bones
         
         // === ANIMAL PRODUCTS (hunting required - valuable) ===
-        "Animal Leather" => (15, 110),     // Requires tanning
+        "Animal Hide" => (18, 95),         // Raw hide; process at tanning rack
+        "Animal Leather" => (15, 110),     // Tanned — ready for crafting
         "Animal Fat" => (20, 75),          // From butchering
         "Wolf Fur" => (8, 130),            // Dangerous animal
         "Fox Fur" => (10, 100),            // Medium difficulty hunt

@@ -653,6 +653,8 @@ const InventoryUI: React.FC<InventoryUIProps> = ({
                         const boxEntity = woodenStorageBoxes.get(containerId.toString());
                         if (boxEntity?.boxType === 3) { // BOX_TYPE_COMPOST = 3
                             connection.reducers.quickMoveToCompost({ boxId: containerId, itemInstanceId });
+                        } else if (boxEntity?.boxType === 18) { // BOX_TYPE_TANNING_RACK
+                            connection.reducers.quickMoveToTanningRack({ boxId: containerId, itemInstanceId });
                         } else if (boxEntity?.boxType === 2) { // BOX_TYPE_REFRIGERATOR = 2
                             connection.reducers.quickMoveToRefrigerator({ boxId: containerId, itemInstanceId });
                         } else if (boxEntity?.boxType === 10) { // BOX_TYPE_FISH_TRAP = 10

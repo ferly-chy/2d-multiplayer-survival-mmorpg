@@ -123,6 +123,19 @@ pub fn get_placeable_definitions() -> Vec<ItemDefinition> {
             .respawn_time(300)
             .build(),
 
+        // Tanning Rack - Cures animal hides into leather using bark
+        ItemBuilder::new("Tanning Rack", "A wooden frame for curing hides. Place animal hide and pine or birch bark in any slots; over time each hide consumes one bark and becomes animal leather.", ItemCategory::Placeable)
+            .icon("tanning_rack.png")
+            .stackable(3)
+            .crafting_cost(vec![
+                CostIngredient { item_name: "Wood".to_string(), quantity: 80 },
+                CostIngredient { item_name: "Rope".to_string(), quantity: 4 },
+                CostIngredient { item_name: "Plant Fiber".to_string(), quantity: 25 },
+            ])
+            .crafting_output(1, 8)
+            .respawn_time(300)
+            .build(),
+
         // Fish Trap - Passive fishing container (must be placed on shore)
         ItemBuilder::new("Fish Trap", "A woven trap for catching fish and crabs. Must be placed on shore (land adjacent to water). Place any food as bait and check back later for your catch!", ItemCategory::Placeable)
             .icon("fish_trap.png")

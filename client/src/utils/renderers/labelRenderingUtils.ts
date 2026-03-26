@@ -389,6 +389,8 @@ export function renderInteractionLabels({
                 const isCompound = isCompoundMonument(box.isMonument, box.posX, box.posY);
                 if (box.boxType === 3) { // BOX_TYPE_COMPOST
                     config = isCompound ? ENTITY_VISUAL_CONFIG.monument_compost : ENTITY_VISUAL_CONFIG.compost;
+                } else if (box.boxType === 18) { // BOX_TYPE_TANNING_RACK (tall frame — same label anchor as compost)
+                    config = ENTITY_VISUAL_CONFIG.compost;
                 } else if (box.boxType === 2) { // BOX_TYPE_REFRIGERATOR
                     config = ENTITY_VISUAL_CONFIG.refrigerator;
                 } else if (box.boxType === 5) { // BOX_TYPE_REPAIR_BENCH

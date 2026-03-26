@@ -92,7 +92,7 @@ import { COMPOUND_BUILDINGS, getBuildingWorldPosition, getMonumentBuildings } fr
 import { hasActiveStoneDestruction, checkStoneDestructionVisibility } from '../utils/renderers/stoneRenderingUtils'; // Import stone destruction tracking
 import { hasActiveCoralDestruction, checkCoralDestructionVisibility } from '../utils/renderers/livingCoralRenderingUtils'; // Import coral destruction tracking
 import { checkBarrelDestructionVisibility } from '../utils/renderers/barrelRenderingUtils'; // Barrel destruction chunks
-import { BOX_TYPE_LARGE, BOX_TYPE_COMPOST, BOX_TYPE_REPAIR_BENCH, BOX_TYPE_COOKING_STATION, BOX_TYPE_SCARECROW, BOX_TYPE_PLAYER_BEEHIVE, BOX_TYPE_WILD_BEEHIVE } from '../utils/renderers/woodenStorageBoxRenderingUtils'; // Import box type constants for y-sorting
+import { BOX_TYPE_LARGE, BOX_TYPE_COMPOST, BOX_TYPE_TANNING_RACK, BOX_TYPE_REPAIR_BENCH, BOX_TYPE_COOKING_STATION, BOX_TYPE_SCARECROW, BOX_TYPE_PLAYER_BEEHIVE, BOX_TYPE_WILD_BEEHIVE } from '../utils/renderers/woodenStorageBoxRenderingUtils'; // Import box type constants for y-sorting
 import { getProjectileVisualDedupKey } from '../utils/renderers/projectileRenderingUtils';
 // Ward radius constants for expanded viewport filtering (to render ward circles even when ward is off-screen)
 import { 
@@ -317,6 +317,7 @@ const getEntityY = (item: YSortedEntityType, timestamp: number): number => {
       const box = entity as SpacetimeDBWoodenStorageBox;
       if (box.boxType === BOX_TYPE_LARGE ||
           box.boxType === BOX_TYPE_COMPOST ||
+          box.boxType === BOX_TYPE_TANNING_RACK ||
           box.boxType === BOX_TYPE_REPAIR_BENCH ||
           box.boxType === BOX_TYPE_COOKING_STATION ||
           box.boxType === BOX_TYPE_SCARECROW ||

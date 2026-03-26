@@ -68,7 +68,7 @@ import { renderTree, renderTreeImpactEffects, renderTreeHitEffects } from './tre
 import { renderStone, renderStoneDestructionEffects, renderStoneHitEffects } from './stoneRenderingUtils';
 import { renderRuneStone } from './runeStoneRenderingUtils';
 import { renderCairn } from './cairnRenderingUtils';
-import { renderWoodenStorageBox, BOX_TYPE_COMPOST, BOX_TYPE_REFRIGERATOR, BOX_TYPE_REPAIR_BENCH, BOX_TYPE_COOKING_STATION, BOX_TYPE_SCARECROW, BOX_TYPE_MILITARY_RATION, BOX_TYPE_MILITARY_CRATE, BOX_TYPE_MINE_CART, BOX_TYPE_FISH_TRAP, BOX_TYPE_WILD_BEEHIVE, BOX_TYPE_PLAYER_BEEHIVE } from './woodenStorageBoxRenderingUtils';
+import { renderWoodenStorageBox, BOX_TYPE_COMPOST, BOX_TYPE_TANNING_RACK, BOX_TYPE_REFRIGERATOR, BOX_TYPE_REPAIR_BENCH, BOX_TYPE_COOKING_STATION, BOX_TYPE_SCARECROW, BOX_TYPE_MILITARY_RATION, BOX_TYPE_MILITARY_CRATE, BOX_TYPE_MINE_CART, BOX_TYPE_FISH_TRAP, BOX_TYPE_WILD_BEEHIVE, BOX_TYPE_PLAYER_BEEHIVE } from './woodenStorageBoxRenderingUtils';
 import { renderEquippedItem, renderMeleeSwipeArcIfSwinging } from './equippedItemRenderingUtils';
 import { renderPlayer, isPlayerHovered } from './playerRenderingUtils';
 import { drawUnderwaterShadowOnly } from './swimmingEffectsUtils';
@@ -1551,6 +1551,8 @@ export const renderYSortedEntities = ({
               const isCompound = isCompoundMonument(box.isMonument, box.posX, box.posY);
               if (box.boxType === BOX_TYPE_COMPOST) {
                   config = isCompound ? ENTITY_VISUAL_CONFIG.monument_compost : ENTITY_VISUAL_CONFIG.compost;
+              } else if (box.boxType === BOX_TYPE_TANNING_RACK) {
+                  config = ENTITY_VISUAL_CONFIG.compost;
               } else if (box.boxType === BOX_TYPE_REFRIGERATOR) {
                   config = ENTITY_VISUAL_CONFIG.refrigerator;
               } else if (box.boxType === BOX_TYPE_REPAIR_BENCH) {

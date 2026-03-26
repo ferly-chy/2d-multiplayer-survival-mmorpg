@@ -54,7 +54,7 @@ pub(crate) fn get_box_collision_y_offset(box_type: u8) -> f32 {
 fn get_box_interaction_center_y_offset(box_type: u8, is_monument: bool, pos_x: f32, pos_y: f32) -> f32 {
     match box_type {
         BOX_TYPE_PLAYER_BEEHIVE | BOX_TYPE_WILD_BEEHIVE => get_box_collision_y_offset(box_type),
-        BOX_TYPE_REPAIR_BENCH | BOX_TYPE_COOKING_STATION | BOX_TYPE_COMPOST => {
+        BOX_TYPE_REPAIR_BENCH | BOX_TYPE_COOKING_STATION | BOX_TYPE_COMPOST | BOX_TYPE_TANNING_RACK => {
             if is_monument && crate::environment::is_position_in_central_compound(pos_x, pos_y) {
                 96.0 // 384px sprite: drawY = posY - 384 + 96, center = posY - 96
             } else {
@@ -71,7 +71,7 @@ pub(crate) fn get_box_collision_radius(box_type: u8) -> f32 {
         BOX_TYPE_NORMAL => BOX_COLLISION_RADIUS,
         BOX_TYPE_LARGE => LARGE_BOX_COLLISION_RADIUS,
         BOX_TYPE_REFRIGERATOR => REFRIGERATOR_COLLISION_RADIUS,
-        BOX_TYPE_COMPOST => COMPOST_COLLISION_RADIUS,
+        BOX_TYPE_COMPOST | BOX_TYPE_TANNING_RACK => COMPOST_COLLISION_RADIUS,
         // Backpacks are loot containers only - they must never block movement or shots.
         BOX_TYPE_BACKPACK => 0.0,
         BOX_TYPE_REPAIR_BENCH => REPAIR_BENCH_COLLISION_RADIUS,
@@ -182,6 +182,8 @@ pub const BOX_TYPE_WOLF_PELT: u8 = 14;
 pub const BOX_TYPE_FOX_PELT: u8 = 15;
 pub const BOX_TYPE_POLAR_BEAR_PELT: u8 = 16;
 pub const BOX_TYPE_WALRUS_PELT: u8 = 17;
+/// Tanning rack — converts animal hide + bark into leather over time (same slot layout as compost).
+pub const BOX_TYPE_TANNING_RACK: u8 = 18;
 pub const NUM_PELT_SLOTS: usize = 0; // Decorative only
 pub const PELT_INITIAL_HEALTH: f32 = 200.0;
 pub const PELT_MAX_HEALTH: f32 = 200.0;
@@ -667,6 +669,23 @@ pub fn split_stack_within_box(
         }
     }
 
+    if storage_box.box_type == crate::wooden_storage_box::BOX_TYPE_TANNING_RACK {
+        use crate::tanning_rack::set_tanning_timestamp;
+        use crate::items::{inventory_item as InventoryItemTableTrait, item_definition as ItemDefinitionTableTrait};
+        let mut inventory_items = ctx.db.inventory_item();
+        let item_defs = ctx.db.item_definition();
+        if let Some(new_item_id) = storage_box.get_slot_instance_id(target_slot_index) {
+            if let Some(mut new_item) = inventory_items.instance_id().find(&new_item_id) {
+                if let Some(item_def) = item_defs.id().find(&new_item.item_def_id) {
+                    if item_def.name == "Animal Hide" {
+                        set_tanning_timestamp(&mut new_item, ctx.timestamp);
+                        inventory_items.instance_id().update(new_item);
+                    }
+                }
+            }
+        }
+    }
+
     // --- Commit Box Update --- 
     boxes.id().update(storage_box);
     Ok(())
@@ -859,6 +878,8 @@ pub fn place_wooden_storage_box(ctx: &ReducerContext, item_instance_id: u64, wor
         BOX_TYPE_POLAR_BEAR_PELT
     } else if item_def.name == "Walrus Pelt" {
         BOX_TYPE_WALRUS_PELT
+    } else if item_def.name == "Tanning Rack" {
+        BOX_TYPE_TANNING_RACK
     } else {
         return Err("Item is not a storage container.".to_string());
     };
@@ -881,7 +902,7 @@ pub fn place_wooden_storage_box(ctx: &ReducerContext, item_instance_id: u64, wor
     let max_placement_dist = match box_type {
         BOX_TYPE_LARGE => LARGE_BOX_PLACEMENT_MAX_DISTANCE,
         BOX_TYPE_WOLF_PELT | BOX_TYPE_FOX_PELT | BOX_TYPE_POLAR_BEAR_PELT | BOX_TYPE_WALRUS_PELT => LARGE_BOX_PLACEMENT_MAX_DISTANCE,
-        BOX_TYPE_COMPOST | BOX_TYPE_SCARECROW | BOX_TYPE_PLAYER_BEEHIVE => TALL_BOX_PLACEMENT_MAX_DISTANCE,
+        BOX_TYPE_COMPOST | BOX_TYPE_TANNING_RACK | BOX_TYPE_SCARECROW | BOX_TYPE_PLAYER_BEEHIVE => TALL_BOX_PLACEMENT_MAX_DISTANCE,
         _ => BOX_PLACEMENT_MAX_DISTANCE,
     };
     let dx = player.position_x - world_x;
@@ -959,6 +980,10 @@ pub fn place_wooden_storage_box(ctx: &ReducerContext, item_instance_id: u64, wor
         BOX_TYPE_COMPOST => {
             use crate::compost::{COMPOST_INITIAL_HEALTH, COMPOST_MAX_HEALTH};
             (COMPOST_INITIAL_HEALTH, COMPOST_MAX_HEALTH)
+        },
+        BOX_TYPE_TANNING_RACK => {
+            use crate::tanning_rack::{TANNING_RACK_INITIAL_HEALTH, TANNING_RACK_MAX_HEALTH};
+            (TANNING_RACK_INITIAL_HEALTH, TANNING_RACK_MAX_HEALTH)
         },
         BOX_TYPE_BACKPACK => (BACKPACK_INITIAL_HEALTH, BACKPACK_MAX_HEALTH),
         BOX_TYPE_SCARECROW => (SCARECROW_INITIAL_HEALTH, SCARECROW_MAX_HEALTH),
@@ -1054,6 +1079,7 @@ pub fn place_wooden_storage_box(ctx: &ReducerContext, item_instance_id: u64, wor
         BOX_TYPE_LARGE => "Large Wooden Storage Box",
         BOX_TYPE_REFRIGERATOR => "Refrigerator",
         BOX_TYPE_COMPOST => "Compost",
+        BOX_TYPE_TANNING_RACK => "Tanning Rack",
         BOX_TYPE_BACKPACK => "Backpack",
         BOX_TYPE_SCARECROW => "Scarecrow",
         BOX_TYPE_FISH_TRAP => "Fish Trap",
@@ -1131,6 +1157,7 @@ pub fn pickup_storage_box(ctx: &ReducerContext, box_id: u32) -> Result<(), Strin
         BOX_TYPE_LARGE => "Large Wooden Storage Box",
         BOX_TYPE_REFRIGERATOR => "Refrigerator",
         BOX_TYPE_COMPOST => "Compost",
+        BOX_TYPE_TANNING_RACK => "Tanning Rack",
         BOX_TYPE_REPAIR_BENCH => "Repair Bench",
         BOX_TYPE_COOKING_STATION => "Cooking Station",
         BOX_TYPE_SCARECROW => "Scarecrow",
@@ -1321,6 +1348,10 @@ impl ItemContainer for WoodenStorageBox {
             BOX_TYPE_COMPOST => {
                 use crate::compost::NUM_COMPOST_SLOTS;
                 NUM_COMPOST_SLOTS
+            },
+            BOX_TYPE_TANNING_RACK => {
+                use crate::tanning_rack::NUM_TANNING_RACK_SLOTS;
+                NUM_TANNING_RACK_SLOTS
             },
             BOX_TYPE_BACKPACK => NUM_BACKPACK_SLOTS,
             BOX_TYPE_REPAIR_BENCH => NUM_REPAIR_BENCH_SLOTS,
@@ -1617,6 +1648,7 @@ pub fn validate_box_interaction(
     } else if storage_box.box_type == BOX_TYPE_REPAIR_BENCH
         || storage_box.box_type == BOX_TYPE_COOKING_STATION
         || storage_box.box_type == BOX_TYPE_COMPOST
+        || storage_box.box_type == BOX_TYPE_TANNING_RACK
     {
         // Compound monument buildings (ALK compound) use larger radius; others use tall box radius
         if storage_box.is_monument && crate::environment::is_position_in_central_compound(storage_box.pos_x, storage_box.pos_y) {

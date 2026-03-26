@@ -149,6 +149,17 @@ export const ENTITY_VISUAL_CONFIG: Record<string, EntityVisualBounds> = {
     spriteWidth: 192,
     spriteHeight: 192,
   },
+
+  // Same footprint / server offset as compost (wooden box +52 Y, 192×192 sprite)
+  tanning_rack: {
+    centerOffsetX: 0,
+    centerOffsetY: -116,
+    width: 192,
+    height: 192,
+    placementYOffset: -64,
+    spriteWidth: 192,
+    spriteHeight: 192,
+  },
   
   refrigerator: {
     centerOffsetX: 0,

@@ -575,7 +575,7 @@ function isWaterPlacementBlocked(connection: DbConnection | null, placementInfo:
   }
 
   // List of items that cannot be placed on water
-  const waterBlockedItems = ['Camp Fire', 'Furnace', 'Barbecue', 'Lantern', 'Ancestral Ward', 'Signal Disruptor', 'Memory Resonance Beacon', 'Wooden Storage Box', 'Large Wooden Storage Box', 'Pantry', 'Scarecrow', 'Sleeping Bag', 'Stash', 'Shelter', 'Reed Rain Collector', "Matron's Chest", 'Repair Bench', 'Cooking Station', "Babushka's Surprise", "Matriarch's Wrath"];
+  const waterBlockedItems = ['Camp Fire', 'Furnace', 'Barbecue', 'Lantern', 'Ancestral Ward', 'Signal Disruptor', 'Memory Resonance Beacon', 'Wooden Storage Box', 'Large Wooden Storage Box', 'Pantry', 'Compost', 'Tanning Rack', 'Scarecrow', 'Sleeping Bag', 'Stash', 'Shelter', 'Reed Rain Collector', "Matron's Chest", 'Repair Bench', 'Cooking Station', 'Wooden Beehive', "Babushka's Surprise", "Matriarch's Wrath"];
   
   // Seeds that don't require water or beach (most seeds) cannot be planted on water
   const isSeedButNotSpecialSeed = isSeedItemValid(placementInfo.itemName) && 
@@ -959,6 +959,7 @@ export const usePlacementManager = (connection: DbConnection | null): [Placement
         case 'Large Wooden Storage Box':
         case 'Pantry':
         case 'Compost':
+        case 'Tanning Rack':
         case 'Scarecrow':
         case 'Fish Trap':
         case 'Wooden Beehive':

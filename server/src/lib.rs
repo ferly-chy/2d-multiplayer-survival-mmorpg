@@ -79,6 +79,7 @@ mod dropped_item; // Declare dropped_item module
 mod wooden_storage_box; // Add the new module
 mod refrigerator; // Refrigerator-specific container logic
 mod compost; // Compost-specific container logic
+mod tanning_rack; // Tanning rack: hide + bark -> leather over time
 mod fish_trap; // Fish trap-specific container logic (passive fishing)
 mod beehive; // Player beehive - honeycomb production system
 mod backpack; // Backpack auto-consolidation system
@@ -479,6 +480,7 @@ use crate::fertilizer_patch::fertilizer_patch as FertilizerPatchTableTrait; // <
 use crate::tilled_tiles::tilled_tile_metadata as TilledTileMetadataTableTrait; // <<< ADDED: Import TilledTileMetadata table trait
 use crate::tilled_tiles::tilled_tile_reversion_schedule as TilledTileReversionScheduleTableTrait; // <<< ADDED: Import TilledTileReversionSchedule table trait
 use crate::compost::compost_process_schedule as CompostProcessScheduleTableTrait; // <<< ADDED: Import CompostProcessSchedule table trait
+use crate::tanning_rack::tanning_process_schedule as TanningProcessScheduleTableTrait; // Tanning rack schedule (pause/resume / clear DB)
 use crate::wild_animal_npc::wild_animal as WildAnimalTableTrait; // <<< ADDED: Import WildAnimal table trait
 use crate::wild_animal_npc::wild_animal_ai_schedule as WildAnimalAiScheduleTableTrait; // <<< ADDED: Import WildAnimalAiSchedule table trait
 use crate::wild_animal_npc::animal_corpse as AnimalCorpseTableTrait; // <<< ADDED: Import AnimalCorpse table trait
@@ -867,6 +869,8 @@ pub fn init_module(ctx: &ReducerContext) -> Result<(), String> {
     // ADD: Initialize compost processing system
     crate::compost::init_compost_system(ctx)?;
     
+    crate::tanning_rack::init_tanning_rack_system(ctx)?;
+    
     // ADD: Initialize fish trap processing system
     crate::fish_trap::init_fish_trap_system(ctx)?;
     
@@ -1204,6 +1208,10 @@ fn pause_game_systems(ctx: &ReducerContext) {
     for id in compost_ids {
         ctx.db.compost_process_schedule().id().delete(id);
     }
+    let tanning_ids: Vec<u64> = ctx.db.tanning_process_schedule().iter().map(|r| r.id).collect();
+    for id in tanning_ids {
+        ctx.db.tanning_process_schedule().id().delete(id);
+    }
     let torch_ids: Vec<u64> = ctx.db.torch_durability_schedule().iter().map(|r| r.schedule_id).collect();
     for id in torch_ids {
         ctx.db.torch_durability_schedule().schedule_id().delete(&id);
@@ -1347,6 +1355,7 @@ fn resume_game_systems(ctx: &ReducerContext) -> Result<(), String> {
     // Note: seasonal_plant_management_schedule is created dynamically during tick_world_state when season changes
     crate::drone::init_drone_system(ctx);
     crate::compost::init_compost_system(ctx)?;
+    crate::tanning_rack::init_tanning_rack_system(ctx)?;
     crate::durability::init_torch_durability_schedule(ctx)?;
     crate::durability::init_food_spoilage_schedule(ctx)?;
     crate::barrel::init_barrel_system(ctx)?;

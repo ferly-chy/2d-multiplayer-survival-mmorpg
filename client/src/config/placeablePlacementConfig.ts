@@ -73,6 +73,7 @@ const PLACEABLE_PLACEMENT_CONFIG: Record<string, PlaceablePlacementConfig> = {
   'Barbecue': { gridSize: { widthQuarters: 2, heightQuarters: 2 }, snapToGrid: true },
   'Large Wooden Storage Box': { gridSize: { widthQuarters: 2, heightQuarters: 2 }, snapToGrid: true },
   'Compost': { gridSize: { widthQuarters: 2, heightQuarters: 2 }, snapToGrid: true },
+  'Tanning Rack': { gridSize: { widthQuarters: 2, heightQuarters: 2 }, snapToGrid: true },
   'Repair Bench': { gridSize: { widthQuarters: 2, heightQuarters: 2 }, snapToGrid: true },
   'Cooking Station': { gridSize: { widthQuarters: 2, heightQuarters: 2 }, snapToGrid: true },
   'Wooden Beehive': { gridSize: { widthQuarters: 2, heightQuarters: 2 }, snapToGrid: true },
@@ -157,6 +158,7 @@ const BOX_TYPE_WOLF_PELT = 14;
 const BOX_TYPE_FOX_PELT = 15;
 const BOX_TYPE_POLAR_BEAR_PELT = 16;
 const BOX_TYPE_WALRUS_PELT = 17;
+const BOX_TYPE_TANNING_RACK = 18;
 
 /** Get placement config for wooden storage box by boxType (for overlap detection) */
 export function getBoxTypePlacementConfig(boxType: number): PlaceablePlacementConfig | null {
@@ -169,6 +171,8 @@ export function getBoxTypePlacementConfig(boxType: number): PlaceablePlacementCo
       return PLACEABLE_PLACEMENT_CONFIG['Pantry'];
     case BOX_TYPE_COMPOST:
       return PLACEABLE_PLACEMENT_CONFIG['Compost'];
+    case BOX_TYPE_TANNING_RACK:
+      return PLACEABLE_PLACEMENT_CONFIG['Compost']; // Same footprint as compost (tall frame)
     case BOX_TYPE_REPAIR_BENCH:
       return PLACEABLE_PLACEMENT_CONFIG['Repair Bench'];
     case BOX_TYPE_COOKING_STATION:

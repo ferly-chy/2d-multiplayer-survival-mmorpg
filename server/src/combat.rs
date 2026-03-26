@@ -4937,7 +4937,7 @@ pub fn damage_animal_corpse(
             crate::wild_animal_npc::AnimalSpecies::Tern => Some("Tern Feathers"), // Terns drop feathers
             crate::wild_animal_npc::AnimalSpecies::Crow => Some("Crow Feathers"), // Crows drop feathers
             crate::wild_animal_npc::AnimalSpecies::Vole => None, // Voles are too small for usable fur
-            crate::wild_animal_npc::AnimalSpecies::Wolverine => None, // Wolverines drop Animal Leather instead
+            crate::wild_animal_npc::AnimalSpecies::Wolverine => None, // Wolverines drop Animal Hide instead
             crate::wild_animal_npc::AnimalSpecies::Caribou => None, // Caribou drop warm hides
             // SalmonShark - no cloth (sharks have skin, not fur)
             crate::wild_animal_npc::AnimalSpecies::SalmonShark => None,
@@ -4964,21 +4964,27 @@ pub fn damage_animal_corpse(
         }
     }
 
-    // Universal Animal Leather drop for most animals (like Animal Fat/Bone)
-    // Note: Crabs don't drop Animal Leather - they have shells/carapace instead
-    let mut animal_leather_chance = (0.40 * effectiveness_multiplier).clamp(0.0, 0.40); // 40% base chance
-    // Apply minimum floor for animal leather when using non-primary tools
-    if is_non_primary_tool {
-        animal_leather_chance = animal_leather_chance.max(MIN_BASIC_RESOURCE_CHANCE);
+    // Universal Animal Hide (crabs, birds, voles, bees too small — matches corpse loot table)
+    let mut animal_hide_chance = (0.40 * effectiveness_multiplier).clamp(0.0, 0.40);
+    if animal_corpse.animal_species == crate::wild_animal_npc::AnimalSpecies::Wolverine {
+        animal_hide_chance = (0.70 * effectiveness_multiplier).clamp(0.0, 0.70);
     }
-    if animal_corpse.health > 0 
-        && animal_corpse.animal_species != crate::wild_animal_npc::AnimalSpecies::BeachCrab
-        && rng.gen_bool(animal_leather_chance) 
-    {
+    if is_non_primary_tool {
+        animal_hide_chance = animal_hide_chance.max(MIN_BASIC_RESOURCE_CHANCE);
+    }
+    let hide_eligible = !matches!(
+        animal_corpse.animal_species,
+        crate::wild_animal_npc::AnimalSpecies::BeachCrab
+            | crate::wild_animal_npc::AnimalSpecies::Tern
+            | crate::wild_animal_npc::AnimalSpecies::Crow
+            | crate::wild_animal_npc::AnimalSpecies::Vole
+            | crate::wild_animal_npc::AnimalSpecies::Bee
+    );
+    if animal_corpse.health > 0 && hide_eligible && rng.gen_bool(animal_hide_chance) {
         let q = quantity_per_hit.saturating_mul(corpse_yield_mult);
-        match grant_resource(ctx, attacker_id, "Animal Leather", q) {
-            Ok(_) => resources_granted.push(("Animal Leather".to_string(), q)),
-            Err(e) => log::error!("Failed to grant Animal Leather: {}", e),
+        match grant_resource(ctx, attacker_id, "Animal Hide", q) {
+            Ok(_) => resources_granted.push(("Animal Hide".to_string(), q)),
+            Err(e) => log::error!("Failed to grant Animal Hide: {}", e),
         }
     }
 
