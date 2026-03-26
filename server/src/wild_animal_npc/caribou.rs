@@ -218,8 +218,8 @@ impl AnimalBehavior for CaribouBehavior {
             attack_damage: 30.0, // Strong antler charge when cornered
             attack_range: 78.0, // Increased from 68 to compensate for collision pushback preventing hits
             attack_speed_ms: 1500, // Moderate attack speed
-            movement_speed: 100.0, // Slow patrol speed (grazing)
-            sprint_speed: 550.0, // VERY fast when spooked - hard to catch
+            movement_speed: 50.0, // ~half prior (100) — slower pacing for testing
+            sprint_speed: 275.0, // ~half prior (550) when spooked/fleeing
             perception_range: 400.0, // Good awareness of surroundings
             perception_angle_degrees: 270.0, // Wide field of view (prey animal)
             patrol_radius: 250.0, // Larger patrol area for grazing
@@ -543,7 +543,7 @@ impl AnimalBehavior for CaribouBehavior {
         }
         
         // Random direction changes (slow, grazing behavior)
-        if rng.gen::<f32>() < 0.08 { // 8% chance to change direction
+        if rng.gen::<f32>() < 0.05 { // Smoother grazing paths
             let angle = rng.gen::<f32>() * 2.0 * PI;
             animal.direction_x = angle.cos();
             animal.direction_y = angle.sin();

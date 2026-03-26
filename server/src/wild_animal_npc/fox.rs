@@ -35,8 +35,8 @@ impl AnimalBehavior for CinderFoxBehavior {
             attack_damage: 20.0, // Increased damage for aggressive hit-and-run
             attack_range: 69.0, // Increased from 60 to compensate for collision pushback preventing hits
             attack_speed_ms: 600, // Much faster attacks (was 800ms)
-            movement_speed: 188.0, // Patrol speed - slow and manageable  
-            sprint_speed: 465.0, // INCREASED: Faster than walking (400) but slower than sprinting (800)
+            movement_speed: 94.0, // ~half prior (188) — slower pacing for testing
+            sprint_speed: 232.0, // ~half prior (465)
             perception_range: 600.0, // INCREASED from 400.0 - much better vision for early detection
             perception_angle_degrees: 220.0, // INCREASED from 180.0 - even wider field of view for safety
             patrol_radius: 180.0, // 6m patrol loop
@@ -269,7 +269,7 @@ impl AnimalBehavior for CinderFoxBehavior {
         let prev_y = animal.pos_y;
         
         // Random wandering instead of circular patrol around spawn
-        if rng.gen::<f32>() < 0.18 { // 18% chance to change direction (foxes are more skittish)
+        if rng.gen::<f32>() < 0.10 { // Smoother patrol; less constant zig-zag
             let angle = rng.gen::<f32>() * 2.0 * PI;
             animal.direction_x = angle.cos();
             animal.direction_y = angle.sin();

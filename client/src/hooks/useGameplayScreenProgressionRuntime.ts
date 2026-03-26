@@ -42,13 +42,12 @@ export function useGameplayScreenProgressionRuntime({
   sovaMessageAdderRef.current = sovaMessageAdder;
 
   const handleMarkTutorialSeen = useCallback((tutorialId: string) => {
-    const reducers = connection?.reducers as Record<string, (() => void) | undefined> | undefined;
-    const reducerFn = reducers?.markTutorialSeen as ((id: string) => void) | undefined;
-    if (!reducerFn) {
+    if (!connection) {
       return;
     }
     try {
-      reducerFn(tutorialId);
+      // SpacetimeDB reducers take a single args object (see mark_tutorial_seen_reducer.ts: tutorialId)
+      connection.reducers.markTutorialSeen({ tutorialId });
       console.log('[GameScreen] Called markTutorialSeen reducer for:', tutorialId);
     } catch (error) {
       console.error('[GameScreen] Failed to mark tutorial as seen:', tutorialId, error);

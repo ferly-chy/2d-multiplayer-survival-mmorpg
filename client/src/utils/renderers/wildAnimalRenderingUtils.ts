@@ -1,4 +1,4 @@
-import { drawDynamicGroundShadow } from './shadowUtils';
+import { drawDynamicGroundShadow, drawShadow } from './shadowUtils';
 import { imageManager } from './imageManager';
 import type { WildAnimal, AnimalSpecies, AnimalState } from '../../generated/types';
 import {
@@ -545,14 +545,40 @@ interface AnimalMovementState {
     prevRenderY: number;
     /** Fractional walk phase; advances by interpolated motion / stride (not wall clock). */
     walkPhase: number;
+    /** Last frame time while pixel motion stalled but AI is still locomoting (bridges server tick gaps). */
+    lastVisualHoldMs?: number;
 }
 
 const animalMovementStates = new Map<string, AnimalMovementState>();
 
-/** Aligns with server `AI_TICK_INTERVAL_MS` (wild animal AI). */
-const WILD_ANIMAL_DEFAULT_SEGMENT_MS = 125;
-const WILD_ANIMAL_SEGMENT_MIN_MS = 90;
+/** Default when inter-arrival time is missing; keep in sync with server `AI_TICK_INTERVAL_MS`. */
+const WILD_ANIMAL_DEFAULT_SEGMENT_MS = 100;
+/** Floor ~1 frame so batched Spacetime updates do not stretch micro-deltas over 100ms (felt as lag vs server). */
+const WILD_ANIMAL_SEGMENT_MIN_MS = 16;
+/** Cap so a single segment does not chase a stale target for too long after network stalls. */
 const WILD_ANIMAL_SEGMENT_MAX_MS = 220;
+
+/** Server states where the animal should keep a walk cycle even between discrete position samples. */
+const LOCOMOTING_ANIMAL_STATE_TAGS = new Set<string>([
+    'Patrolling',
+    'Chasing',
+    'Fleeing',
+    'Investigating',
+    'Alert',
+    'Following',
+    'Protecting',
+    'Flying',
+    'FlyingChase',
+    'Grounded',
+    'Scavenging',
+    'Stealing',
+    'Swimming',
+    'SwimmingChase',
+    'Drifting',
+    'Stalking',
+    'Attacking',
+    'AttackingStructure',
+]);
 
 /** Large server corrections (respawn, etc.) — match prior wild-animal snap radius. */
 const MAX_INTERPOLATION_DISTANCE = 600;
@@ -560,6 +586,88 @@ const MAX_INTERPOLATION_DISTANCE = 600;
 const WALK_STRIDE_PER_INDEX_FACTOR = 0.21;
 const WALK_SYNC_MAX_STEP_PX = 80;
 const WALK_PHASE_WRAP = 6000;
+
+/** 4-way facing for shadow footprint (matches sprite row mapping). */
+type FourWayFacing = 'down' | 'right' | 'left' | 'up';
+
+function normalizeWildAnimalFacingToFourWay(direction: string): FourWayFacing {
+    let normalizedDir = direction.toLowerCase();
+    if (normalizedDir === 'up_left' || normalizedDir === 'up-left' || normalizedDir === 'upleft') {
+        normalizedDir = 'left';
+    } else if (normalizedDir === 'up_right' || normalizedDir === 'up-right' || normalizedDir === 'upright') {
+        normalizedDir = 'right';
+    } else if (normalizedDir === 'down_left' || normalizedDir === 'down-left' || normalizedDir === 'downleft') {
+        normalizedDir = 'left';
+    } else if (normalizedDir === 'down_right' || normalizedDir === 'down-right' || normalizedDir === 'downright') {
+        normalizedDir = 'right';
+    }
+    if (normalizedDir === 'down' || normalizedDir === 'right' || normalizedDir === 'left' || normalizedDir === 'up') {
+        return normalizedDir;
+    }
+    return 'down';
+}
+
+/** Radians from +X: long axis of footprint aligns with facing (screen Y increases downward). */
+function fourWayFacingToShadowRotationRadians(facing: FourWayFacing): number {
+    switch (facing) {
+        case 'right':
+            return 0;
+        case 'down':
+            return Math.PI / 2;
+        case 'left':
+            return Math.PI;
+        case 'up':
+            return -Math.PI / 2;
+        default:
+            return Math.PI / 2;
+    }
+}
+
+/**
+ * Underfoot oval after dynamic silhouette — length/width swap with facing like the animal body;
+ * same blur/alpha feel as online players (playerRenderingUtils).
+ */
+function drawWildAnimalPlayerStyleUnderfootOval(
+    ctx: CanvasRenderingContext2D,
+    centerX: number,
+    centerY: number,
+    renderWidth: number,
+    renderHeight: number,
+    shakeX: number,
+    shakeY: number,
+    facingDirection: string,
+): void {
+    const shadowBaseYOffset = renderHeight * 0.4;
+    const ovalUpNudge = Math.round(Math.min(18, Math.max(6, renderHeight * 0.06)));
+    const facing = normalizeWildAnimalFacingToFourWay(facingDirection);
+    const horizontal = facing === 'left' || facing === 'right';
+    // Long axis ≈ sprite extent along travel direction; short axis across the body.
+    const halfLength = horizontal ? renderWidth * 0.48 : renderHeight * 0.48;
+    // Left/right: match player oval proportions (playerRenderingUtils: radiusY = radiusX * 0.4) — was too tall using 0.22*height.
+    const halfWidth = horizontal
+        ? halfLength * 0.4
+        : renderWidth * 0.22;
+    const rotation = fourWayFacingToShadowRotationRadians(facing);
+    // Match player online underfoot oval: blur(3px) at rest (playerRenderingUtils: 3 + jumpProgress*4, jump=0).
+    const shadowBlurAmount = 3;
+    const shadowAlpha = 0.5;
+    // When horizontal, nudge center up a touch so the squeezed oval sits slightly higher (bottom-up squeeze).
+    const horizontalUpNudge = horizontal ? Math.round(Math.min(10, Math.max(2, renderHeight * 0.035))) : 0;
+    ctx.save();
+    if (shadowBlurAmount > 0) {
+        ctx.filter = `blur(${shadowBlurAmount}px)`;
+    }
+    drawShadow(
+        ctx,
+        centerX + shakeX,
+        centerY + shadowBaseYOffset + shakeY - ovalUpNudge - horizontalUpNudge,
+        halfLength,
+        halfWidth,
+        shadowAlpha,
+        rotation,
+    );
+    ctx.restore();
+}
 
 // --- Reusable Offscreen Canvas for Tinting ---
 const offscreenCanvas = document.createElement('canvas');
@@ -919,9 +1027,11 @@ export function renderWildAnimal({
                     (movementState.segToY - movementState.segFromY) * prevAlpha;
 
                 let measured = smoothNow - movementState.lastPacketApplyMs;
-                if (measured < 25) {
+                if (!Number.isFinite(measured) || measured < 0) {
                     measured = WILD_ANIMAL_DEFAULT_SEGMENT_MS;
                 }
+                // Use actual inter-arrival time. Old behavior replaced gaps <25ms with 100ms, which made
+                // clustered updates interpolate very slowly while collision/debug still showed raw server pos.
                 measured = Math.min(
                     WILD_ANIMAL_SEGMENT_MAX_MS,
                     Math.max(WILD_ANIMAL_SEGMENT_MIN_MS, measured),
@@ -1081,19 +1191,41 @@ export function renderWildAnimal({
             movementState.segToX - renderPosX,
             movementState.segToY - renderPosY,
         );
-        const isMovingVisual = stepDist > 0.1 || distToTargetNow > 1.2;
+        // Small threshold: sub-pixel interpolation still counts as motion
+        const isMovingVisual = stepDist > 0.02 || distToTargetNow > 0.8;
 
         let phase = movementState.walkPhase ?? 0;
+        const stridePx = Math.max(8, renderWidth * WALK_STRIDE_PER_INDEX_FACTOR);
+        const stateTag = animal.state.tag;
+
         if (isMovingVisual) {
-            const stridePx = Math.max(8, renderWidth * WALK_STRIDE_PER_INDEX_FACTOR);
+            movementState.lastVisualHoldMs = undefined;
             phase += stepDist / stridePx;
             if (phase > WALK_PHASE_WRAP) {
                 phase = phase % cols;
             }
             movementState.walkPhase = phase;
             calculatedAnimFrame = ((Math.floor(phase) % cols) + cols) % cols;
-        } else {
+        } else if (stateTag === 'Idle') {
+            // True stationary server state — first walk frame reads as idle stance for most sheets
             calculatedAnimFrame = 0;
+            movementState.walkPhase = 0;
+            movementState.lastVisualHoldMs = undefined;
+        } else if (LOCOMOTING_ANIMAL_STATE_TAGS.has(stateTag)) {
+            // Between server ticks the lerp hits alpha=1 and stepDist drops to 0; we used to force frame 0 here,
+            // which pulsed walk→idle→walk every AI tick. Advance phase on wall clock during the gap instead.
+            const lastHold = movementState.lastVisualHoldMs ?? smoothNow;
+            const dtHold = Math.min(64, Math.max(0, smoothNow - lastHold));
+            movementState.lastVisualHoldMs = smoothNow;
+            // ~3.2 full sheet cycles per second of hold (tunable)
+            phase += ((dtHold / 1000) * 3.2 * cols) / 4;
+            if (phase > WALK_PHASE_WRAP) {
+                phase = phase % cols;
+            }
+            movementState.walkPhase = phase;
+            calculatedAnimFrame = ((Math.floor(phase) % cols) + cols) % cols;
+        } else {
+            calculatedAnimFrame = ((Math.floor(phase) % cols) + cols) % cols;
             movementState.walkPhase = phase;
         }
 
@@ -1168,6 +1300,13 @@ export function renderWildAnimal({
     // Skip shadow for entities with shadowRadius 0 (bees, sharks)
     if (props.shadowRadius > 0) {
         ctx.save();
+
+        // At noon the silhouette shadow sits slightly below the feet; nudge pivot up (only this window).
+        const isNoonShadowWindow =
+            cycleProgress >= 0.35 && cycleProgress < 0.55;
+        const noonGroundShadowPivotYOffset = isNoonShadowWindow
+            ? Math.round(Math.min(24, Math.max(8, renderHeight * 0.055)))
+            : 0;
 
         // Flying birds (Tern, Crow) get a special detached shadow
         if (isBird && useFlying) {
@@ -1247,10 +1386,20 @@ export function renderWildAnimal({
                     maxStretchFactor: 3.0,
                     minStretchFactor: 0.25,
                     shadowBlur: 2,
-                    pivotYOffset: 0,
+                    pivotYOffset: noonGroundShadowPivotYOffset,
                     shakeOffsetX: shakeX,
                     shakeOffsetY: shakeY,
                 });
+                drawWildAnimalPlayerStyleUnderfootOval(
+                    ctx,
+                    renderPosX,
+                    renderPosY,
+                    renderWidth,
+                    renderHeight,
+                    shakeX,
+                    shakeY,
+                    animal.facingDirection,
+                );
             }
         } else if (animalImage) {
             // Static image - use directly for shadow
@@ -1267,10 +1416,20 @@ export function renderWildAnimal({
                 maxStretchFactor: 3.0,
                 minStretchFactor: 0.25,
                 shadowBlur: 2,
-                pivotYOffset: 0,
+                pivotYOffset: noonGroundShadowPivotYOffset,
                 shakeOffsetX: shakeX,
                 shakeOffsetY: shakeY,
             });
+            drawWildAnimalPlayerStyleUnderfootOval(
+                ctx,
+                renderPosX,
+                renderPosY,
+                renderWidth,
+                renderHeight,
+                shakeX,
+                shakeY,
+                animal.facingDirection,
+            );
         } else {
             // Fallback ellipse shadow if no image available
             ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
@@ -1283,6 +1442,16 @@ export function renderWildAnimal({
                 0, 0, Math.PI * 2
             );
             ctx.fill();
+            drawWildAnimalPlayerStyleUnderfootOval(
+                ctx,
+                renderPosX,
+                renderPosY,
+                renderWidth,
+                renderHeight,
+                shakeX,
+                shakeY,
+                animal.facingDirection,
+            );
         }
         ctx.restore();
     } // End shadow rendering for entities with shadowRadius > 0

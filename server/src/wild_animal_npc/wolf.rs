@@ -52,8 +52,8 @@ impl AnimalBehavior for TundraWolfBehavior {
             attack_damage: 25.0, // Reduced from 40.0 - still dangerous but not one-shot
             attack_range: 69.0, // Increased from 60 to compensate for collision pushback preventing hits
             attack_speed_ms: 800, // REDUCED from 1000ms - faster, more aggressive attacks
-            movement_speed: 201.0, // Patrol speed - slow and manageable
-            sprint_speed: 450.0, // Noticeably faster than player walking (400) - wolves will catch walkers, force players to sprint
+            movement_speed: 100.0, // ~half prior (201) — slower pacing for testing
+            sprint_speed: 225.0, // ~half prior (450)
             perception_range: 800.0, // Excellent hunter vision (increased)
             perception_angle_degrees: 200.0, // Wider hunter awareness
             patrol_radius: 540.0, // 18m wander
@@ -342,7 +342,7 @@ impl AnimalBehavior for TundraWolfBehavior {
         // 🐺 PACK ALPHA BEHAVIOR: Alphas lead the pack's movement
         if animal.is_pack_leader {
             // Alphas change direction less frequently but more decisively
-            if rng.gen::<f32>() < 0.08 { // 8% chance to change direction (less than solo wolves)
+            if rng.gen::<f32>() < 0.05 { // Straighter pack lead
                 let angle = rng.gen::<f32>() * 2.0 * PI;
                 animal.direction_x = angle.cos();
                 animal.direction_y = angle.sin();
@@ -350,7 +350,7 @@ impl AnimalBehavior for TundraWolfBehavior {
             }
         } else if animal.pack_id.is_none() {
             // Solo wolves: Random wandering with pauses
-            if rng.gen::<f32>() < 0.12 { // 12% chance to change direction
+            if rng.gen::<f32>() < 0.07 { // Smoother solo prowl
                 let angle = rng.gen::<f32>() * 2.0 * PI;
                 animal.direction_x = angle.cos();
                 animal.direction_y = angle.sin();

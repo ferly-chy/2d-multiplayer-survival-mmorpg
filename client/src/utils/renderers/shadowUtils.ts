@@ -29,10 +29,12 @@
 export function drawShadow(
   ctx: CanvasRenderingContext2D,
   centerX: number,
-  baseY: number, 
+  baseY: number,
   radiusX: number,
   radiusY: number,
-  alpha: number = 0.5 // Match dynamic ground shadow's maxShadowAlpha
+  alpha: number = 0.5, // Match dynamic ground shadow's maxShadowAlpha
+  /** Radians: rotation of ellipse axes from +X (canvas default is axis-aligned). */
+  rotationRadians: number = 0,
 ) {
   if (!globalShadowsEnabled) {
     return;
@@ -40,8 +42,8 @@ export function drawShadow(
   ctx.save();
   ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`; // Configurable opacity, default 0.5 to match dynamic shadow
   ctx.beginPath();
-  // Draw an ellipse centered horizontally at centerX, vertically at baseY
-  ctx.ellipse(centerX, baseY, radiusX, radiusY, 0, 0, Math.PI * 2);
+  // Draw an ellipse centered at centerX, baseY (radiusX/Y are semiaxes before rotation)
+  ctx.ellipse(centerX, baseY, radiusX, radiusY, rotationRadians, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 } 

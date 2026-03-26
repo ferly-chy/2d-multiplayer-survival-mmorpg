@@ -120,8 +120,8 @@ pub const TAMING_STAY_DISTANCE_SQUARED: f32 = TAMING_STAY_DISTANCE * TAMING_STAY
 
 // --- Constants ---
 // Animal AI tick interval - determines how often animals update their position/behavior
-// 125ms (8x/sec) provides smooth movement that matches player responsiveness
-pub const AI_TICK_INTERVAL_MS: u64 = 125; // AI processes 8 times per second for smooth movement
+// 100ms (10x/sec): smoother than 8Hz; culling still skips far animals most of the cost
+pub const AI_TICK_INTERVAL_MS: u64 = 100;
 pub const MAX_ANIMALS_PER_CHUNK: u32 = 3;
 pub const ANIMAL_SPAWN_COOLDOWN_SECS: u64 = 120; // 2 minutes between spawns
 
@@ -878,7 +878,7 @@ pub fn process_wild_animal_ai(ctx: &ReducerContext, _schedule: WildAnimalAiSched
     let prefetched = PreFetchedAIData::fetch(ctx);
 
     // NOTE: Animal collision uses get_cached_spatial_grid() internally (refreshed every 1s)
-    // No need to build a separate grid here - that was dead code costing ~full world scan every 125ms
+    // No need to build a separate grid here - that was dead code costing ~full world scan every AI tick
 
     // CHUNK-BASED OPTIMIZATION: Only fetch animals in chunks near players
     // Avoids full table scan when world has many animals spread across the map
@@ -1630,6 +1630,48 @@ fn update_animal_ai_state(
 
 // --- Movement Execution ---
 
+/// In melee range, keep lateral motion (orbit / stutter-step) instead of rooting until the next strike.
+/// `hesitation_multiplier` scales speed (flashlight, etc.).
+fn apply_melee_engagement_movement(
+    ctx: &ReducerContext,
+    animal: &mut WildAnimal,
+    target_player: &Player,
+    stats: &AnimalStats,
+    distance_to_target: f32,
+    dt: f32,
+    hesitation_multiplier: f32,
+) {
+    let dx = target_player.position_x - animal.pos_x;
+    let dy = target_player.position_y - animal.pos_y;
+    let dist = distance_to_target.max(1.0);
+    let nx = dx / dist;
+    let ny = dy / dist;
+    // Stable handedness per animal so strafe direction does not flip randomly each tick
+    let hand = if (animal.id & 1) == 0 { 1.0 } else { -1.0 };
+    let tx = -ny * hand;
+    let ty = nx * hand;
+
+    let inner = stats.attack_range * 0.48;
+    let radial_blend = if distance_to_target < inner {
+        0.45
+    } else {
+        0.0
+    };
+
+    let mut mx = tx + nx * radial_blend;
+    let mut my = ty + ny * radial_blend;
+    let mlen = (mx * mx + my * my).sqrt().max(0.001);
+    mx /= mlen;
+    my /= mlen;
+
+    let combat_speed =
+        (stats.movement_speed * 0.92 + stats.sprint_speed * 0.22) * hesitation_multiplier;
+    const ENGAGE_LEAD_PX: f32 = 72.0;
+    let goal_x = animal.pos_x + mx * ENGAGE_LEAD_PX;
+    let goal_y = animal.pos_y + my * ENGAGE_LEAD_PX;
+    move_towards_target(ctx, animal, goal_x, goal_y, combat_speed, dt);
+}
+
 fn execute_animal_movement(
     ctx: &ReducerContext,
     animal: &mut WildAnimal,
@@ -1638,9 +1680,7 @@ fn execute_animal_movement(
     current_time: Timestamp,
     rng: &mut impl Rng,
 ) -> Result<(), String> {
-    // CRITICAL: dt must match AI_TICK_INTERVAL_MS (500ms = 0.5 seconds)
-    // This was incorrectly set to 0.125 (125ms) causing animals to move at 25% speed
-    let dt = AI_TICK_INTERVAL_MS as f32 / 1000.0; // 500ms = 0.5 seconds
+    let dt = AI_TICK_INTERVAL_MS as f32 / 1000.0;
     
     let mut is_sprinting = false;
     
@@ -1779,16 +1819,24 @@ fn execute_animal_movement(
                         }
                         // If in optimal range (200-400px), stay put and fire projectiles (handled elsewhere)
                     } else {
-                        // MELEE MODE: Normal chase behavior - close the distance
+                        // MELEE MODE: close from outside; inside range, orbit/stutter-step (stay readable, not a frozen turret)
                         // 🐺 NOTE: Once an animal is chasing (e.g., you attacked it), wolf fur won't stop it!
-                        // Intimidation only prevents initial detection/aggro
-                        if new_distance > stats.attack_range * 0.9 { // Start moving when slightly outside attack range
-                            // Move directly toward player - no stopping short
-                            is_sprinting = hesitation_multiplier >= 1.0; // Only sprint if not hesitating
+                        if new_distance > stats.attack_range * 0.9 {
+                            is_sprinting = hesitation_multiplier >= 1.0;
                             let effective_speed = stats.sprint_speed * hesitation_multiplier;
                             move_towards_target(ctx, animal, target_player.position_x, target_player.position_y, effective_speed, dt);
+                        } else {
+                            is_sprinting = hesitation_multiplier >= 1.0;
+                            apply_melee_engagement_movement(
+                                ctx,
+                                animal,
+                                &target_player,
+                                stats,
+                                new_distance,
+                                dt,
+                                hesitation_multiplier,
+                            );
                         }
-                        // If within 90% of attack range, stop moving and let attack system handle it
                     }
                 }
             }
@@ -1927,11 +1975,28 @@ fn execute_animal_movement(
         },
         
         AnimalState::Attacking => {
-            // Animals don't move while attacking, but enforce minimum distance from player
-            // to prevent standing inside the player after a fast chase
+            // Keep slight footwork during attack windows (hostiles / sharks) instead of a hard freeze
             if let Some(target_id) = animal.target_player_id {
                 if let Some(target_player) = ctx.db.player().identity().find(&target_id) {
                     enforce_minimum_player_distance(animal, &target_player, stats);
+                    let d_sq = get_distance_squared(
+                        animal.pos_x,
+                        animal.pos_y,
+                        target_player.position_x,
+                        target_player.position_y,
+                    );
+                    let d = d_sq.sqrt();
+                    if d <= stats.attack_range * 1.05 {
+                        apply_melee_engagement_movement(
+                            ctx,
+                            animal,
+                            &target_player,
+                            stats,
+                            d,
+                            dt,
+                            get_flashlight_hesitation_multiplier(ctx, animal),
+                        );
+                    }
                 }
             }
         },
@@ -1963,6 +2028,16 @@ fn execute_animal_movement(
                     let new_distance = new_distance_sq.sqrt();
                     if new_distance > stats.attack_range * 0.9 {
                         move_towards_target(ctx, animal, target_player.position_x, target_player.position_y, stats.sprint_speed, dt);
+                    } else {
+                        apply_melee_engagement_movement(
+                            ctx,
+                            animal,
+                            &target_player,
+                            stats,
+                            new_distance,
+                            dt,
+                            1.0,
+                        );
                     }
                 }
             }
@@ -5268,16 +5343,16 @@ pub fn maybe_change_patrol_direction(
     rng: &mut impl Rng,
 ) {
     let change_chance = match animal.species {
-        AnimalSpecies::CinderFox => 0.18,     // Foxes are skittish
-        AnimalSpecies::TundraWolf => 0.12,    // Wolves are more purposeful (solo) or 0.08 (alpha)
+        AnimalSpecies::CinderFox => 0.10,     // Fewer zig-zags — smoother patrol
+        AnimalSpecies::TundraWolf => 0.07,    // Straighter prowl between turns
         AnimalSpecies::CableViper => 0.15,    // Vipers are moderate
         AnimalSpecies::ArcticWalrus => 0.06,  // Walruses are very slow and deliberate
         AnimalSpecies::BeachCrab => 0.10,     // Crabs scuttle but are fairly predictable
         AnimalSpecies::Tern => 0.05,          // Terns fly in more consistent directions
         AnimalSpecies::Crow => 0.08,          // Crows are fairly focused
         AnimalSpecies::Vole => 0.25,          // Voles are very erratic and skittish
-        AnimalSpecies::Wolverine => 0.10,     // Wolverines are deliberate predators
-        AnimalSpecies::Caribou => 0.08,       // Caribou are calm, slow grazers
+        AnimalSpecies::Wolverine => 0.06,     // Deliberate, less twitchy patrol
+        AnimalSpecies::Caribou => 0.05,       // Grazing herds — long straight segments
         AnimalSpecies::SalmonShark => 0.05,   // Sharks swim in smooth, deliberate patterns
         AnimalSpecies::Jellyfish => 0.02,    // Jellyfish drift very slowly and smoothly
         // Hostile NPCs - different patrol patterns
@@ -5554,7 +5629,7 @@ pub fn execute_grounded_idle(
     animal.is_flying = false;
     
     // Very low random chance to take off - birds should stay grounded and walk more
-    // At 8 ticks/second, 0.8% = roughly 6% chance per second to take off
+    // At ~10 ticks/second, 0.8% ≈ 8% chance per second to take off
     if rng.gen::<f32>() < CHANCE_TO_TAKE_OFF {
         animal.is_flying = true;
         animal.state = AnimalState::Flying;

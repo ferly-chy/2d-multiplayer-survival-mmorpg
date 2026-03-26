@@ -41,8 +41,8 @@ impl AnimalBehavior for WolverineBehavior {
             attack_damage: 28.0, // High damage - wolverines are vicious
             attack_range: 86.0, // Increased from 75 to compensate for collision pushback preventing hits
             attack_speed_ms: 700, // Fast, ferocious attacks
-            movement_speed: 120.0, // Steady patrol speed
-            sprint_speed: 280.0, // Fast chase - wolverines are quick
+            movement_speed: 60.0, // ~half prior (120) — slower pacing for testing
+            sprint_speed: 140.0, // ~half prior (280)
             perception_range: 350.0, // Good awareness
             perception_angle_degrees: 200.0, // Wide field of view
             patrol_radius: 200.0, // Large territory
@@ -194,7 +194,7 @@ impl AnimalBehavior for WolverineBehavior {
         let prev_y = animal.pos_y;
         
         // Territorial wandering
-        if rng.gen::<f32>() < 0.12 { // 12% chance to change direction
+        if rng.gen::<f32>() < 0.06 { // Longer straight territorial segments
             let angle = rng.gen::<f32>() * 2.0 * PI;
             animal.direction_x = angle.cos();
             animal.direction_y = angle.sin();
