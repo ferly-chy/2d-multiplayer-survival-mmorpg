@@ -30,7 +30,16 @@ import {
     DUAL_GRID_LOOKUP
 } from '../dualGridAutotile';
 import { tileDoodadRenderer } from './tileDoodadRenderer';
-import { initShorelineMask, initHotSpringShorelineMask, isShorelineMaskReady, isHotSpringShorelineMaskReady, renderShorelineOverlay } from './shorelineOverlayUtils.ts';
+import {
+    initShorelineMask,
+    initHotSpringShorelineMask,
+    initGrassHotSpringShorelineMask,
+    isShorelineMaskReady,
+    isHotSpringShorelineMaskReady,
+    isGrassHotSpringShorelineMaskReady,
+    renderShorelineOverlay,
+    type ShorelineMaskVariant,
+} from './shorelineOverlayUtils.ts';
 import { isWaterTileTag } from '../tileTypeGuards';
 
 // Helper to get tile base texture path from tile type name
@@ -108,8 +117,10 @@ export class ProceduralWorldRenderer {
             this.isInitialized = true;
             const beachSeaImg = this.tileCache.images.get('transition_Beach_Sea');
             const beachHotSpringWaterImg = this.tileCache.images.get('transition_Beach_HotSpringWater');
+            const grassBeachImg = this.tileCache.images.get('transition_Grass_Beach');
             initShorelineMask(beachSeaImg).catch(() => {});
             initHotSpringShorelineMask(beachHotSpringWaterImg).catch(() => {});
+            initGrassHotSpringShorelineMask(grassBeachImg).catch(() => {});
         } catch (error) {
             // Silently handle errors - missing assets will show fallback colors
         }
@@ -232,8 +243,8 @@ export class ProceduralWorldRenderer {
     }
 
     /**
-     * Render shoreline overlay for Beach_Sea transitions only.
-     * Call this AFTER the water overlay so the white shoreline appears on top.
+     * Animated shoreline overlay: Beach_Sea, Beach_HotSpringWater, and Grass_HotSpringWater.
+     * Call this AFTER the water overlay so the edge reads on top of the water tint.
      */
     public renderShorelineOverlayPass(
         ctx: CanvasRenderingContext2D,
@@ -244,7 +255,13 @@ export class ProceduralWorldRenderer {
         isSnorkeling: boolean = false
     ): void {
         if (isSnorkeling) return;
-        if (!isShorelineMaskReady() && !isHotSpringShorelineMaskReady()) return;
+        if (
+            !isShorelineMaskReady() &&
+            !isHotSpringShorelineMaskReady() &&
+            !isGrassHotSpringShorelineMaskReady()
+        ) {
+            return;
+        }
 
         const { tileSize } = gameConfig;
         const currentTimeMs = performance.now();
@@ -280,14 +297,29 @@ export class ProceduralWorldRenderer {
         const halfSize = Math.floor(pixelSize / 2);
 
         for (const tileInfo of transitions) {
-            const isBeachSea = (tileInfo.primaryTerrain === 'Beach' && tileInfo.secondaryTerrain === 'Sea') ||
+            const isBeachSea =
+                (tileInfo.primaryTerrain === 'Beach' && tileInfo.secondaryTerrain === 'Sea') ||
                 (tileInfo.primaryTerrain === 'Sea' && tileInfo.secondaryTerrain === 'Beach');
-            const isBeachHotSpring = (tileInfo.primaryTerrain === 'Beach' && tileInfo.secondaryTerrain === 'HotSpringWater') ||
+            const isBeachHotSpring =
+                (tileInfo.primaryTerrain === 'Beach' && tileInfo.secondaryTerrain === 'HotSpringWater') ||
                 (tileInfo.primaryTerrain === 'HotSpringWater' && tileInfo.secondaryTerrain === 'Beach');
-            if (!isBeachSea && !isBeachHotSpring) continue;
+            const isGrassHotSpring =
+                (tileInfo.primaryTerrain === 'Grass' && tileInfo.secondaryTerrain === 'HotSpringWater') ||
+                (tileInfo.primaryTerrain === 'HotSpringWater' && tileInfo.secondaryTerrain === 'Grass');
+
+            let maskVariant: ShorelineMaskVariant | null = null;
+            if (isBeachSea) maskVariant = 'beachSea';
+            else if (isBeachHotSpring) maskVariant = 'hotSpringBeach';
+            else if (isGrassHotSpring) maskVariant = 'hotSpringGrass';
+            if (!maskVariant) continue;
+
+            if (maskVariant === 'beachSea' && !isShorelineMaskReady()) continue;
+            if (maskVariant === 'hotSpringBeach' && !isHotSpringShorelineMaskReady()) continue;
+            if (maskVariant === 'hotSpringGrass' && !isGrassHotSpringShorelineMaskReady()) continue;
 
             ctx.save();
 
+            // Match renderDualGridTransition: flip first, then corner clip (renderShorelineOverlay must not flip again)
             if (tileInfo.flipHorizontal || tileInfo.flipVertical) {
                 const centerX = destX + pixelSize / 2;
                 const centerY = destY + pixelSize / 2;
@@ -316,10 +348,10 @@ export class ProceduralWorldRenderer {
                 destX,
                 destY,
                 pixelSize,
-                tileInfo.flipHorizontal,
-                tileInfo.flipVertical,
+                false,
+                false,
                 currentTimeMs,
-                isBeachHotSpring
+                maskVariant
             );
 
             ctx.restore();
@@ -331,8 +363,9 @@ export class ProceduralWorldRenderer {
      * This is the first pass - just the solid terrain texture.
      * 
      * When isSnorkeling is true, renders in "underwater view" mode:
-     * - Water tiles (Sea, HotSpringWater) render normally
-     * - All land tiles render as dark blue (simulating underwater view of land above)
+     * - Sea / DeepSea: surface base textures (open water)
+     * - HotSpringWater: Underwater_Sea interior tiles (parity with subsurface ocean look)
+     * - Land: dark underwater interior (looking up at the bottom of the surface)
      */
     private renderBaseTile(
         ctx: CanvasRenderingContext2D, 
@@ -420,12 +453,29 @@ export class ProceduralWorldRenderer {
         }
         
         // === UNDERWATER SNORKELING MODE ===
-        // When snorkeling, land tiles appear as dark murky blue (looking up at surface from underwater)
-        // Water tiles (Sea, HotSpringWater) render normally - you're in the water seeing water
         const isWaterTile = isWaterTileTag(tileTypeName);
         
         if (isSnorkeling && !isWaterTile) {
-            // Render land tiles using underwater interior tile from autotile
+            // Land (and non-water) tiles: dark underwater interior
+            const underwaterImg = this.tileCache.images.get('transition_Underwater_Sea');
+            if (underwaterImg && underwaterImg.complete && underwaterImg.naturalHeight !== 0) {
+                ctx.drawImage(
+                    underwaterImg,
+                    UNDERWATER_INTERIOR_COL * AUTOTILE_TILE_SIZE,
+                    UNDERWATER_INTERIOR_ROW * AUTOTILE_TILE_SIZE,
+                    AUTOTILE_TILE_SIZE,
+                    AUTOTILE_TILE_SIZE,
+                    pixelX, pixelY, pixelSize, pixelSize
+                );
+            } else {
+                ctx.fillStyle = UNDERWATER_FALLBACK_COLOR;
+                ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
+            }
+            return;
+        }
+
+        // Hot spring pools: bright surface tile reads wrong underwater — use same interior as ocean snorkeling
+        if (isSnorkeling && tileTypeName === 'HotSpringWater') {
             const underwaterImg = this.tileCache.images.get('transition_Underwater_Sea');
             if (underwaterImg && underwaterImg.complete && underwaterImg.naturalHeight !== 0) {
                 ctx.drawImage(

@@ -753,30 +753,28 @@ export const renderYSortedEntities = ({
       }
       
       // === UNDERWATER SNORKELING MODE ===
-      // When snorkeling, hide most land-based entities - player is underwater
-      // But allow underwater entities: players, living coral, submerged fumaroles, seaweed, fish, sharks, jellyfish, and dropped items
+      // Hide surface world (land structures, NPCs, wildlife). Only subsurface-relevant entities.
       if (isLocalPlayerSnorkeling) {
-        // Allow: players, living coral (always underwater), submerged fumaroles, SeaweedBed resources, dropped items, projectiles, and wild animals (sharks, jellyfish swim in water with you)
-        const isSeaweedBed = type === 'harvestable_resource' && 
+        const isSeaweedBed = type === 'harvestable_resource' &&
           (entity as SpacetimeDBHarvestableResource).plantType?.tag === 'SeaweedBed';
-        
-        // Planted SeaweedBed seeds (player-planted seaweed) should also be visible underwater
-        const isPlantedSeaweed = type === 'planted_seed' && 
+
+        const isPlantedSeaweed = type === 'planted_seed' &&
           (entity as SpacetimeDBPlantedSeed).plantType?.tag === 'SeaweedBed';
-        
-        const isUnderwaterEntity = 
-          type === 'player' || 
-          type === 'living_coral' || 
-          type === 'dropped_item' || // Dropped items should be visible underwater (thrown harpoons, etc.)
-          type === 'projectile' || // Projectiles should be visible underwater (thrown harpoons in flight, etc.)
-          type === 'wild_animal' || // Sharks and jellyfish swim in water - must be visible when snorkeling. Land animals on shore may also be in view.
-          type === 'animal_corpse' || // Shark and jellyfish corpses spawn in water - harvestable with Tidebreaker Blade
+
+        const isHumanPlayer = type === 'player' && !(entity as SpacetimeDBPlayer).isNpc;
+
+        const isUnderwaterEntity =
+          isHumanPlayer ||
+          type === 'living_coral' ||
+          type === 'dropped_item' ||
+          type === 'projectile' ||
+          type === 'barrel' ||
           isSeaweedBed ||
-          isPlantedSeaweed || // Planted seaweed fronds visible underwater
+          isPlantedSeaweed ||
           (type === 'fumarole' && (entity as SpacetimeDBFumarole).isSubmerged);
-        
+
         if (!isUnderwaterEntity) {
-          return; // Skip all land-based entities when underwater
+          return;
         }
       }
       
@@ -1796,15 +1794,22 @@ export const renderYSortedEntities = ({
           
           // Create callback to check if barrel is on a sea tile
           // This prevents sea barrel water effects from rendering when barrels are on land (e.g., beach)
-          const isOnSeaTile = (worldX: number, worldY: number): boolean => {
+          const isOnOpenWaterTile = (worldX: number, worldY: number): boolean => {
               if (!connection) return false;
               const { tileX, tileY } = worldPosToTileCoords(worldX, worldY);
               const tileType = getTileTypeFromChunkData(connection, tileX, tileY);
-              return isOceanTileTag(tileType);
+              return isWaterTileTag(tileType);
           };
-          
+
           // Render barrel - skip water shadow (drawn in early pass so swimming player bottom half renders on top)
-          renderBarrel(ctx, barrel, nowMs, cycleProgress, isOnSeaTile, localPlayerPosition?.x, localPlayerPosition?.y, true);
+          if (isLocalPlayerSnorkeling) {
+              ctx.save();
+              ctx.filter = 'sepia(20%) hue-rotate(140deg) saturate(120%)';
+              renderBarrel(ctx, barrel, nowMs, cycleProgress, isOnOpenWaterTile, localPlayerPosition?.x, localPlayerPosition?.y, true);
+              ctx.restore();
+          } else {
+              renderBarrel(ctx, barrel, nowMs, cycleProgress, isOnOpenWaterTile, localPlayerPosition?.x, localPlayerPosition?.y, true);
+          }
           
           // Draw outline only if this is THE closest interactable target
           if (isTheClosestTarget) {

@@ -12,10 +12,7 @@ import {
   renderSeaStackUnderwaterSilhouette,
   renderSeaStackBottomOnly,
 } from '../../utils/renderers/seaStackRenderingUtils';
-import {
-  renderBarrelUnderwaterSilhouette,
-  renderSeaBarrelWaterShadowOnly,
-} from '../../utils/renderers/barrelRenderingUtils';
+import { renderSeaBarrelWaterShadowOnly } from '../../utils/renderers/barrelRenderingUtils';
 import {
   updateUnderwaterEffects,
   renderUnderwaterEffectsUnder,
@@ -199,9 +196,7 @@ export function renderWorldPreparationPasses({
     visibleSeaStacks.forEach((seaStack) => {
       renderSeaStackUnderwaterSilhouette(ctx, seaStack, currentCycleProgress);
     });
-    visibleBarrels.forEach((barrel) => {
-      renderBarrelUnderwaterSilhouette(ctx, barrel, currentCycleProgress, nowMs);
-    });
+    // Barrels: full water-line rendering in main entity pass (includes hot spring water via isWaterTileTag)
   } else {
     const localPlayerPositionForSeaStacks =
       currentPredictedPosition ?? (localPlayer ? { x: localPlayer.positionX, y: localPlayer.positionY } : null);

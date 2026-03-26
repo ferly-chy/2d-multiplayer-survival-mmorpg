@@ -622,18 +622,11 @@ pub fn update_player_position_simple(
         log::info!("Player {:?} auto-disabled crouching when entering/moving in water", sender_id);
     }
 
-    // --- Auto-disable snorkeling when leaving water or entering hot spring ---
-    if current_player.is_snorkeling {
-        if !is_on_water {
-            current_player.is_snorkeling = false;
-            emit_snorkel_emerge_sound(ctx, final_x, final_y, sender_id);
-            log::info!("Player {:?} auto-emerged from snorkel when leaving water", sender_id);
-        } else if crate::active_effects::is_player_in_hot_spring(ctx, final_x, final_y) {
-            // Hot springs are too shallow and warm for snorkeling!
-            current_player.is_snorkeling = false;
-            emit_snorkel_emerge_sound(ctx, final_x, final_y, sender_id);
-            log::info!("Player {:?} auto-emerged from snorkel when entering hot spring", sender_id);
-        }
+    // --- Auto-disable snorkeling when leaving water (includes leaving HotSpringWater tiles) ---
+    if current_player.is_snorkeling && !is_on_water {
+        current_player.is_snorkeling = false;
+        emit_snorkel_emerge_sound(ctx, final_x, final_y, sender_id);
+        log::info!("Player {:?} auto-emerged from snorkel when leaving water", sender_id);
     }
 
     // --- Movement Sound Logic (Walking & Swimming) - OPTIMIZED ---

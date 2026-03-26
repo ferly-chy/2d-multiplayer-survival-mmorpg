@@ -106,7 +106,9 @@ export function useGameCanvasWorldLookups({
     const lookup = new Map<string, boolean>();
     if (!connection) return lookup;
     const isLandAtShore = (tileType: string | null) => tileType === 'Beach' || tileType === 'Asphalt';
-    const isShoreWater = (tileType: string | null) => isOceanTileTag(tileType);
+    // Include hot spring water so barrel shadows / transition skips match sea-style shoreline rules
+    const isShoreWater = (tileType: string | null) =>
+      isOceanTileTag(tileType) || tileType === 'HotSpringWater';
     visibleWorldTiles.forEach((tile) => {
       const tx = tile.worldX;
       const ty = tile.worldY;

@@ -13,20 +13,33 @@ import { TILE_SIZE as AUTOTILE_TILE_SIZE, TILESET_COLS, TILESET_ROWS } from '../
 // Import tilesets for mask generation
 import beachSeaAutotileUrl from '../../assets/tiles/new/tileset_beach_sea_autotile.png';
 import beachHotSpringWaterAutotileUrl from '../../assets/tiles/new/tileset_beach_hotspringwater_autotile.png';
+import grassBeachAutotileUrl from '../../assets/tiles/new/tileset_grass_beach_autotile.png';
 
 // =============================================================================
 // CONSTANTS
 // =============================================================================
 
 const EDGE_THRESHOLD = 33;            // Min warmth difference (stricter = fewer dots)
+/** Hot spring / grass+hotspring water art is often higher-chroma; looser threshold picks up the shore line */
+const HOT_SPRING_SHORE_EDGE_THRESHOLD = 20;
 const WAVE_SPEED = 2.8;               // Wave cycle speed (rad/s)
 const WAVE_OFFSET_PX = 2.8;           // Pixels the edge shifts (visible motion)
 const WAVE_LAYERS = 3;                  // Fading layers that trail the main edge
 
-// Refined blue - main shoreline edge
-const SHORE_COLOR = { r: 145, g: 190, b: 225 };
+interface ShorelineRgb {
+  r: number;
+  g: number;
+  b: number;
+}
+
+// Refined blue - main shoreline edge (beach / sea)
+const SHORE_COLOR: ShorelineRgb = { r: 145, g: 190, b: 225 };
 // Frothy beach water color - wave layers fade toward this
-const BEACH_COLOR = { r: 200, g: 225, b: 235 };
+const BEACH_COLOR: ShorelineRgb = { r: 200, g: 225, b: 235 };
+
+/** Dark teal edge + mid teal foam — reads on bright aqua HotSpringWater tiles */
+const HOT_SPRING_SHORE_COLOR: ShorelineRgb = { r: 10, g: 72, b: 82 };
+const HOT_SPRING_WAVE_COLOR: ShorelineRgb = { r: 32, g: 118, b: 128 };
 
 // Warmth: positive = sand (yellow/brown), negative = water (blue)
 const getWarmth = (r: number, g: number, b: number): number =>
@@ -49,6 +62,13 @@ let maskLoadPromise: Promise<ShorelineMaskCache | null> | null = null;
 let hotSpringMaskCache: ShorelineMaskCache | null = null;
 let hotSpringMaskLoadPromise: Promise<ShorelineMaskCache | null> | null = null;
 
+/** Shore mask from grass_beach tileset for Grass_HotSpringWater transitions */
+let grassHotSpringMaskCache: ShorelineMaskCache | null = null;
+let grassHotSpringMaskLoadPromise: Promise<ShorelineMaskCache | null> | null = null;
+
+/** Which precomputed mask to use when drawing the animated shoreline */
+export type ShorelineMaskVariant = 'beachSea' | 'hotSpringBeach' | 'hotSpringGrass';
+
 /** 8-neighbor offsets for connectivity check */
 const DX8 = [-1, 0, 1, -1, 1, -1, 0, 1];
 const DY8 = [-1, -1, -1, 0, 0, 1, 1, 1];
@@ -61,7 +81,9 @@ function processTileRegion(
   data: Uint8ClampedArray,
   tileW: number,
   tileH: number,
-  stride: number
+  stride: number,
+  edgeThreshold: number = EDGE_THRESHOLD,
+  shoreRgb: ShorelineRgb = SHORE_COLOR
 ): Uint8Array {
   const edgeMask = new Uint8Array(tileW * tileH * 4);
   const dx = [-1, 1, 0, 0];
@@ -90,15 +112,15 @@ function processTileRegion(
         maxNeighborWarmth = Math.max(maxNeighborWarmth, nw);
       }
 
-      const atBoundary = (maxNeighborWarmth - warmth) >= EDGE_THRESHOLD;
+      const atBoundary = (maxNeighborWarmth - warmth) >= edgeThreshold;
       const onWaterSide = warmth < maxNeighborWarmth;
 
       if (atBoundary && onWaterSide) {
         const base = idx * 4;
         const alpha = Math.min(255, Math.max(0, 220 - Math.abs(warmth) * 2));
-        edgeMask[base] = SHORE_COLOR.r;
-        edgeMask[base + 1] = SHORE_COLOR.g;
-        edgeMask[base + 2] = SHORE_COLOR.b;
+        edgeMask[base] = shoreRgb.r;
+        edgeMask[base + 1] = shoreRgb.g;
+        edgeMask[base + 2] = shoreRgb.b;
         edgeMask[base + 3] = alpha;
       }
     }
@@ -160,9 +182,9 @@ function processTileRegion(
       }
       if (addPixel && maxA > 0) {
         const base = idx * 4;
-        shoreline[base] = SHORE_COLOR.r;
-        shoreline[base + 1] = SHORE_COLOR.g;
-        shoreline[base + 2] = SHORE_COLOR.b;
+        shoreline[base] = shoreRgb.r;
+        shoreline[base + 1] = shoreRgb.g;
+        shoreline[base + 2] = shoreRgb.b;
         shoreline[base + 3] = Math.min(255, maxA + 60);
       }
     }
@@ -175,7 +197,12 @@ function processTileRegion(
  * Generate thin shoreline mask from tileset.
  * Same layout as tileset: 4x5 grid of 128x128 tiles.
  */
-async function generateShorelineMasks(tilesetImg: HTMLImageElement): Promise<{ shoreCanvas: HTMLCanvasElement; waveCanvas: HTMLCanvasElement }> {
+async function generateShorelineMasks(
+  tilesetImg: HTMLImageElement,
+  edgeThreshold: number = EDGE_THRESHOLD,
+  shoreRgb: ShorelineRgb = SHORE_COLOR,
+  waveRgb: ShorelineRgb = BEACH_COLOR
+): Promise<{ shoreCanvas: HTMLCanvasElement; waveCanvas: HTMLCanvasElement }> {
   const fullW = tilesetImg.naturalWidth;
   const fullH = tilesetImg.naturalHeight;
 
@@ -217,7 +244,9 @@ async function generateShorelineMasks(tilesetImg: HTMLImageElement): Promise<{ s
         tileData,
         AUTOTILE_TILE_SIZE,
         AUTOTILE_TILE_SIZE,
-        AUTOTILE_TILE_SIZE * 4
+        AUTOTILE_TILE_SIZE * 4,
+        edgeThreshold,
+        shoreRgb
       );
 
       for (let y = 0; y < AUTOTILE_TILE_SIZE; y++) {
@@ -247,9 +276,9 @@ async function generateShorelineMasks(tilesetImg: HTMLImageElement): Promise<{ s
   const wavePixels = waveData.data;
   for (let i = 0; i < wavePixels.length; i += 4) {
     if (wavePixels[i + 3] > 0) {
-      wavePixels[i] = BEACH_COLOR.r;
-      wavePixels[i + 1] = BEACH_COLOR.g;
-      wavePixels[i + 2] = BEACH_COLOR.b;
+      wavePixels[i] = waveRgb.r;
+      wavePixels[i + 1] = waveRgb.g;
+      wavePixels[i + 2] = waveRgb.b;
     }
   }
   waveCtx.putImageData(waveData, 0, 0);
@@ -298,6 +327,50 @@ export async function initShorelineMask(beachSeaImage?: HTMLImageElement | null)
 }
 
 /**
+ * Load shoreline mask from Grass_Beach tileset (same sheet as Grass_HotSpringWater).
+ */
+export async function initGrassHotSpringShorelineMask(grassBeachImage?: HTMLImageElement | null): Promise<ShorelineMaskCache | null> {
+  if (grassHotSpringMaskCache?.ready) return grassHotSpringMaskCache;
+  if (grassHotSpringMaskLoadPromise) return grassHotSpringMaskLoadPromise;
+
+  grassHotSpringMaskLoadPromise = (async () => {
+    try {
+      let img: HTMLImageElement;
+      if (grassBeachImage?.complete && grassBeachImage.naturalWidth > 0) {
+        img = grassBeachImage;
+      } else {
+        img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error('Failed to load grass_beach tileset for hotspring shore'));
+          img.src = grassBeachAutotileUrl;
+        });
+      }
+
+      const { shoreCanvas, waveCanvas } = await generateShorelineMasks(
+        img,
+        HOT_SPRING_SHORE_EDGE_THRESHOLD,
+        HOT_SPRING_SHORE_COLOR,
+        HOT_SPRING_WAVE_COLOR
+      );
+      grassHotSpringMaskCache = {
+        canvas: shoreCanvas,
+        waveCanvas,
+        ctx: shoreCanvas.getContext('2d')!,
+        ready: true,
+      };
+      return grassHotSpringMaskCache;
+    } catch (e) {
+      console.warn('[ShorelineOverlay] Failed to generate grass+hotspring mask:', e);
+      return null;
+    }
+  })();
+
+  return grassHotSpringMaskLoadPromise;
+}
+
+/**
  * Load and initialize the shoreline mask for Beach_HotSpringWater transitions.
  * Pass preloaded Beach_HotSpringWater image from tile cache to avoid delay.
  */
@@ -320,7 +393,12 @@ export async function initHotSpringShorelineMask(beachHotSpringWaterImage?: HTML
         });
       }
 
-      const { shoreCanvas, waveCanvas } = await generateShorelineMasks(img);
+      const { shoreCanvas, waveCanvas } = await generateShorelineMasks(
+        img,
+        HOT_SPRING_SHORE_EDGE_THRESHOLD,
+        HOT_SPRING_SHORE_COLOR,
+        HOT_SPRING_WAVE_COLOR
+      );
       hotSpringMaskCache = {
         canvas: shoreCanvas,
         waveCanvas,
@@ -349,7 +427,7 @@ export async function initHotSpringShorelineMask(beachHotSpringWaterImage?: HTML
  * @param flipHorizontal - Whether tile was flipped
  * @param flipVertical - Whether tile was flipped
  * @param currentTimeMs - Current time for animation
- * @param forHotSpring - If true, use Beach_HotSpringWater mask (subtle wave edges on hotspring sides)
+ * @param maskVariant - beachSea (default), hotSpringBeach (Beach_HotSpringWater tileset), hotSpringGrass (Grass_HotSpringWater / grass_beach sheet)
  */
 export function renderShorelineOverlay(
   ctx: CanvasRenderingContext2D,
@@ -360,9 +438,14 @@ export function renderShorelineOverlay(
   flipHorizontal: boolean,
   flipVertical: boolean,
   currentTimeMs: number,
-  forHotSpring: boolean = false
+  maskVariant: ShorelineMaskVariant = 'beachSea'
 ): void {
-  const cache = forHotSpring ? hotSpringMaskCache : maskCache;
+  const cache =
+    maskVariant === 'hotSpringBeach'
+      ? hotSpringMaskCache
+      : maskVariant === 'hotSpringGrass'
+        ? grassHotSpringMaskCache
+        : maskCache;
   const t = currentTimeMs * 0.001;
 
   ctx.save();
@@ -444,4 +527,11 @@ export function isShorelineMaskReady(): boolean {
  */
 export function isHotSpringShorelineMaskReady(): boolean {
   return hotSpringMaskCache?.ready ?? false;
+}
+
+/**
+ * Grass + hot spring water shoreline (Grass_Beach tileset mask).
+ */
+export function isGrassHotSpringShorelineMaskReady(): boolean {
+  return grassHotSpringMaskCache?.ready ?? false;
 }

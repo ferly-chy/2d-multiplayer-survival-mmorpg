@@ -9,7 +9,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { useMobileDetection } from '../../hooks/useMobileDetection';
 import { useSoundSystemWithSelectors } from '../../hooks/useSoundSystemWithSelectors';
 import { getTileTypeFromChunkData, worldPosToTileCoords } from '../../utils/renderers/placementRenderingUtils';
-import { isOceanTileTag } from '../../utils/tileTypeGuards';
+import { isWaterTileTag } from '../../utils/tileTypeGuards';
 import {
   useLocalPlayer,
   useEquipmentMovementModifiers,
@@ -95,7 +95,7 @@ export function useGameplayRuntimeHost({
     }
     const { tileX, tileY } = worldPosToTileCoords(worldX, worldY);
     const tileType = getTileTypeFromChunkData(connection, tileX, tileY);
-    return isOceanTileTag(tileType);
+    return isWaterTileTag(tileType);
   }, [connection]);
 
   const predictedMovement = usePredictedMovement({

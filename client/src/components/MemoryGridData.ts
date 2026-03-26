@@ -366,7 +366,7 @@ export const MEMORY_GRID_NODES = [
   { 
     id: 'reed-snorkel', 
     name: 'Reed Diver\'s Helm',
-    description: 'Unlocks crafting the Reed Diver\'s Helm - allows limited underwater exploration.',
+    description: 'Unlocks crafting the Reed Diver\'s Helm - submerge in the ocean or in hot spring pools.',
     cost: 260, 
     tier: 2, 
     prerequisites: ['reed-harpoon'], 
