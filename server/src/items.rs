@@ -263,7 +263,7 @@ pub fn seed_ranged_weapon_stats(ctx: &ReducerContext) -> Result<(), String> {
             weapon_range: 520.0,       // Close-mid range - rewards aggressive positioning
             projectile_speed: 800.0,   // Faster arrows - less frustrating to lead
             accuracy: 0.86,            // 86% accuracy - rewards getting in range
-            reload_time_secs: 0.80,    // Slightly faster follow-up shots - keeps the bow snappy
+            reload_time_secs: 0.40,    // Slightly faster follow-up shots - keeps the bow snappy
             magazine_capacity: 0,      // Single-shot (arrows loaded one at a time)
             is_automatic: false,       // Semi-auto - must click for each shot
             magazine_reload_time_secs: 0.0, // Instant nock - no reload animation
@@ -285,7 +285,7 @@ pub fn seed_ranged_weapon_stats(ctx: &ReducerContext) -> Result<(), String> {
             reload_time_secs: 0.0,     // NO fire rate cooldown - manual reload is the only delay
             magazine_capacity: 0,      // Single-shot (bolts loaded one at a time)
             is_automatic: false,       // Semi-auto - must click for each shot
-            magazine_reload_time_secs: 2.0, // 2 seconds to crank crossbow string (right-click)
+            magazine_reload_time_secs: 1.0, // 2 seconds to crank crossbow string (right-click)
         },
         
         // TIER 3: Makarov PM (Late Game)
@@ -300,10 +300,10 @@ pub fn seed_ranged_weapon_stats(ctx: &ReducerContext) -> Result<(), String> {
             weapon_range: 820.0,       // Longest range - engage at distance
             projectile_speed: 1300.0,  // Very fast bullets, nearly hitscan
             accuracy: 0.88,            // 88% accuracy - slow fire rate means better aim
-            reload_time_secs: 1.0,     // 1 second between shots - deliberate semi-auto
+            reload_time_secs: 0.5,     // 1 second between shots - deliberate semi-auto
             magazine_capacity: 8,      // 8-round magazine
             is_automatic: false,       // Semi-auto pistol - must click for each shot
-            magazine_reload_time_secs: 2.5, // 2.5 seconds to swap magazine
+            magazine_reload_time_secs: 1.25, // 2.5 seconds to swap magazine
         },
         
         // TIER 4: PP-91 KEDR (Endgame)
@@ -319,10 +319,10 @@ pub fn seed_ranged_weapon_stats(ctx: &ReducerContext) -> Result<(), String> {
             weapon_range: 720.0,       // Shorter than pistol - SMG loses accuracy at range
             projectile_speed: 1250.0,  // Fast bullets, slightly slower than pistol
             accuracy: 0.72,            // 72% accuracy - full auto recoil
-            reload_time_secs: 0.10,    // Extreme fire rate - 10 rounds per second
+            reload_time_secs: 0.05,    // Extreme fire rate - 10 rounds per second
             magazine_capacity: 30,     // 30-round magazine
             is_automatic: true,        // FULL AUTO - hold mouse button to fire continuously
-            magazine_reload_time_secs: 3.0, // 3 seconds to swap larger magazine
+            magazine_reload_time_secs: 1.5, // 3 seconds to swap larger magazine
         },
         
         // UNDERWATER: Reed Harpoon Gun
@@ -341,7 +341,7 @@ pub fn seed_ranged_weapon_stats(ctx: &ReducerContext) -> Result<(), String> {
             reload_time_secs: 0.0,     // NO fire rate cooldown - magazine reload is the only delay
             magazine_capacity: 2,      // 2-dart magazine - limited capacity
             is_automatic: false,       // Semi-auto - must click for each shot
-            magazine_reload_time_secs: 2.0, // 2 seconds to reload darts
+            magazine_reload_time_secs: 1.0, // 2 seconds to reload darts
         },
 
         // Grenade - self-ammo throwable, straight-line, no bounce
@@ -350,7 +350,7 @@ pub fn seed_ranged_weapon_stats(ctx: &ReducerContext) -> Result<(), String> {
             weapon_range: 450.0,
             projectile_speed: 700.0,
             accuracy: 1.0,
-            reload_time_secs: 0.5,
+            reload_time_secs: 0.25,
             magazine_capacity: 0,
             is_automatic: false,
             magazine_reload_time_secs: 0.0,
@@ -362,7 +362,7 @@ pub fn seed_ranged_weapon_stats(ctx: &ReducerContext) -> Result<(), String> {
             weapon_range: 450.0,
             projectile_speed: 700.0,
             accuracy: 1.0,
-            reload_time_secs: 0.5,
+            reload_time_secs: 0.25,
             magazine_capacity: 0,
             is_automatic: false,
             magazine_reload_time_secs: 0.0,

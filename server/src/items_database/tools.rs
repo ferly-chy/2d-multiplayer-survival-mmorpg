@@ -12,7 +12,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             .equippable(None)
 
             .primary_target_damage(30, 40)
-            .primary_target_yield(9, 14)
+            .primary_target_yield(18, 28)
             .primary_target_type(TargetType::Tree)
             .primary_yield_resource("Wood")
             .pvp_damage(35, 35)
@@ -24,7 +24,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             ])
             .crafting_output(1, 10)
             .respawn_time(900)
-            .attack_interval(0.6)
+            .attack_interval(0.3)
             .build(),
 
         // Corpse Processing Tools 
@@ -33,7 +33,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             .equippable(None)
             
             .primary_target_damage(20, 20)
-            .primary_target_yield(3, 3)
+            .primary_target_yield(6, 6)
             .primary_target_type(TargetType::PlayerCorpse)
             .primary_yield_resource("Corpse Parts")
             .pvp_damage(25, 25)
@@ -42,7 +42,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
                 CostIngredient { item_name: "Plant Fiber".to_string(), quantity: 10 },
             ])
             .crafting_output(1, 5)
-            .attack_interval(0.8)
+            .attack_interval(0.4)
             .build(),
 
         ItemBuilder::new("Bone Knife", "A sharp knife crafted from bone. Quick but not very durable. Excellent for harvesting corpses.", ItemCategory::Tool)
@@ -50,7 +50,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             .equippable(None)
             
             .primary_target_damage(25, 25)
-            .primary_target_yield(5, 5)
+            .primary_target_yield(10, 10)
             .primary_target_type(TargetType::PlayerCorpse)
             .primary_yield_resource("Corpse Parts")
             .pvp_damage(15, 20)
@@ -60,7 +60,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
                 CostIngredient { item_name: "Plant Fiber".to_string(), quantity: 5 },
             ])
             .crafting_output(1, 2)
-            .attack_interval(0.5)
+            .attack_interval(0.25)
             .build(),
 
         // Tidebreaker Blade - Underwater harvesting knife that works while snorkeling
@@ -69,7 +69,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             .equippable(None)
             
             .primary_target_damage(30, 30)
-            .primary_target_yield(4, 6)
+            .primary_target_yield(8, 12)
             .primary_target_type(TargetType::AnimalCorpse)
             .primary_yield_resource("Animal Parts")
             .pvp_damage(22, 28)
@@ -80,7 +80,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
                 CostIngredient { item_name: "Rope".to_string(), quantity: 2 },
             ])
             .crafting_output(1, 8)
-            .attack_interval(0.55)
+            .attack_interval(0.275)
             .build(),
 
         // Repair Tool
@@ -94,14 +94,14 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             ])
             .crafting_output(1, 5)
             .respawn_time(420)
-            .attack_interval(1.0)
+            .attack_interval(0.5)
             .build(),
 
         // Primary Gathering Tools
         // Yield formula: For 100% resource extraction, yield = resources * damage / health
         // Trees: 800 HP, 150-500 resources (avg 325). Stone Hatchet should get ~90%, Metal ~100%
         basic_tool("Stone Hatchet", "A simple hatchet for chopping wood.", 
-                  TargetType::Tree, 35, 50, 16, 22, "Wood") // Increased yield from 12-18 to 16-22 for ~90% extraction
+                  TargetType::Tree, 35, 50, 32, 44, "Wood") // Increased yield from 12-18 to 16-22 for ~90% extraction
             .icon("stone_hatchet.png")
             .pvp_damage(15, 20)
             .crafting_cost(vec![
@@ -110,11 +110,11 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             ])
             .crafting_output(1, 7)
             .respawn_time(600)
-            .attack_interval(0.8)
+            .attack_interval(0.4)
             .build(),
 
         basic_tool("Metal Hatchet", "A robust metal hatchet that cuts through wood efficiently. Gathers significantly more wood than its stone counterpart.",
-                  TargetType::Tree, 60, 80, 30, 40, "Wood") // Increased yield from 25-35 to 30-40 for ~100% extraction
+                  TargetType::Tree, 60, 80, 60, 80, "Wood") // Increased yield from 25-35 to 30-40 for ~100% extraction
             .icon("metal_hatchet.png")
             .pvp_damage(22, 30)
             .crafting_cost(vec![
@@ -123,7 +123,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             ])
             .crafting_output(1, 10)
             .respawn_time(900)
-            .attack_interval(0.7)
+            .attack_interval(0.35)
             .build(),
 
         ItemBuilder::new("Combat Ladle", "A surprisingly sturdy ladle, ready for a culinary confrontation. Also works as a basic gathering tool.", ItemCategory::Tool)
@@ -137,14 +137,14 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             ])
             .crafting_output(1, 2)
             .respawn_time(300)
-            .attack_interval(0.7)
+            .attack_interval(0.35)
             .build(),
 
         // Stones: 400 HP, 200-400 resources (avg 300). Yields need to be MUCH higher to extract before HP depletes.
         // Stone Pickaxe: ~7 hits to kill (400/55), needs ~43 yield/hit for 300 resources
         // Metal Pickaxe: ~4 hits to kill (400/90), needs ~75 yield/hit for 300 resources
         basic_tool("Stone Pickaxe", "A simple pickaxe for breaking rocks.",
-                  TargetType::Stone, 40, 70, 35, 50, "Stone") // Massively increased yield from 8-14 to 35-50 for ~90% extraction
+                  TargetType::Stone, 40, 70, 70, 100, "Stone") // Massively increased yield from 8-14 to 35-50 for ~90% extraction
             .icon("stone_pickaxe.png")
             .equippable(None)
             .pvp_damage(18, 25)
@@ -154,11 +154,11 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             ])
             .crafting_output(1, 7)
             .respawn_time(600)
-            .attack_interval(1.2)
+            .attack_interval(0.6)
             .build(),
 
         basic_tool("Metal Pickaxe", "A sturdy metal pickaxe that breaks rocks efficiently. Gathers significantly more stone than its stone counterpart.",
-                  TargetType::Stone, 60, 120, 60, 85, "Stone") // Massively increased yield from 13-22 to 60-85 for ~100% extraction
+                  TargetType::Stone, 60, 120, 120, 170, "Stone") // Massively increased yield from 13-22 to 60-85 for ~100% extraction
             .icon("metal_pickaxe.png")
             .equippable(None)
             .pvp_damage(25, 35)
@@ -168,7 +168,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             ])
             .crafting_output(1, 10)
             .respawn_time(900)
-            .attack_interval(1.0)
+            .attack_interval(0.5)
             .build(),
 
         ItemBuilder::new("Rock", "A basic tool for gathering.", ItemCategory::Tool)
@@ -182,7 +182,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             ])
             .crafting_output(1, 1)
             .respawn_time(30)
-            .attack_interval(1.2)
+            .attack_interval(0.6)
             .build(),
 
         // Light Sources
@@ -197,7 +197,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             ])
             .crafting_output(1, 1)
             .respawn_time(30)
-            .attack_interval(0.5)
+            .attack_interval(0.25)
             .build(),
         ItemBuilder::new("Flashlight", "A handheld electric light source. Provides bright, focused illumination and slows down nighttime apparitions.", ItemCategory::Tool)
             .icon("flashlight.png")
@@ -299,7 +299,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             ])
             .crafting_output(1, 5)
             .respawn_time(360)
-            .attack_interval(1.2)
+            .attack_interval(0.6)
             .build(),
 
         ItemBuilder::new("Bone Gaff Hook", "A sharp, curved bone hook that can be used as a fishing gaff or improvised weapon. A component for crafting fishing rods.", ItemCategory::Tool)
@@ -326,7 +326,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             // Primary target: Living Coral - yields Limestone
             .primary_target_type(TargetType::LivingCoral)
             .primary_target_damage(40, 60)  // Damage per hit to coral
-            .primary_target_yield(20, 28)   // Increased from 8-15 to 20-28 Limestone per hit for ~100% extraction
+            .primary_target_yield(40, 56)   // Increased from 8-15 to 20-28 Limestone per hit for ~100% extraction
             .primary_yield_resource("Limestone")
             .pvp_damage(15, 20)
             .crafting_cost(vec![
@@ -336,7 +336,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             ])
             .crafting_output(1, 7)
             .respawn_time(600)
-            .attack_interval(1.0)
+            .attack_interval(0.5)
             .build(),
 
         ItemBuilder::new("Reed Bellows", "A primitive bellows crafted from reed stalks and animal leather. When placed in campfires: makes fuel burn 50% slower and cooking 20% faster. When placed in furnaces: makes fuel burn 50% slower and smelting 20% faster.", ItemCategory::Tool)
@@ -397,7 +397,7 @@ pub fn get_tool_definitions() -> Vec<ItemDefinition> {
             ])
             .crafting_output(1, 5)
             .respawn_time(600)
-            .attack_interval(0.9)
+            .attack_interval(0.45)
             .build(),
 
         // Bone Carving Kit - Unique tool found at Whale Bone Graveyard for crafting bone totems

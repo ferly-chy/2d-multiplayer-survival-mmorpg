@@ -43,9 +43,10 @@ export type ToolDodgeRollSpin = { progress: number; direction: string };
 
 // --- Constants ---
 const SWING_DURATION_MS = 150;
-const HUNTING_BOW_RELOAD_MS = 850;
-const CROSSBOW_RELOAD_MS = 2300;
-const HARPOON_GUN_RELOAD_MS = 450;
+// Match server ranged_weapon_stats reload/magazine times (arcade pacing).
+const HUNTING_BOW_RELOAD_MS = 400;
+const CROSSBOW_RELOAD_MS = 1000;
+const HARPOON_GUN_RELOAD_MS = 225;
 
 // Helper to get swing angle from item definition
 // Items with attackArcDegrees defined use that, otherwise default to 90°

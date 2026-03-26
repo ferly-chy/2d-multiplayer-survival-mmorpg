@@ -10,7 +10,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Naval Cutlass - Ceremonial sword, highest single-hit damage
         ItemBuilder::new("Naval Cutlass", "A ceremonial naval sword from the old Soviet Pacific Fleet. Tarnished but still deadly sharp. Slower strikes but devastating damage.", ItemCategory::Weapon)
             .icon("naval_cutlass.png")
-            .weapon(48, 52, 1.0) // Highest melee damage, slow deliberate strikes
+            .weapon(48, 52, 0.5) // Highest melee damage, slow deliberate strikes
             .damage_type(DamageType::Slash) // Slashing weapon
             .bleed_effect(3.0, 12.0, 1.0) // Standard bleed, longer duration
             .build(),
@@ -18,7 +18,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // AK74 Bayonet - Fast, precise military blade
         ItemBuilder::new("AK74 Bayonet", "A detached bayonet from an AK-74 rifle. Compact, balanced, and brutally effective in close combat. Lightning-fast strikes with vicious bleeding.", ItemCategory::Weapon)
             .icon("soviet_bayonet.png")
-            .weapon(30, 34, 0.55) // Lower per-hit damage, FASTEST weapon
+            .weapon(30, 34, 0.275) // Lower per-hit damage, FASTEST weapon
             .damage_type(DamageType::Slash) // Slashing weapon
             .bleed_effect(4.0, 12.0, 1.0) // High bleed damage, long duration
             .build(),
@@ -26,7 +26,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Engineers Maul - Heavy demolition hammer
         ItemBuilder::new("Engineers Maul", "A heavy demolition hammer used by Soviet military engineers. Built for breaking through concrete and steel, it's devastatingly effective in combat.", ItemCategory::Weapon)
             .icon("engineers_maul.png")
-            .weapon(40, 45, 0.85) // High damage, slow but powerful
+            .weapon(40, 45, 0.425) // High damage, slow but powerful
             .damage_type(DamageType::Blunt) // Blunt weapon
             .bleed_effect(2.5, 10.0, 1.0) // Moderate bleed
             .build(),
@@ -34,7 +34,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Military Crowbar - Ultimate blunt weapon
         ItemBuilder::new("Military Crowbar", "A heavy-duty crowbar from Soviet military engineering corps. Built for breaching and demolition, it delivers devastating blows in combat.", ItemCategory::Weapon)
             .icon("military_crowbar.png")
-            .weapon(55, 60, 1.2) // HIGHEST damage in game, SLOWEST weapon
+            .weapon(55, 60, 0.6) // HIGHEST damage in game, SLOWEST weapon
             .damage_type(DamageType::Blunt) // Blunt weapon
             .bleed_effect(1.5, 8.0, 1.0) // Lower bleed (blunt force trauma)
             .build(),
@@ -45,7 +45,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Human Skull - Grim improvised weapon
         ItemBuilder::new("Human Skull", "The surprisingly intact skull of a former human. Grim, but effective in a pinch.", ItemCategory::Weapon)
             .icon("skull.png")
-            .weapon(30, 30, 2.0) // Fixed damage, very slow
+            .weapon(30, 30, 1.0) // Fixed damage, very slow
             .damage_type(DamageType::Blunt) // Blunt weapon
             .extractable("Bone Fragments", 25, 25, "Crush")
             .build(),
@@ -54,7 +54,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         ItemBuilder::new("Fox Skull", "A fox skull. A trophy from a successful hunt, and proof of your prowess against cunning prey. Lighter than other skulls.", ItemCategory::Weapon)
             .icon("fox_skull.png")
             .stackable(10)
-            .weapon(25, 25, 1.8) // Lighter/faster than human skull
+            .weapon(25, 25, 0.9) // Lighter/faster than human skull
             .damage_type(DamageType::Blunt) // Blunt weapon
             .extractable("Bone Fragments", 15, 15, "Crush")
             .build(),
@@ -63,7 +63,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         ItemBuilder::new("Wolf Skull", "A wolf skull. A fearsome trophy from a dangerous hunt, showing your ability to defeat apex predators. Heavy and intimidating.", ItemCategory::Weapon)
             .icon("wolf_skull.png")
             .stackable(10)
-            .weapon(35, 35, 2.2) // Stronger but slower than human skull
+            .weapon(35, 35, 1.1) // Stronger but slower than human skull
             .damage_type(DamageType::Blunt) // Blunt weapon
             .extractable("Bone Fragments", 20, 20, "Crush")
             .build(),
@@ -72,7 +72,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         ItemBuilder::new("Viper Skull", "A viper skull with intact fangs. A deadly trophy that proves your survival against venomous predators. The fangs still carry traces of venom.", ItemCategory::Weapon)
             .icon("viper_skull.png")
             .stackable(10)
-            .weapon(28, 28, 1.9) // Moderate damage and speed
+            .weapon(28, 28, 0.95) // Moderate damage and speed
             .damage_type(DamageType::Pierce) // Pierce weapon (fangs)
             .bleed_effect(2.0, 6.0, 1.0) // Venom effect - moderate bleed
             .extractable("Bone Fragments", 22, 22, "Crush")
@@ -82,7 +82,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         ItemBuilder::new("Walrus Skull", "A massive walrus skull with intact tusks. An impressive trophy from one of the arctic's most formidable marine mammals. The weight and tusks make it devastatingly effective in combat.", ItemCategory::Weapon)
             .icon("walrus_skull.png")
             .stackable(10)
-            .weapon(40, 40, 2.5) // High damage but very slow due to weight
+            .weapon(40, 40, 1.25) // High damage but very slow due to weight
             .damage_type(DamageType::Pierce) // Pierce weapon (tusks)
             .extractable("Bone Fragments", 30, 30, "Crush")
             .build(),
@@ -91,7 +91,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         ItemBuilder::new("Vole Skull", "A tiny vole skull. More of a curiosity than a weapon, but proof you can kill even the smallest prey. Surprisingly fast to swing.", ItemCategory::Weapon)
             .icon("vole_skull.png")
             .stackable(20)
-            .weapon(8, 10, 2.5) // Very weak but very fast - novelty weapon
+            .weapon(8, 10, 1.25) // Very weak but very fast - novelty weapon
             .damage_type(DamageType::Blunt) // Blunt weapon
             .extractable("Bone Fragments", 5, 5, "Crush")
             .build(),
@@ -100,7 +100,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         ItemBuilder::new("Wolverine Skull", "A wolverine skull with its powerful jaws intact. A trophy from one of nature's most fearless predators. The thick bone and sharp teeth make it a formidable weapon.", ItemCategory::Weapon)
             .icon("wolverine_skull.png")
             .stackable(10)
-            .weapon(32, 35, 2.0) // Good damage, moderate speed - fierce predator
+            .weapon(32, 35, 1.0) // Good damage, moderate speed - fierce predator
             .damage_type(DamageType::Pierce) // Pierce weapon (teeth)
             .extractable("Bone Fragments", 18, 18, "Crush")
             .build(),
@@ -109,7 +109,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         ItemBuilder::new("Polar Bear Skull", "A massive polar bear skull. An apex predator trophy showing mastery over the alpine's most dangerous hunter. The sheer size and weight make it devastating.", ItemCategory::Weapon)
             .icon("polar_bear_skull.png")
             .stackable(10)
-            .weapon(42, 42, 2.5) // Very high damage but very slow - largest skull
+            .weapon(42, 42, 1.25) // Very high damage but very slow - largest skull
             .damage_type(DamageType::Blunt) // Blunt weapon
             .extractable("Bone Fragments", 30, 30, "Crush")
             .build(),
@@ -118,7 +118,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         ItemBuilder::new("Hare Skull", "A small hare skull. A quick trophy from a fast prey. Lightweight and surprisingly fast to swing.", ItemCategory::Weapon)
             .icon("hare_skull.png")
             .stackable(20)
-            .weapon(10, 12, 1.4) // Weak but very fast - novelty weapon
+            .weapon(10, 12, 0.7) // Weak but very fast - novelty weapon
             .damage_type(DamageType::Blunt) // Blunt weapon
             .extractable("Bone Fragments", 6, 6, "Crush")
             .build(),
@@ -127,7 +127,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         ItemBuilder::new("Owl Skull", "An owl skull with large eye sockets. A trophy from a silent nocturnal hunter. The hollow bones make it lighter than expected.", ItemCategory::Weapon)
             .icon("owl_skull.png")
             .stackable(15)
-            .weapon(22, 24, 1.7) // Moderate damage, decent speed - bird skull
+            .weapon(22, 24, 0.85) // Moderate damage, decent speed - bird skull
             .damage_type(DamageType::Blunt) // Blunt weapon
             .extractable("Bone Fragments", 10, 10, "Crush")
             .build(),
@@ -136,7 +136,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         ItemBuilder::new("Tern Skull", "A tern skull with its distinctive sharp beak. A trophy from a tireless seabird known for diving into the waves. The streamlined shape makes it fast to swing.", ItemCategory::Weapon)
             .icon("tern_skull.png")
             .stackable(15)
-            .weapon(18, 20, 1.5) // Lower damage but very fast - small agile bird
+            .weapon(18, 20, 0.75) // Lower damage but very fast - small agile bird
             .damage_type(DamageType::Pierce) // Pierce weapon (sharp beak)
             .extractable("Bone Fragments", 8, 8, "Crush")
             .build(),
@@ -145,7 +145,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         ItemBuilder::new("Crow Skull", "A crow skull with intelligent eye sockets. A trophy from a cunning scavenger. The sturdy construction belies its small size.", ItemCategory::Weapon)
             .icon("crow_skull.png")
             .stackable(15)
-            .weapon(16, 18, 1.6) // Weak but fast - small bird skull
+            .weapon(16, 18, 0.8) // Weak but fast - small bird skull
             .damage_type(DamageType::Blunt) // Blunt weapon
             .extractable("Bone Fragments", 8, 8, "Crush")
             .build(),
@@ -154,7 +154,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         ItemBuilder::new("Shark Skull", "A fearsome shark skull with rows of serrated teeth. A rare trophy from the ocean's apex predator. The cartilaginous structure is surprisingly lightweight, but those teeth are deadly.", ItemCategory::Weapon)
             .icon("shark_skull.png")
             .stackable(10)
-            .weapon(38, 42, 1.9) // High damage - apex aquatic predator
+            .weapon(38, 42, 0.95) // High damage - apex aquatic predator
             .damage_type(DamageType::Pierce) // Pierce weapon (teeth)
             .bleed_effect(3.0, 8.0, 1.0) // Serrated teeth cause serious bleeding
             .extractable("Bone Fragments", 25, 25, "Crush")
@@ -168,7 +168,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Tradeoff: High damage per hit but slow, no bleed
         ItemBuilder::new("Stone Mace", "A heavy stone lashed to a wooden handle. Slow to swing but hits like a boulder. Excellent for stunning prey and crushing skulls.", ItemCategory::Weapon)
             .icon("stone_mace.png")
-            .weapon(28, 32, 1.3) // High damage, slow swing - rewards timing
+            .weapon(28, 32, 0.65) // High damage, slow swing - rewards timing
             .damage_type(DamageType::Blunt) // Blunt crushing damage
             .crafting_cost(vec![
                 CostIngredient { item_name: "Wood".to_string(), quantity: 150 },
@@ -184,7 +184,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Tradeoff: Highest craftable blunt damage, punishes missed swings
         ItemBuilder::new("War Hammer", "A heavy metal hammerhead on a reinforced shaft. Devastating crushing power that can shatter bones and dent armor. Slow but terrifying.", ItemCategory::Weapon)
             .icon("war_hammer.png")
-            .weapon(42, 48, 1.4) // Very high damage, very slow - commitment weapon
+            .weapon(42, 48, 0.7) // Very high damage, very slow - commitment weapon
             .damage_type(DamageType::Blunt) // Blunt crushing damage
             .crafting_cost(vec![
                 CostIngredient { item_name: "Wood".to_string(), quantity: 200 },
@@ -203,7 +203,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Tradeoff: Low base damage but fast attacks and vicious bleeding
         ItemBuilder::new("Bone Shiv", "A sharpened bone fragment wrapped in leather. Lightning fast strikes that leave deep, bleeding wounds. Perfect for ambushes.", ItemCategory::Weapon)
             .icon("bone_shiv.png")
-            .weapon(12, 15, 0.5) // Very low damage, VERY fast - hit and run
+            .weapon(12, 15, 0.25) // Very low damage, VERY fast - hit and run
             .damage_type(DamageType::Pierce) // Piercing stab damage
             .bleed_effect(3.0, 10.0, 1.0) // HIGH bleed - 30 total bleed damage!
             .crafting_cost(vec![
@@ -219,7 +219,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Tradeoff: Lower burst than swords but highest sustained DPS through bleed
         ItemBuilder::new("Metal Dagger", "A razor-sharp blade forged from scrap metal. Wickedly fast with deep, vicious cuts that bleed profusely. The assassin's choice.", ItemCategory::Weapon)
             .icon("metal_dagger.png")
-            .weapon(22, 26, 0.45) // Low-medium damage, FASTEST weapon - DPS king
+            .weapon(22, 26, 0.225) // Low-medium damage, FASTEST weapon - DPS king
             .damage_type(DamageType::Slash) // Slashing cuts
             .bleed_effect(4.0, 12.0, 1.0) // VICIOUS bleed - 48 total bleed damage!
             .crafting_cost(vec![
@@ -239,7 +239,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Tradeoff: Highest craftable slash damage, slower than sword
         ItemBuilder::new("Battle Axe", "A brutal double-headed axe forged for war. Massive cleaving strikes that can split a man in two. Heavy, slow, and absolutely devastating.", ItemCategory::Weapon)
             .icon("battle_axe.png")
-            .weapon(45, 52, 1.0) // Very high damage, moderate speed - power weapon
+            .weapon(45, 52, 0.5) // Very high damage, moderate speed - power weapon
             .damage_type(DamageType::Slash) // Cleaving slash damage
             .bleed_effect(3.5, 10.0, 1.0) // Strong bleed - 35 total
             .crafting_cost(vec![
@@ -257,7 +257,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Reed Harpoon - Fragile starter spear (Tier 0.5)
         ItemBuilder::new("Reed Harpoon", "A fragile harpoon made from reeds and bone fragments. Light and buoyant, but weaker than a proper wooden spear.", ItemCategory::Weapon)
             .icon("reed_harpoon.png")
-            .weapon(18, 20, 1.2) // Lower damage than Wooden Spear, slightly faster swing speed
+            .weapon(18, 20, 0.6) // Lower damage than Wooden Spear, slightly faster swing speed
             .damage_type(DamageType::Pierce) // Piercing weapon
             .bleed_effect(1.5, 6.0, 1.0) // Weaker bleed than Wooden Spear
             .crafting_cost(vec![
@@ -271,7 +271,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Wooden Spear - Basic spear, longest reach
         ItemBuilder::new("Wooden Spear", "A sharpened stick. Better than throwing rocks.", ItemCategory::Weapon)
             .icon("spear.png")
-            .weapon(25, 25, 1.5) // Fixed moderate damage, very slow due to reach
+            .weapon(25, 25, 0.75) // Fixed moderate damage, very slow due to reach
             .damage_type(DamageType::Pierce) // Pierce weapon
             .bleed_effect(2.0, 8.0, 1.0) // Standard bleed
             .crafting_cost(vec![
@@ -284,7 +284,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Stone Spear - Improved spear with stone tip
         ItemBuilder::new("Stone Spear", "A basic spear tipped with sharpened stone. Has a longer reach and causes bleeding.", ItemCategory::Weapon)
             .icon("stone_spear.png")
-            .weapon(35, 35, 1.3) // Fixed higher damage, slow but faster than wooden spear
+            .weapon(35, 35, 0.65) // Fixed higher damage, slow but faster than wooden spear
             .damage_type(DamageType::Pierce) // Pierce weapon
             .bleed_effect(3.0, 8.0, 1.0) // Better bleed
             .crafting_cost(vec![
@@ -303,7 +303,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Tradeoff vs Spear: Lower single-target DPS, but excellent for crowds/grass
         ItemBuilder::new("Scythe", "A curved farming tool repurposed for survival. The wide sweeping arc hits multiple targets but deals less damage per strike. Excellent for clearing grass, weaker in duels.", ItemCategory::Weapon)
             .icon("scythe.png")
-            .weapon(16, 20, 1.1) // LOW damage (vs Spear 25), slower swing - balanced for multi-hit
+            .weapon(16, 20, 0.55) // LOW damage (vs Spear 25), slower swing - balanced for multi-hit
             .damage_type(DamageType::Slash) // Slashing weapon
             .attack_arc_degrees(120.0) // WIDE 120° sweep arc for efficient grass clearing
             .bleed_effect(1.0, 5.0, 1.0) // WEAK bleed (vs Spear 2.0/8.0) - shallow cuts
@@ -322,7 +322,7 @@ pub fn get_weapon_definitions() -> Vec<ItemDefinition> {
         // Kayak Paddle - Light blunt weapon, also used for scarecrow crafting
         ItemBuilder::new("Kayak Paddle", "A sturdy paddle carved from driftwood. Light and fast, useful for both paddling and self-defense. Can be used to build a scarecrow.", ItemCategory::Weapon)
             .icon("kayak_paddle.png")
-            .weapon(20, 22, 1.0) // Light melee: 20-22 damage, 1.0s cooldown - fast swings
+            .weapon(20, 22, 0.5) // Light melee: 20-22 damage, 1.0s cooldown - fast swings
             .damage_type(DamageType::Blunt) // Blunt weapon
             .crafting_cost(vec![
                 CostIngredient { item_name: "Wood".to_string(), quantity: 100 },
