@@ -196,7 +196,6 @@ export function renderWorldPreparationPasses({
     visibleSeaStacks.forEach((seaStack) => {
       renderSeaStackUnderwaterSilhouette(ctx, seaStack, currentCycleProgress);
     });
-    // Barrels: full water-line rendering in main entity pass (includes hot spring water via isWaterTileTag)
   } else {
     const localPlayerPositionForSeaStacks =
       currentPredictedPosition ?? (localPlayer ? { x: localPlayer.positionX, y: localPlayer.positionY } : null);
@@ -224,7 +223,7 @@ export function renderWorldPreparationPasses({
     return waterTileLookup.get(`${tileX},${tileY}`) ?? false;
   };
 
-  if (allShadowsEnabled) {
+  if (allShadowsEnabled && !isSnorkeling) {
     visibleBarrels.forEach((barrel) => {
       renderSeaBarrelWaterShadowOnly(
         ctx,

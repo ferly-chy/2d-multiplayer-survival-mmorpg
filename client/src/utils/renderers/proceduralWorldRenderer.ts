@@ -364,7 +364,7 @@ export class ProceduralWorldRenderer {
      * 
      * When isSnorkeling is true, renders in "underwater view" mode:
      * - Sea / DeepSea: surface base textures (open water)
-     * - HotSpringWater: Underwater_Sea interior tiles (parity with subsurface ocean look)
+     * - HotSpringWater: Underwater_Sea sandy sea-floor interior (dual-grid index 15)
      * - Land: dark underwater interior (looking up at the bottom of the surface)
      */
     private renderBaseTile(
@@ -383,10 +383,9 @@ export class ProceduralWorldRenderer {
         const pixelY = Math.floor(tileY * tileSize);
         const pixelSize = Math.floor(tileSize) + 1; // Add 1 pixel to eliminate gaps
         
-        // Underwater interior tile extraction from autotile
-        // DUAL_GRID_LOOKUP index 0 (all corners same/primary) = row 1, col 2 (interior tile)
-        const UNDERWATER_INTERIOR_COL = 2;
-        const UNDERWATER_INTERIOR_ROW = 1;
+        // Underwater_Sea autotile: index 0 = primary interior (murky "land from below"); index 15 = secondary interior (sandy sea floor)
+        const UNDERWATER_MURKY_INTERIOR = DUAL_GRID_LOOKUP[0];
+        const UNDERWATER_SANDY_SEA_FLOOR_INTERIOR = DUAL_GRID_LOOKUP[15];
         const AUTOTILE_TILE_SIZE = 128;
         const UNDERWATER_FALLBACK_COLOR = '#0a3d4f';
         
@@ -410,8 +409,8 @@ export class ProceduralWorldRenderer {
                 if (underwaterImg && underwaterImg.complete && underwaterImg.naturalHeight !== 0) {
                     ctx.drawImage(
                         underwaterImg,
-                        UNDERWATER_INTERIOR_COL * AUTOTILE_TILE_SIZE,
-                        UNDERWATER_INTERIOR_ROW * AUTOTILE_TILE_SIZE,
+                        UNDERWATER_MURKY_INTERIOR.col * AUTOTILE_TILE_SIZE,
+                        UNDERWATER_MURKY_INTERIOR.row * AUTOTILE_TILE_SIZE,
                         AUTOTILE_TILE_SIZE,
                         AUTOTILE_TILE_SIZE,
                         pixelX, pixelY, pixelSize, pixelSize
@@ -435,8 +434,8 @@ export class ProceduralWorldRenderer {
                 if (underwaterImg && underwaterImg.complete && underwaterImg.naturalHeight !== 0) {
                     ctx.drawImage(
                         underwaterImg,
-                        UNDERWATER_INTERIOR_COL * AUTOTILE_TILE_SIZE,
-                        UNDERWATER_INTERIOR_ROW * AUTOTILE_TILE_SIZE,
+                        UNDERWATER_MURKY_INTERIOR.col * AUTOTILE_TILE_SIZE,
+                        UNDERWATER_MURKY_INTERIOR.row * AUTOTILE_TILE_SIZE,
                         AUTOTILE_TILE_SIZE,
                         AUTOTILE_TILE_SIZE,
                         pixelX, pixelY, pixelSize, pixelSize
@@ -461,8 +460,8 @@ export class ProceduralWorldRenderer {
             if (underwaterImg && underwaterImg.complete && underwaterImg.naturalHeight !== 0) {
                 ctx.drawImage(
                     underwaterImg,
-                    UNDERWATER_INTERIOR_COL * AUTOTILE_TILE_SIZE,
-                    UNDERWATER_INTERIOR_ROW * AUTOTILE_TILE_SIZE,
+                    UNDERWATER_MURKY_INTERIOR.col * AUTOTILE_TILE_SIZE,
+                    UNDERWATER_MURKY_INTERIOR.row * AUTOTILE_TILE_SIZE,
                     AUTOTILE_TILE_SIZE,
                     AUTOTILE_TILE_SIZE,
                     pixelX, pixelY, pixelSize, pixelSize
@@ -474,14 +473,14 @@ export class ProceduralWorldRenderer {
             return;
         }
 
-        // Hot spring pools: bright surface tile reads wrong underwater — use same interior as ocean snorkeling
+        // Hot spring pools: use Underwater_Sea "sea floor" interior (dual-grid 15 — sandy), not murky open-water interior
         if (isSnorkeling && tileTypeName === 'HotSpringWater') {
             const underwaterImg = this.tileCache.images.get('transition_Underwater_Sea');
             if (underwaterImg && underwaterImg.complete && underwaterImg.naturalHeight !== 0) {
                 ctx.drawImage(
                     underwaterImg,
-                    UNDERWATER_INTERIOR_COL * AUTOTILE_TILE_SIZE,
-                    UNDERWATER_INTERIOR_ROW * AUTOTILE_TILE_SIZE,
+                    UNDERWATER_SANDY_SEA_FLOOR_INTERIOR.col * AUTOTILE_TILE_SIZE,
+                    UNDERWATER_SANDY_SEA_FLOOR_INTERIOR.row * AUTOTILE_TILE_SIZE,
                     AUTOTILE_TILE_SIZE,
                     AUTOTILE_TILE_SIZE,
                     pixelX, pixelY, pixelSize, pixelSize

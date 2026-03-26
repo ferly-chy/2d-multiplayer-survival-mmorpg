@@ -768,7 +768,6 @@ export const renderYSortedEntities = ({
           type === 'living_coral' ||
           type === 'dropped_item' ||
           type === 'projectile' ||
-          type === 'barrel' ||
           isSeaweedBed ||
           isPlantedSeaweed ||
           (type === 'fumarole' && (entity as SpacetimeDBFumarole).isSubmerged);
@@ -1802,14 +1801,7 @@ export const renderYSortedEntities = ({
           };
 
           // Render barrel - skip water shadow (drawn in early pass so swimming player bottom half renders on top)
-          if (isLocalPlayerSnorkeling) {
-              ctx.save();
-              ctx.filter = 'sepia(20%) hue-rotate(140deg) saturate(120%)';
-              renderBarrel(ctx, barrel, nowMs, cycleProgress, isOnOpenWaterTile, localPlayerPosition?.x, localPlayerPosition?.y, true);
-              ctx.restore();
-          } else {
-              renderBarrel(ctx, barrel, nowMs, cycleProgress, isOnOpenWaterTile, localPlayerPosition?.x, localPlayerPosition?.y, true);
-          }
+          renderBarrel(ctx, barrel, nowMs, cycleProgress, isOnOpenWaterTile, localPlayerPosition?.x, localPlayerPosition?.y, true);
           
           // Draw outline only if this is THE closest interactable target
           if (isTheClosestTarget) {
