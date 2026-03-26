@@ -107,6 +107,23 @@ pub const PVP_KNOCKBACK_DISTANCE: f32 = 32.0;
 /// Set to true to enable PvP damage between players.
 pub const PVP_ENABLED: bool = false;
 
+/// 2× resource yields from dedicated corpse tools; 1× for non-specialized items. Skull/trophy grants stay unscaled.
+fn corpse_harvest_yield_multiplier(item_def: &ItemDefinition) -> u32 {
+    match item_def.name.as_str() {
+        "Bone Knife" | "Bone Club" | "Bush Knife" | "AK74 Bayonet" | "Tidebreaker Blade" => 2,
+        _ => {
+            if matches!(
+                item_def.primary_target_type,
+                Some(TargetType::PlayerCorpse) | Some(TargetType::AnimalCorpse)
+            ) {
+                2
+            } else {
+                1
+            }
+        }
+    }
+}
+
 // --- Bone Totem Configuration ---
 /// Distance within which allies count for the Sabaakax Totem pack bonus
 /// Set to 1500px to cover most of the visible viewport so pack hunting is viable
@@ -3900,12 +3917,14 @@ pub fn damage_player_corpse(
         }
     };
 
+    let corpse_yield_mult = corpse_harvest_yield_multiplier(item_def);
+
     // Example: 50% chance to get Animal Fat per hit, if corpse still has health
     // Apply logarithmic bonus based on time alive
     if corpse.health > 0 && rng.gen_bool(actual_chance_fat) {
         let base_fat = quantity_per_successful_hit;
         let time_alive_bonus = calculate_fat_bonus_from_time_alive(corpse.spawned_at, corpse.death_time);
-        let total_fat = base_fat + time_alive_bonus;
+        let total_fat = (base_fat + time_alive_bonus).saturating_mul(corpse_yield_mult);
         
         log::debug!(
             "[DamagePlayerCorpse:{}] Time alive bonus: {} (base: {}, total: {})",
@@ -3920,16 +3939,18 @@ pub fn damage_player_corpse(
 
     // Example: 30% chance to get 1 Raw Human Flesh per hit
     if corpse.health > 0 && rng.gen_bool(actual_chance_flesh) {
-        match grant_resource(ctx, attacker_id, "Raw Human Flesh", quantity_per_successful_hit) {
-            Ok(_) => resources_granted.push(("Raw Human Flesh".to_string(), quantity_per_successful_hit)),
+        let q = quantity_per_successful_hit.saturating_mul(corpse_yield_mult);
+        match grant_resource(ctx, attacker_id, "Raw Human Flesh", q) {
+            Ok(_) => resources_granted.push(("Raw Human Flesh".to_string(), q)),
             Err(e) => log::error!("Failed to grant Raw Human Flesh: {}", e),
         }
     }
     
     // Example: 20% chance to get 1 Animal Bone per hit
     if corpse.health > 0 && rng.gen_bool(actual_chance_bone) {
-        match grant_resource(ctx, attacker_id, "Animal Bone", quantity_per_successful_hit) {
-            Ok(_) => resources_granted.push(("Animal Bone".to_string(), quantity_per_successful_hit)),
+        let q = quantity_per_successful_hit.saturating_mul(corpse_yield_mult);
+        match grant_resource(ctx, attacker_id, "Animal Bone", q) {
+            Ok(_) => resources_granted.push(("Animal Bone".to_string(), q)),
             Err(e) => log::error!("Failed to grant Animal Bone: {}", e),
         }
     }
@@ -3938,36 +3959,21 @@ pub fn damage_player_corpse(
         log::info!("[DamagePlayerCorpse:{}] Corpse depleted by Player {:?} using item {} (category {:?}, multiplier {:.1}). Checking for Human Skull grant.", 
                  corpse_id, attacker_id, item_def.name, item_def.category, effectiveness_multiplier);
         
-        // Grant Human Skulls based on tool effectiveness, only if the item is a Tool
+        // Exactly one Human Skull per depleted corpse (trophy), when finished with a Tool
         if item_def.category == ItemCategory::Tool {
-            let skulls_to_grant = match effectiveness_multiplier {
-                m if m == BONE_KNIFE_MULTIPLIER => 3, // Bone Knife
-                m if m == BONE_CLUB_MULTIPLIER => 2,  // Bone Club
-                m if m == MACHETE_MULTIPLIER => 1,  // Machete
-                // Includes PRIMARY_CORPSE_TOOL_MULTIPLIER (1.0) 
-                // and NON_PRIMARY_ITEM_MULTIPLIER (0.1) if it's a tool, resulting in 1 skull
-                _ => 1, 
-            };
-
-            if skulls_to_grant > 0 {
-                match grant_resource(ctx, attacker_id, "Human Skull", skulls_to_grant) {
-                    Ok(_) => {
-                        resources_granted.push(("Human Skull".to_string(), skulls_to_grant));
-                        log::info!(
-                            "[DamagePlayerCorpse:{}] Granted {} Human Skull(s) to Player {:?} (using {} with multiplier {:.1}).",
-                            corpse_id, skulls_to_grant, attacker_id, item_def.name, effectiveness_multiplier
-                        );
-                    }
-                    Err(e) => log::error!(
-                        "[DamagePlayerCorpse:{}] Failed to grant Human Skull(s) to Player {:?}: {}",
-                        corpse_id, attacker_id, e
-                    ),
+            const HUMAN_SKULLS_PER_DEPLETED_CORPSE: u32 = 1;
+            match grant_resource(ctx, attacker_id, "Human Skull", HUMAN_SKULLS_PER_DEPLETED_CORPSE) {
+                Ok(_) => {
+                    resources_granted.push(("Human Skull".to_string(), HUMAN_SKULLS_PER_DEPLETED_CORPSE));
+                    log::info!(
+                        "[DamagePlayerCorpse:{}] Granted 1 Human Skull to Player {:?} (using {} with multiplier {:.1}).",
+                        corpse_id, attacker_id, item_def.name, effectiveness_multiplier
+                    );
                 }
-            } else {
-                 log::info!(
-                    "[DamagePlayerCorpse:{}] Corpse depleted, item {} (category {:?}) is a tool but effectiveness multiplier {:.1} resulted in 0 skulls.",
-                    corpse_id, item_def.name, item_def.category, effectiveness_multiplier
-                );
+                Err(e) => log::error!(
+                    "[DamagePlayerCorpse:{}] Failed to grant Human Skull to Player {:?}: {}",
+                    corpse_id, attacker_id, e
+                ),
             }
         } else {
             log::info!(
@@ -4869,6 +4875,8 @@ pub fn damage_animal_corpse(
         } else {
             (1.0, 1.0, 1.0) // Non-caribou get full drops
         };
+
+    let corpse_yield_mult = corpse_harvest_yield_multiplier(item_def);
     
     // Grant resources based on RNG and animal type
     // Apply logarithmic bonus based on time alive
@@ -4879,8 +4887,11 @@ pub fn damage_animal_corpse(
     {
         let base_fat = quantity_per_hit;
         let time_alive_bonus = calculate_fat_bonus_from_time_alive(animal_corpse.spawned_at, animal_corpse.death_time);
-        // Apply caribou age multiplier for fat
-        let total_fat = ((base_fat + time_alive_bonus) as f32 * caribou_fat_mult).round() as u32;
+        // Apply caribou age multiplier for fat, then corpse-tool harvest bonus (skulls/trophies excluded elsewhere)
+        let mut total_fat = ((base_fat + time_alive_bonus) as f32 * caribou_fat_mult).round() as u32;
+        if total_fat > 0 {
+            total_fat = total_fat.saturating_mul(corpse_yield_mult);
+        }
         
         if total_fat > 0 {
             log::debug!(
@@ -4924,8 +4935,9 @@ pub fn damage_animal_corpse(
         };
         
         if let Some(cloth_name) = cloth_type {
-            match grant_resource(ctx, attacker_id, cloth_name, quantity_per_hit) {
-                Ok(_) => resources_granted.push((cloth_name.to_string(), quantity_per_hit)),
+            let q = quantity_per_hit.saturating_mul(corpse_yield_mult);
+            match grant_resource(ctx, attacker_id, cloth_name, q) {
+                Ok(_) => resources_granted.push((cloth_name.to_string(), q)),
                 Err(e) => log::error!("Failed to grant {}: {}", cloth_name, e),
             }
         }
@@ -4942,8 +4954,9 @@ pub fn damage_animal_corpse(
         && animal_corpse.animal_species != crate::wild_animal_npc::AnimalSpecies::BeachCrab
         && rng.gen_bool(animal_leather_chance) 
     {
-        match grant_resource(ctx, attacker_id, "Animal Leather", quantity_per_hit) {
-            Ok(_) => resources_granted.push(("Animal Leather".to_string(), quantity_per_hit)),
+        let q = quantity_per_hit.saturating_mul(corpse_yield_mult);
+        match grant_resource(ctx, attacker_id, "Animal Leather", q) {
+            Ok(_) => resources_granted.push(("Animal Leather".to_string(), q)),
             Err(e) => log::error!("Failed to grant Animal Leather: {}", e),
         }
     }
@@ -4953,8 +4966,11 @@ pub fn damage_animal_corpse(
         && animal_corpse.animal_species != crate::wild_animal_npc::AnimalSpecies::BeachCrab
         && rng.gen_bool(actual_bone_chance) 
     {
-        // Apply caribou age multiplier for bones
-        let bone_quantity = (quantity_per_hit as f32 * caribou_bone_mult).round() as u32;
+        // Apply caribou age multiplier for bones, then corpse-tool harvest bonus
+        let mut bone_quantity = (quantity_per_hit as f32 * caribou_bone_mult).round() as u32;
+        if bone_quantity > 0 {
+            bone_quantity = bone_quantity.saturating_mul(corpse_yield_mult);
+        }
         if bone_quantity > 0 {
             match grant_resource(ctx, attacker_id, "Animal Bone", bone_quantity) {
                 Ok(_) => resources_granted.push(("Animal Bone".to_string(), bone_quantity)),
@@ -4991,8 +5007,11 @@ pub fn damage_animal_corpse(
             crate::wild_animal_npc::AnimalSpecies::SnowyOwl => Some("Raw Owl Meat"),
         };
         if let Some(meat_name) = meat_type {
-            // Apply caribou age multiplier for meat
-            let meat_quantity = (quantity_per_hit as f32 * caribou_meat_mult).round() as u32;
+            // Apply caribou age multiplier for meat, then corpse-tool harvest bonus
+            let mut meat_quantity = (quantity_per_hit as f32 * caribou_meat_mult).round() as u32;
+            if meat_quantity > 0 {
+                meat_quantity = meat_quantity.saturating_mul(corpse_yield_mult);
+            }
             if meat_quantity > 0 {
                 match grant_resource(ctx, attacker_id, meat_name, meat_quantity) {
                     Ok(_) => resources_granted.push((meat_name.to_string(), meat_quantity)),
