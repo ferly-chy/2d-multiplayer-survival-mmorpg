@@ -102,9 +102,11 @@ pub const RESPAWN_TIME_MS: u64 = 5000; // 5 seconds
 pub const PVP_KNOCKBACK_DISTANCE: f32 = 32.0;
 
 // --- PvP Configuration ---
-/// When false, players cannot damage other players with any weapon, projectile, or explosive.
-/// Only hostile NPCs and environmental hazards can damage players.
-/// Set to true to enable PvP damage between players.
+/// Server-wide PvP master switch (compile-time).
+/// - `false`: Player vs player damage uses **per-player opt-in** (`/pvp`, timer, combat extension).
+/// - `true`: **Always-on PvP** — every player counts as PvP-active for damage, raiding, fire-patch vs players, turrets, etc.
+///   Personal `/pvp` state is ignored for those checks (see [`is_pvp_active_for_player`]). XP bonus from `/pvp` still uses
+///   [`player_personal_pvp_opt_in_active`] only.
 pub const PVP_ENABLED: bool = false;
 
 /// 2× resource yields from dedicated corpse tools; 1× for non-specialized items. Skull/trophy grants stay unscaled.
@@ -133,8 +135,8 @@ const ALLY_DETECTION_RADIUS_SQ: f32 = ALLY_DETECTION_RADIUS * ALLY_DETECTION_RAD
 /// Combat extension window - if player was in PvP combat within this time, timer can't expire
 const PVP_COMBAT_EXTENSION_WINDOW_MICROS: i64 = 5 * 60 * 1_000_000; // 5 minutes
 
-/// Checks if a player has active PvP status (enabled + not expired + combat extension)
-pub fn is_pvp_active_for_player(player: &Player, current_time: Timestamp) -> bool {
+/// `/pvp` timer + combat extension only — **not** affected by [`PVP_ENABLED`]. Use for XP bonus and chat command logic.
+pub fn player_personal_pvp_opt_in_active(player: &Player, current_time: Timestamp) -> bool {
     if !player.pvp_enabled {
         return false;
     }
@@ -143,21 +145,28 @@ pub fn is_pvp_active_for_player(player: &Player, current_time: Timestamp) -> boo
         return false;
     };
     
-    // Check if base timer hasn't expired
     if until > current_time {
         return true;
     }
     
-    // Check combat extension: if player was in PvP combat within last 5 minutes, extend
     if let Some(last_combat) = player.last_pvp_combat_time {
         let combat_elapsed = current_time.to_micros_since_unix_epoch()
             .saturating_sub(last_combat.to_micros_since_unix_epoch());
         if combat_elapsed < PVP_COMBAT_EXTENSION_WINDOW_MICROS {
-            return true; // Combat extension active
+            return true;
         }
     }
     
     false
+}
+
+/// True if this player may be targeted / counted as PvP-flagged for **combat and raid rules**.
+/// When [`PVP_ENABLED`] is `true`, always `true` (opt-in ignored). Otherwise uses [`player_personal_pvp_opt_in_active`].
+pub fn is_pvp_active_for_player(player: &Player, current_time: Timestamp) -> bool {
+    if PVP_ENABLED {
+        return true;
+    }
+    player_personal_pvp_opt_in_active(player, current_time)
 }
 
 /// Updates combat timestamp for both players and extends timer if needed

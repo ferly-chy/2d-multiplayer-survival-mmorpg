@@ -412,7 +412,7 @@ pub fn award_xp(ctx: &ReducerContext, player_id: Identity, xp_amount: u64) -> Re
     // Check for PvP XP bonus
     let mut final_xp_amount = xp_amount;
     if let Some(player) = ctx.db.player().identity().find(&player_id) {
-        if crate::combat::is_pvp_active_for_player(&player, ctx.timestamp) {
+        if crate::combat::player_personal_pvp_opt_in_active(&player, ctx.timestamp) {
             let bonus = ((xp_amount as f32) * 0.25) as u64;
             final_xp_amount = xp_amount + bonus;
             log::info!("PvP XP bonus: {} -> {} (+{}) for player {:?}", 

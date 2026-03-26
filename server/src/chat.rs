@@ -457,8 +457,8 @@ pub fn send_message(ctx: &ReducerContext, text: String) -> Result<(), String> {
                 let player = ctx.db.player().identity().find(&sender_id)
                     .ok_or("Player not found")?;
                 
-                // Check if already active (using helper from combat module)
-                let is_active = crate::combat::is_pvp_active_for_player(&player, current_time);
+                // Personal timer + XP bonus (independent of combat::PVP_ENABLED always-on combat)
+                let is_active = crate::combat::player_personal_pvp_opt_in_active(&player, current_time);
                 
                 if is_active {
                     // Calculate remaining time
