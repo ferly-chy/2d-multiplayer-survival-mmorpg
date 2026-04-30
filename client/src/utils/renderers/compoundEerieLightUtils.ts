@@ -23,12 +23,14 @@ const EERIE_ACCENT = { r: 140, g: 100, b: 220 };    // Mystical purple
 const EERIE_DEEP = { r: 30, g: 50, b: 100 };        // Deep indigo (outer halo)
 const EERIE_HIGHLIGHT = { r: 180, g: 200, b: 255 };  // Bright ethereal highlight
 
-// Rising particle configuration
-const PARTICLE_COUNT = 8;
+// Rising particle configuration. Keep this lightweight: all compound lights can be
+// visible at once, so per-particle radial gradients are too expensive for the hot path.
+const PARTICLE_COUNT = 4;
 const PARTICLE_LIFETIME_SECONDS = 5.0;
 const PARTICLE_SPAWN_RADIUS = 60;
 const PARTICLE_MIN_SIZE = 2;
 const PARTICLE_MAX_SIZE = 7;
+const LIGHT_EFFECT_CULL_BUFFER = 260;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // UTILITY
@@ -49,6 +51,21 @@ function lerpColor(
         g: Math.round(c1.g + (c2.g - c1.g) * t),
         b: Math.round(c1.b + (c2.b - c1.b) * t),
     };
+}
+
+function isLightVisibleOnScreen(
+    worldX: number,
+    worldY: number,
+    radius: number,
+    viewMinX: number,
+    viewMaxX: number,
+    viewMinY: number,
+    viewMaxY: number
+): boolean {
+    return worldX + radius >= viewMinX &&
+        worldX - radius <= viewMaxX &&
+        worldY + radius >= viewMinY &&
+        worldY - radius <= viewMaxY;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -246,23 +263,16 @@ function renderEerieParticles(
         // Interpolate color between primary and accent
         const color = lerpColor(EERIE_PRIMARY, EERIE_ACCENT, colorVariant);
 
-        // Outer glow
-        const glowRadius = size * 3;
-        const glowGradient = ctx.createRadialGradient(px, py, 0, px, py, glowRadius);
-        glowGradient.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha * 0.3})`);
-        glowGradient.addColorStop(0.5, `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha * 0.1})`);
-        glowGradient.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
-        ctx.fillStyle = glowGradient;
+        // Cheap particle glow: solid translucent circles avoid dozens of radial gradients
+        // when the whole compound is visible.
+        const glowRadius = size * 2.6;
+        ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha * 0.12})`;
         ctx.beginPath();
         ctx.arc(px, py, glowRadius, 0, Math.PI * 2);
         ctx.fill();
 
         // Core particle
-        const coreGradient = ctx.createRadialGradient(px, py, 0, px, py, size);
-        coreGradient.addColorStop(0, `rgba(${EERIE_HIGHLIGHT.r}, ${EERIE_HIGHLIGHT.g}, ${EERIE_HIGHLIGHT.b}, ${alpha * 0.8})`);
-        coreGradient.addColorStop(0.5, `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha * 0.5})`);
-        coreGradient.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
-        ctx.fillStyle = coreGradient;
+        ctx.fillStyle = `rgba(${EERIE_HIGHLIGHT.r}, ${EERIE_HIGHLIGHT.g}, ${EERIE_HIGHLIGHT.b}, ${alpha * 0.55})`;
         ctx.beginPath();
         ctx.arc(px, py, size, 0, Math.PI * 2);
         ctx.fill();
@@ -289,13 +299,18 @@ export function renderCompoundEerieLights(
 ): void {
     if (!isNightTime(cycleProgress)) return;
 
-    const lights = getCompoundEerieLightsWithPositions();
-    const buffer = 400; // Viewport cull buffer
-
-    for (const light of lights) {
-        // Viewport culling
-        if (light.worldX < viewMinX - buffer || light.worldX > viewMaxX + buffer) continue;
-        if (light.worldY < viewMinY - buffer || light.worldY > viewMaxY + buffer) continue;
+    for (const light of getCompoundEerieLightsWithPositions()) {
+        if (!isLightVisibleOnScreen(
+            light.worldX,
+            light.worldY,
+            light.radius + LIGHT_EFFECT_CULL_BUFFER,
+            viewMinX,
+            viewMaxX,
+            viewMinY,
+            viewMaxY
+        )) {
+            continue;
+        }
 
         renderCompoundEerieLight(ctx, light, cycleProgress, cameraOffsetX, cameraOffsetY, nowMs);
     }

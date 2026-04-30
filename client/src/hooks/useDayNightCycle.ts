@@ -1370,42 +1370,49 @@ export function useDayNightCycle({
         const compoundScreenY = compoundCenter.y + cameraOffsetY;
         // Asphalt area is ±768px from center. Use ~900px radius for soft edge beyond asphalt.
         const compoundLightRadius = 900;
-        
-        // Large dim cutout - not fully bright, just lifts the darkness enough to see
-        const compoundCutout = maskCtx.createRadialGradient(
-            compoundScreenX, compoundScreenY, compoundLightRadius * 0.15,
-            compoundScreenX, compoundScreenY, compoundLightRadius
-        );
-        compoundCutout.addColorStop(0, 'rgba(0,0,0,0.55)');    // Moderate cutout at center
-        compoundCutout.addColorStop(0.3, 'rgba(0,0,0,0.45)');  // Gradual falloff
-        compoundCutout.addColorStop(0.6, 'rgba(0,0,0,0.30)');  // Mid fade
-        compoundCutout.addColorStop(0.8, 'rgba(0,0,0,0.12)');  // Soft edge
-        compoundCutout.addColorStop(0.92, 'rgba(0,0,0,0.04)'); // Very soft edge
-        compoundCutout.addColorStop(1, 'rgba(0,0,0,0)');       // Complete fade
-        
-        maskCtx.fillStyle = compoundCutout;
-        maskCtx.beginPath();
-        maskCtx.arc(compoundScreenX, compoundScreenY, compoundLightRadius, 0, Math.PI * 2);
-        maskCtx.fill();
-        
-        // Add eerie blue/purple tint over the entire compound
-        maskCtx.globalCompositeOperation = 'source-over';
-        const compoundGlowRadius = compoundLightRadius * 0.85;
-        const compoundGlow = maskCtx.createRadialGradient(
-            compoundScreenX, compoundScreenY, 0,
-            compoundScreenX, compoundScreenY, compoundGlowRadius
-        );
-        compoundGlow.addColorStop(0, 'rgba(60, 90, 180, 0.10)');    // Subtle blue center
-        compoundGlow.addColorStop(0.3, 'rgba(80, 100, 200, 0.08)'); // Blue mid
-        compoundGlow.addColorStop(0.5, 'rgba(100, 90, 210, 0.06)'); // Blue-purple blend
-        compoundGlow.addColorStop(0.7, 'rgba(120, 85, 200, 0.03)'); // Fading purple
-        compoundGlow.addColorStop(1, 'rgba(30, 50, 100, 0)');       // Fade to transparent
-        
-        maskCtx.fillStyle = compoundGlow;
-        maskCtx.beginPath();
-        maskCtx.arc(compoundScreenX, compoundScreenY, compoundGlowRadius, 0, Math.PI * 2);
-        maskCtx.fill();
-        maskCtx.globalCompositeOperation = 'destination-out';
+        const compoundLightVisible =
+            compoundScreenX + compoundLightRadius >= 0 &&
+            compoundScreenX - compoundLightRadius <= canvasSize.width &&
+            compoundScreenY + compoundLightRadius >= 0 &&
+            compoundScreenY - compoundLightRadius <= canvasSize.height;
+
+        if (compoundLightVisible) {
+            // Large dim cutout - not fully bright, just lifts the darkness enough to see
+            const compoundCutout = maskCtx.createRadialGradient(
+                compoundScreenX, compoundScreenY, compoundLightRadius * 0.15,
+                compoundScreenX, compoundScreenY, compoundLightRadius
+            );
+            compoundCutout.addColorStop(0, 'rgba(0,0,0,0.55)');    // Moderate cutout at center
+            compoundCutout.addColorStop(0.3, 'rgba(0,0,0,0.45)');  // Gradual falloff
+            compoundCutout.addColorStop(0.6, 'rgba(0,0,0,0.30)');  // Mid fade
+            compoundCutout.addColorStop(0.8, 'rgba(0,0,0,0.12)');  // Soft edge
+            compoundCutout.addColorStop(0.92, 'rgba(0,0,0,0.04)'); // Very soft edge
+            compoundCutout.addColorStop(1, 'rgba(0,0,0,0)');       // Complete fade
+            
+            maskCtx.fillStyle = compoundCutout;
+            maskCtx.beginPath();
+            maskCtx.arc(compoundScreenX, compoundScreenY, compoundLightRadius, 0, Math.PI * 2);
+            maskCtx.fill();
+            
+            // Add eerie blue/purple tint over the entire compound
+            maskCtx.globalCompositeOperation = 'source-over';
+            const compoundGlowRadius = compoundLightRadius * 0.85;
+            const compoundGlow = maskCtx.createRadialGradient(
+                compoundScreenX, compoundScreenY, 0,
+                compoundScreenX, compoundScreenY, compoundGlowRadius
+            );
+            compoundGlow.addColorStop(0, 'rgba(60, 90, 180, 0.10)');    // Subtle blue center
+            compoundGlow.addColorStop(0.3, 'rgba(80, 100, 200, 0.08)'); // Blue mid
+            compoundGlow.addColorStop(0.5, 'rgba(100, 90, 210, 0.06)'); // Blue-purple blend
+            compoundGlow.addColorStop(0.7, 'rgba(120, 85, 200, 0.03)'); // Fading purple
+            compoundGlow.addColorStop(1, 'rgba(30, 50, 100, 0)');       // Fade to transparent
+            
+            maskCtx.fillStyle = compoundGlow;
+            maskCtx.beginPath();
+            maskCtx.arc(compoundScreenX, compoundScreenY, compoundGlowRadius, 0, Math.PI * 2);
+            maskCtx.fill();
+            maskCtx.globalCompositeOperation = 'destination-out';
+        }
 
         // ═══════════════════════════════════════════════════════════════
         // INDIVIDUAL EERIE LIGHT HOTSPOTS - scattered organically around compound
@@ -1416,6 +1423,14 @@ export function useDayNightCycle({
             const screenX = worldX + cameraOffsetX;
             const screenY = worldY + cameraOffsetY;
             const lightRadius = radius * intensity;
+            if (
+                screenX + lightRadius < 0 ||
+                screenX - lightRadius > canvasSize.width ||
+                screenY + lightRadius < 0 ||
+                screenY - lightRadius > canvasSize.height
+            ) {
+                return;
+            }
             
             // Small localized cutout hotspot
             const maskGradient = maskCtx.createRadialGradient(

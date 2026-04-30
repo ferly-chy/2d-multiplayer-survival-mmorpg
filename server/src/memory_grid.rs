@@ -244,6 +244,8 @@ fn get_node_info(node_id: &str) -> Option<(u64, Vec<&'static str>)> {
         // ============================================
         // Branch 1 (linear)
         "fire-arrow" => Some((480, vec!["bone-arrow"])),
+        // Branch 2 (linear)
+        "large-wooden-storage-box" => Some((600, vec!["bush-knife"])),
         // Branch 3 UPPER (Diving path @ 112°)
         "diving-pick" => Some((520, vec!["reed-snorkel"])),
         // Branch 3 LOWER (Water Collection path @ 128°)
@@ -261,6 +263,8 @@ fn get_node_info(node_id: &str) -> Option<(u64, Vec<&'static str>)> {
         // ============================================
         // Branch 1 (linear)
         "hollow-reed-arrow" => Some((1200, vec!["fire-arrow"])),
+        // Branch 2 (linear)
+        "metal-door" => Some((1280, vec!["large-wooden-storage-box"])),
         // Branch 3 CENTER (Water Mobility path)
         "reed-flippers" => Some((1000, vec!["kayak-paddle"])),
         // Branch 3 LOWER (Water Collection)
@@ -520,6 +524,7 @@ fn get_node_display_name(node_id: &str) -> String {
         
         // Tier 3
         "fire-arrow" => "Fire Arrow".to_string(),
+        "large-wooden-storage-box" => "Large Wooden Storage Box".to_string(),
         "diving-pick" => "Diving Pick".to_string(),
         "reed-rain-collector" => "Reed Rain Collector".to_string(),
         "barbecue" => "Barbecue".to_string(),
@@ -528,6 +533,7 @@ fn get_node_display_name(node_id: &str) -> String {
         
         // Tier 4
         "hollow-reed-arrow" => "Hollow Reed Arrow".to_string(),
+        "metal-door" => "Metal Door".to_string(),
         "reed-flippers" => "Reed Flippers".to_string(),
         "plastic-water-jug" => "Plastic Water Jug".to_string(),
         "cooking-station" => "Cooking Station".to_string(),
