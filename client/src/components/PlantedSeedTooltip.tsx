@@ -378,7 +378,7 @@ export default function PlantedSeedTooltip({
   return (
     <div
       className={styles.tooltipContainer}
-      style={{ left: `${position.x + 15}px`, top: `${position.y + 15}px` }}
+      style={{ transform: `translate3d(${position.x + 15}px, ${position.y + 15}px, 0)` }}
     >
       <PlantedSeedTooltipBody {...rest} />
     </div>

@@ -6,7 +6,7 @@ const SEED_HOVER_RADIUS_SQ = SEED_HOVER_RADIUS * SEED_HOVER_RADIUS;
 
 /** World units per spatial bucket (~tile width); hover radius 30px needs at most ±1 cell overlap */
 const BUCKET_CELL = 48;
-const BUCKET_SCAN_RADIUS = 2;
+const BUCKET_SCAN_RADIUS = 1;
 
 type SeedBuckets = Map<string, string[]>;
 
@@ -63,32 +63,12 @@ function findClosestSeedIdWithBuckets(
   return closestId;
 }
 
-/** Fallback when bucket index is empty or out of sync (e.g. rare same-size table churn). */
-function findClosestSeedIdFullScan(
-  seeds: Map<string, PlantedSeed>,
-  worldMouseX: number,
-  worldMouseY: number,
-): string | null {
-  let closestId: string | null = null;
-  let closestDistSq = SEED_HOVER_RADIUS_SQ;
-  for (const [id, seed] of seeds) {
-    const dx = worldMouseX - seed.posX;
-    const dy = worldMouseY - seed.posY;
-    const distSq = dx * dx + dy * dy;
-    if (distSq < closestDistSq) {
-      closestDistSq = distSq;
-      closestId = id;
-    }
-  }
-  return closestId;
-}
-
 /**
  * Hook to manage planted seed hover states for displaying info tooltips.
  *
  * Performance: `plantedSeeds` gets a new Map reference on many SpacetimeDB updates (growth ticks).
- * We keep a spatial bucket index rebuilt only when `plantedSeeds.size` changes, and we only
- * recompute the closest seed id when mouse position or that size changes — not on every table clone.
+ * We keep a spatial bucket index rebuilt only when `plantedSeeds.size` changes. Hover checks
+ * only inspect the cursor bucket and its neighbors; no full-table fallback runs on mousemove.
  *
  * The closest match is exposed as a **primitive id** so downstream effects do not run on every
  * mousemove (tuple/array identity would change each frame).
@@ -125,13 +105,9 @@ export function usePlantedSeedHover(
     const seeds = plantedSeedsRef.current;
     const idx = bucketIndexRef.current;
     if (!idx) {
-      return findClosestSeedIdFullScan(seeds, worldMouseX, worldMouseY);
+      return null;
     }
-    const fromBuckets = findClosestSeedIdWithBuckets(seeds, idx.buckets, worldMouseX, worldMouseY);
-    if (fromBuckets) {
-      return fromBuckets;
-    }
-    return findClosestSeedIdFullScan(seeds, worldMouseX, worldMouseY);
+    return findClosestSeedIdWithBuckets(seeds, idx.buckets, worldMouseX, worldMouseY);
   }, [worldMouseX, worldMouseY, lastSize]);
 
   useEffect(() => {

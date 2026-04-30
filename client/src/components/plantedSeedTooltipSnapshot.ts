@@ -167,30 +167,36 @@ function calculateLightEffects(
   let nearCampfire = false;
   let nearLantern = false;
   let nearFurnace = false;
-  campfires.forEach((campfire) => {
+  for (const campfire of campfires.values()) {
     if (campfire.isBurning && !campfire.isDestroyed) {
       const dx = seed.posX - campfire.posX;
       const dy = seed.posY - campfire.posY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance < 120) nearCampfire = true;
+      if (dx * dx + dy * dy < 120 * 120) {
+        nearCampfire = true;
+        break;
+      }
     }
-  });
-  lanterns.forEach((lantern) => {
+  }
+  for (const lantern of lanterns.values()) {
     if (lantern.isBurning && !lantern.isDestroyed) {
       const dx = seed.posX - lantern.posX;
       const dy = seed.posY - lantern.posY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance < 100) nearLantern = true;
+      if (dx * dx + dy * dy < 100 * 100) {
+        nearLantern = true;
+        break;
+      }
     }
-  });
-  furnaces.forEach((furnace) => {
+  }
+  for (const furnace of furnaces.values()) {
     if (furnace.isBurning && !furnace.isDestroyed) {
       const dx = seed.posX - furnace.posX;
       const dy = seed.posY - furnace.posY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance < 120) nearFurnace = true;
+      if (dx * dx + dy * dy < 120 * 120) {
+        nearFurnace = true;
+        break;
+      }
     }
-  });
+  }
   return { nearCampfire, nearLantern, nearFurnace };
 }
 
@@ -389,11 +395,12 @@ export function buildPlantedSeedEnvSnapshot(seed: PlantedSeed, env: TooltipWorld
   const seedChunkWeather = chunkWeather.get(chunkIndexStr) ?? null;
 
   const plantTypeTag = seed.plantType.tag;
+  const isMushroomPlant = isMushroomPlantType(plantTypeTag);
 
   const cloudCoverage = calculateCloudCoverage(seed, clouds);
   const waterPatchEffect = getWaterPatchEffect(seed, waterPatches);
   const fertilizerPatchEffect = getFertilizerPatchEffect(seed, fertilizerPatches);
-  const nearTree = isNearTree(seed, trees);
+  const nearTree = isMushroomPlant ? isNearTree(seed, trees) : false;
   const nearGreenRuneStone = isNearGreenRuneStone(seed, runeStones);
   const lightEffects = calculateLightEffects(seed, campfires, lanterns, furnaces);
   const onPreparedSoil = isOnPreparedSoil(worldChunkData, seed);
@@ -405,7 +412,6 @@ export function buildPlantedSeedEnvSnapshot(seed: PlantedSeed, env: TooltipWorld
   const currentWeather =
     seedChunkWeather?.currentWeather?.tag || worldState?.currentWeather.tag || 'Clear';
   const currentTimeOfDay = worldState?.timeOfDay.tag || 'Noon';
-  const isMushroomPlant = isMushroomPlantType(plantTypeTag);
 
   const baseTimeMultiplier = getTimeOfDayMultiplier(currentTimeOfDay);
   const weatherMultiplier = getWeatherMultiplier(currentWeather);
