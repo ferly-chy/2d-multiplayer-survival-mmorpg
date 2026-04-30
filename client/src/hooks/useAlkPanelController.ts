@@ -1,10 +1,14 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { Identity } from 'spacetimedb';
-import type { AlkContract, AlkContractKind, AlkPlayerContract, ItemDefinition } from '../generated/types';
+import type { AlkContract, AlkContractKind, AlkPlayerContract } from '../generated/types';
 import { useGameConnection } from '../contexts/GameConnectionContext';
 import { useGameplaySession } from '../contexts/GameplaySessionContext';
 import { useGameplayMovement } from '../contexts/GameplayMovementContext';
 import { useAlkPanelRuntimeData, useGameScreenWorldTables, useLocalPlayer } from '../engine/selectors';
+import {
+  buildItemDefinitionsByName,
+  buildPlayerInventoryCountsByDefId,
+} from '../utils/playerInventoryIndex';
 
 export type AlkTab =
   | 'seasonal'
@@ -122,31 +126,20 @@ export function useAlkPanelController({ onClose }: { onClose: () => void }) {
     };
   }, [onClose, isQuantityInputFocused, isSearchFocused, searchQuery]);
 
+  const itemDefinitionsByName = useMemo(
+    () => buildItemDefinitionsByName(itemDefinitions),
+    [itemDefinitions],
+  );
+
+  const playerInventoryCountsByDefId = useMemo(
+    () => buildPlayerInventoryCountsByDefId(inventoryItems, playerIdentity),
+    [inventoryItems, playerIdentity],
+  );
+
   const inventoryShardCount = useMemo(() => {
-    if (!playerIdentity || !inventoryItems || !itemDefinitions) return 0;
-
-    const memoryShardDef = Array.from(itemDefinitions.values()).find((def) => def.name === 'Memory Shard');
-    if (!memoryShardDef) return 0;
-
-    let total = 0;
-    inventoryItems.forEach((item) => {
-      const loc = item.location;
-      if (!loc) return;
-
-      let isOwned = false;
-      if (loc.tag === 'Inventory' && loc.value?.ownerId?.isEqual(playerIdentity)) {
-        isOwned = true;
-      } else if (loc.tag === 'Hotbar' && loc.value?.ownerId?.isEqual(playerIdentity)) {
-        isOwned = true;
-      }
-
-      if (isOwned && item.itemDefId === memoryShardDef.id) {
-        total += Number(item.quantity);
-      }
-    });
-
-    return total;
-  }, [playerIdentity, inventoryItems, itemDefinitions]);
+    const memoryShardDef = itemDefinitionsByName.get('Memory Shard');
+    return memoryShardDef ? playerInventoryCountsByDefId.get(memoryShardDef.id.toString()) ?? 0 : 0;
+  }, [itemDefinitionsByName, playerInventoryCountsByDefId]);
 
   const currentSeason = useMemo(() => {
     if (worldState) {
@@ -158,38 +151,53 @@ export function useAlkPanelController({ onClose }: { onClose: () => void }) {
     return 0;
   }, [worldState, alkState]);
 
-  const seasonalContracts = useMemo(
-    () => Array.from(alkContracts.values()).filter((c) => (getKindTag(c.kind) === 'SeasonalHarvest' || getKindTag(c.kind) === 'BaseFood') && c.isActive && isNotMemoryShard(c)),
-    [alkContracts],
-  );
-  const materialsContracts = useMemo(
-    () => Array.from(alkContracts.values()).filter((c) => (getKindTag(c.kind) === 'Materials' || getKindTag(c.kind) === 'BaseIndustrial') && c.isActive && isNotMemoryShard(c)),
-    [alkContracts],
-  );
-  const armsContracts = useMemo(
-    () => Array.from(alkContracts.values()).filter((c) => getKindTag(c.kind) === 'Arms' && c.isActive && isNotMemoryShard(c)),
-    [alkContracts],
-  );
-  const armorContracts = useMemo(
-    () => Array.from(alkContracts.values()).filter((c) => getKindTag(c.kind) === 'Armor' && c.isActive && isNotMemoryShard(c)),
-    [alkContracts],
-  );
-  const toolsContracts = useMemo(
-    () => Array.from(alkContracts.values()).filter((c) => getKindTag(c.kind) === 'Tools' && c.isActive && isNotMemoryShard(c)),
-    [alkContracts],
-  );
-  const provisionsContracts = useMemo(
-    () => Array.from(alkContracts.values()).filter((c) => getKindTag(c.kind) === 'Provisions' && c.isActive && isNotMemoryShard(c)),
-    [alkContracts],
-  );
-  const bonusContracts = useMemo(
-    () => Array.from(alkContracts.values()).filter((c) => getKindTag(c.kind) === 'DailyBonus' && c.isActive && isNotMemoryShard(c)),
-    [alkContracts],
-  );
-  const buyOrderContracts = useMemo(
-    () => Array.from(alkContracts.values()).filter((c) => getKindTag(c.kind) === 'BuyOrder' && c.isActive && isNotMemoryShard(c)),
-    [alkContracts],
-  );
+  const groupedContracts = useMemo(() => {
+    const groups = {
+      seasonal: [] as AlkContract[],
+      materials: [] as AlkContract[],
+      arms: [] as AlkContract[],
+      armor: [] as AlkContract[],
+      tools: [] as AlkContract[],
+      provisions: [] as AlkContract[],
+      bonus: [] as AlkContract[],
+      buyOrders: [] as AlkContract[],
+    };
+
+    alkContracts.forEach((contract) => {
+      if (!contract.isActive || !isNotMemoryShard(contract)) return;
+
+      switch (getKindTag(contract.kind)) {
+        case 'SeasonalHarvest':
+        case 'BaseFood':
+          groups.seasonal.push(contract);
+          break;
+        case 'Materials':
+        case 'BaseIndustrial':
+          groups.materials.push(contract);
+          break;
+        case 'Arms':
+          groups.arms.push(contract);
+          break;
+        case 'Armor':
+          groups.armor.push(contract);
+          break;
+        case 'Tools':
+          groups.tools.push(contract);
+          break;
+        case 'Provisions':
+          groups.provisions.push(contract);
+          break;
+        case 'DailyBonus':
+          groups.bonus.push(contract);
+          break;
+        case 'BuyOrder':
+          groups.buyOrders.push(contract);
+          break;
+      }
+    });
+
+    return groups;
+  }, [alkContracts]);
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -258,7 +266,8 @@ export function useAlkPanelController({ onClose }: { onClose: () => void }) {
     alkPlayerContracts,
     worldState,
     itemDefinitions,
-    inventoryItems,
+    itemDefinitionsByName,
+    playerInventoryCountsByDefId,
     activeTab,
     setActiveTab,
     nearbyStationId,
@@ -270,14 +279,14 @@ export function useAlkPanelController({ onClose }: { onClose: () => void }) {
     setIsSearchFocused,
     inventoryShardCount,
     currentSeason,
-    seasonalContracts,
-    materialsContracts,
-    armsContracts,
-    armorContracts,
-    toolsContracts,
-    provisionsContracts,
-    bonusContracts,
-    buyOrderContracts,
+    seasonalContracts: groupedContracts.seasonal,
+    materialsContracts: groupedContracts.materials,
+    armsContracts: groupedContracts.arms,
+    armorContracts: groupedContracts.armor,
+    toolsContracts: groupedContracts.tools,
+    provisionsContracts: groupedContracts.provisions,
+    bonusContracts: groupedContracts.bonus,
+    buyOrderContracts: groupedContracts.buyOrders,
     searchResults,
     isSearchActive,
     myContracts,

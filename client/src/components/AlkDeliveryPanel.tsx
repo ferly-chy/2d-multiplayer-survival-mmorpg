@@ -14,11 +14,13 @@ import {
     AlkStation,
     AlkContract,
     AlkPlayerContract,
-    PlayerShardBalance,
     ItemDefinition,
-    InventoryItem,
 } from '../generated/types';
 import { useAlkPanelRuntimeData } from '../engine/selectors';
+import {
+    buildItemDefinitionsByName,
+    buildPlayerInventoryCountsByDefId,
+} from '../utils/playerInventoryIndex';
 
 // Module-level flag to prevent immediate reopening after E key close
 // This is shared across all instances and persists briefly after panel closes
@@ -65,7 +67,6 @@ export const AlkDeliveryPanel: React.FC<AlkDeliveryPanelProps> = ({
         alkStations,
         alkContracts,
         alkPlayerContracts,
-        playerShardBalance,
         itemDefinitions,
         inventoryItems,
         matronageMembers,
@@ -95,35 +96,23 @@ export const AlkDeliveryPanel: React.FC<AlkDeliveryPanelProps> = ({
     // Check if this is the Central Compound
     const isCentralCompound = stationId === 0;
     
+    const itemDefinitionsByName = useMemo(
+        () => buildItemDefinitionsByName(itemDefinitions),
+        [itemDefinitions],
+    );
+
+    const playerInventoryCountsByDefId = useMemo(
+        () => buildPlayerInventoryCountsByDefId(inventoryItems, playerIdentity),
+        [inventoryItems, playerIdentity],
+    );
+    
     // Check if player has a Matron's Mark in inventory
     const hasMatronsMark = useMemo(() => {
-        if (!playerIdentity || !inventoryItems || !itemDefinitions) return false;
-
-        const matronsMarkDef = Array.from(itemDefinitions.values()).find(
-            def => def.name === "Matron's Mark"
-        );
+        const matronsMarkDef = itemDefinitionsByName.get("Matron's Mark");
         if (!matronsMarkDef) return false;
 
-        let found = false;
-        inventoryItems.forEach((item) => {
-            if (found) return;
-            const loc = item.location;
-            if (!loc) return;
-
-            let isOwned = false;
-            if (loc.tag === 'Inventory' && loc.value?.ownerId?.isEqual(playerIdentity)) {
-                isOwned = true;
-            } else if (loc.tag === 'Hotbar' && loc.value?.ownerId?.isEqual(playerIdentity)) {
-                isOwned = true;
-            }
-
-            if (isOwned && item.itemDefId === matronsMarkDef.id) {
-                found = true;
-            }
-        });
-
-        return found;
-    }, [playerIdentity, inventoryItems, itemDefinitions]);
+        return (playerInventoryCountsByDefId.get(matronsMarkDef.id.toString()) ?? 0) > 0;
+    }, [itemDefinitionsByName, playerInventoryCountsByDefId]);
     
     // Handle creating a new matronage
     const handleCreateMatronage = useCallback(async () => {
@@ -145,34 +134,9 @@ export const AlkDeliveryPanel: React.FC<AlkDeliveryPanelProps> = ({
     
     // Count Memory Shards in player's inventory (this is the real shard count)
     const inventoryShardCount = useMemo(() => {
-        if (!playerIdentity || !inventoryItems || !itemDefinitions) return 0;
-        
-        // Find Memory Shard definition
-        const memoryShardDef = Array.from(itemDefinitions.values()).find(
-            def => def.name === 'Memory Shard'
-        );
-        if (!memoryShardDef) return 0;
-        
-        let total = 0;
-        inventoryItems.forEach((item) => {
-            // Check if owned by player and is Memory Shard
-            const loc = item.location;
-            if (!loc) return;
-            
-            let isOwned = false;
-            if (loc.tag === 'Inventory' && loc.value?.ownerId?.isEqual(playerIdentity)) {
-                isOwned = true;
-            } else if (loc.tag === 'Hotbar' && loc.value?.ownerId?.isEqual(playerIdentity)) {
-                isOwned = true;
-            }
-            
-            if (isOwned && item.itemDefId === memoryShardDef.id) {
-                total += Number(item.quantity);
-            }
-        });
-        
-        return total;
-    }, [playerIdentity, inventoryItems, itemDefinitions]);
+        const memoryShardDef = itemDefinitionsByName.get('Memory Shard');
+        return memoryShardDef ? playerInventoryCountsByDefId.get(memoryShardDef.id.toString()) ?? 0 : 0;
+    }, [itemDefinitionsByName, playerInventoryCountsByDefId]);
 
     // Get the station details
     const station = useMemo(() => {
@@ -199,32 +163,11 @@ export const AlkDeliveryPanel: React.FC<AlkDeliveryPanelProps> = ({
             const contract = alkContracts.get(pc.contractId.toString());
             if (!contract) return;
 
-            const itemDef = Array.from(itemDefinitions.values()).find(
-                (item) => item.name === contract.itemName
-            );
+            const itemDef = itemDefinitionsByName.get(contract.itemName.trim());
 
-            // Calculate how many of this item the player has
-            // Check both inventory and hotbar locations
-            let inventoryQty = 0;
-            inventoryItems.forEach((invItem) => {
-                // Check if item is in player's inventory or hotbar
-                const loc = invItem.location;
-                if (!loc) return;
-                
-                let isOwned = false;
-                if (loc.tag === 'Inventory' && loc.value?.ownerId?.isEqual(playerIdentity)) {
-                    isOwned = true;
-                } else if (loc.tag === 'Hotbar' && loc.value?.ownerId?.isEqual(playerIdentity)) {
-                    isOwned = true;
-                }
-                
-                if (!isOwned) return;
-                
-                const invItemDef = itemDefinitions.get(invItem.itemDefId.toString());
-                if (invItemDef && invItemDef.name === contract.itemName) {
-                    inventoryQty += Number(invItem.quantity);
-                }
-            });
+            const inventoryQty = itemDef
+                ? playerInventoryCountsByDefId.get(itemDef.id.toString()) ?? 0
+                : 0;
 
             // Can deliver if we have at least the target quantity
             const targetQty = Number(pc.targetQuantity);
@@ -240,7 +183,7 @@ export const AlkDeliveryPanel: React.FC<AlkDeliveryPanelProps> = ({
         });
 
         return contracts;
-    }, [alkPlayerContracts, alkContracts, itemDefinitions, inventoryItems, playerIdentity]);
+    }, [alkPlayerContracts, alkContracts, itemDefinitionsByName, playerInventoryCountsByDefId, playerIdentity]);
 
     // Calculate total deliverable shards
     const deliverableSummary = useMemo(() => {

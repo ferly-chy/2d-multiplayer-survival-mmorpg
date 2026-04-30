@@ -17,7 +17,6 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import type { Identity } from 'spacetimedb';
 import { getItemIcon } from '../utils/itemIconUtils';
 import alkIcon from '../assets/ui/alk.png';
 import './AlkPanel.css';
@@ -119,10 +118,7 @@ interface ContractCardProps {
     isAccepted: boolean;
     currentSeason: number;
     onQuantityInputFocusChange?: (isFocused: boolean) => void;
-    // For MAX button - calculate from inventory/hotbar
-    inventoryItems?: Map<string, any>;
-    itemDefinitions?: Map<string, ItemDefinition>;
-    playerIdentity?: Identity | null;
+    playerItemCount: number;
 }
 
 const ContractCard: React.FC<ContractCardProps> = ({
@@ -132,40 +128,10 @@ const ContractCard: React.FC<ContractCardProps> = ({
     isAccepted,
     currentSeason,
     onQuantityInputFocusChange,
-    inventoryItems,
-    itemDefinitions,
-    playerIdentity,
+    playerItemCount,
 }) => {
     // Contract count = how many contracts (each contract = 1 bundle worth of items)
     const [contractCount, setContractCount] = useState(1);
-    
-    // Calculate how many of this item the player has in inventory/hotbar (not storage)
-    const playerItemCount = useMemo(() => {
-        if (!playerIdentity || !inventoryItems || !itemDefinitions) return 0;
-        
-        let total = 0;
-        inventoryItems.forEach((item) => {
-            // Check if owned by player (inventory or hotbar only, not storage)
-            const loc = item.location;
-            if (!loc) return;
-            
-            let isOwned = false;
-            if (loc.tag === 'Inventory' && loc.value?.ownerId?.isEqual(playerIdentity)) {
-                isOwned = true;
-            } else if (loc.tag === 'Hotbar' && loc.value?.ownerId?.isEqual(playerIdentity)) {
-                isOwned = true;
-            }
-            
-            if (!isOwned) return;
-            
-            // Check if this is the contract's item
-            if (item.itemDefId === contract.itemDefId) {
-                total += Number(item.quantity);
-            }
-        });
-        
-        return total;
-    }, [playerIdentity, inventoryItems, contract.itemDefId]);
     
     // Max contracts from pool (if limited)
     const maxFromPool = contract.currentPoolRemaining 
@@ -739,11 +705,10 @@ const AlkPanel: React.FC<AlkPanelProps> = ({
     onClose,
 }) => {
     const {
-        playerIdentity,
         alkState,
         alkContracts,
         itemDefinitions,
-        inventoryItems,
+        playerInventoryCountsByDefId,
         worldState,
         activeTab,
         setActiveTab,
@@ -812,9 +777,7 @@ const AlkPanel: React.FC<AlkPanelProps> = ({
                             isAccepted={acceptedContractIds.has(contract.contractId.toString())}
                             currentSeason={currentSeason}
                             onQuantityInputFocusChange={setIsQuantityInputFocused}
-                            inventoryItems={inventoryItems}
-                            itemDefinitions={itemDefinitions}
-                            playerIdentity={playerIdentity}
+                            playerItemCount={playerInventoryCountsByDefId.get(contract.itemDefId.toString()) ?? 0}
                         />
                     ))}
                 </div>
@@ -937,9 +900,7 @@ const AlkPanel: React.FC<AlkPanelProps> = ({
                         isAccepted={acceptedContractIds.has(contract.contractId.toString())}
                         currentSeason={currentSeason}
                         onQuantityInputFocusChange={setIsQuantityInputFocused}
-                        inventoryItems={inventoryItems}
-                        itemDefinitions={itemDefinitions}
-                        playerIdentity={playerIdentity}
+                        playerItemCount={playerInventoryCountsByDefId.get(contract.itemDefId.toString()) ?? 0}
                     />
                 ))}
             </div>
