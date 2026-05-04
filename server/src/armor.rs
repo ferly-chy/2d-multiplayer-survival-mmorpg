@@ -189,7 +189,8 @@ pub fn calculate_movement_speed_modifier(ctx: &ReducerContext, player_id: Identi
     speed_modifier
 }
 
-/// Calculates total stamina regeneration modifier from equipped armor
+/// Calculates total endurance modifier from equipped armor.
+/// Stamina no longer drains; this value reduces hunger/thirst drain instead.
 pub fn calculate_stamina_regen_modifier(ctx: &ReducerContext, player_id: Identity) -> f32 {
     let armor_pieces = get_equipped_armor_pieces(ctx, player_id);
     let mut stamina_modifier = 0.0; // Additive modifier

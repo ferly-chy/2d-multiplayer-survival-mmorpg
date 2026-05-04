@@ -26,7 +26,7 @@ interface ArmorStats {
     // Bonuses
     warmthBonus: number;
     movementSpeedModifier: number;
-    staminaRegenModifier: number;
+    enduranceDrainReduction: number;
     waterSpeedBonus: number; // Bonus speed while swimming (e.g., Reed Flippers)
     
     // Special Effects
@@ -79,7 +79,7 @@ const ArmorStatsPanel: React.FC<ArmorStatsPanelProps> = ({ equippedArmor }) => {
             coldResistance: 0,
             warmthBonus: 0,
             movementSpeedModifier: 0,
-            staminaRegenModifier: 0,
+            enduranceDrainReduction: 0,
             waterSpeedBonus: 0,
             burnImmunityPieces: 0,
             coldImmunityPieces: 0,
@@ -110,7 +110,7 @@ const ArmorStatsPanel: React.FC<ArmorStatsPanelProps> = ({ equippedArmor }) => {
             // Accumulate bonuses
             accumulated.warmthBonus += armor.warmthBonus || 0;
             accumulated.movementSpeedModifier += armor.movementSpeedModifier || 0;
-            accumulated.staminaRegenModifier += armor.staminaRegenModifier || 0;
+            accumulated.enduranceDrainReduction += armor.staminaRegenModifier || 0;
             // Water speed bonus (e.g., Reed Flippers) - cast to any for generated types compatibility
             const waterBonus = (armor as any).waterSpeedBonus;
             if (typeof waterBonus === 'number') {
@@ -243,7 +243,7 @@ const ArmorStatsPanel: React.FC<ArmorStatsPanelProps> = ({ equippedArmor }) => {
             </div>
 
             {/* Bonuses Section */}
-            {(stats.warmthBonus !== 0 || stats.movementSpeedModifier !== 0 || stats.staminaRegenModifier !== 0 || stats.waterSpeedBonus !== 0) && (
+            {(stats.warmthBonus !== 0 || stats.movementSpeedModifier !== 0 || stats.enduranceDrainReduction !== 0 || stats.waterSpeedBonus !== 0) && (
                 <div className={styles.section}>
                     <div className={styles.sectionTitle}>✨ Bonuses</div>
                     {stats.warmthBonus !== 0 && (
@@ -270,10 +270,10 @@ const ArmorStatsPanel: React.FC<ArmorStatsPanelProps> = ({ equippedArmor }) => {
                             </span>
                         </div>
                     )}
-                    {stats.staminaRegenModifier !== 0 && (
+                    {stats.enduranceDrainReduction !== 0 && (
                         <div className={styles.statRow}>
-                            <span className={styles.statLabel}>⚡ Stamina Regen:</span>
-                            <span className={styles.statValue}>{formatPercent(stats.staminaRegenModifier)}</span>
+                            <span className={styles.statLabel}>⚡ Hunger/Thirst Drain:</span>
+                            <span className={styles.statValue}>-{formatPercent(stats.enduranceDrainReduction, false)}</span>
                         </div>
                     )}
                 </div>

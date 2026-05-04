@@ -448,7 +448,7 @@ pub fn get_armor_definitions() -> Vec<ItemDefinition> {
                 pierce_resistance: 0.06,
                 cold_resistance: 0.0,
             })
-            .stamina_regen_modifier(0.02) // +2% stamina regen per piece
+            .stamina_regen_modifier(0.02) // +2% endurance: reduced hunger/thirst drain per piece
             .grants_bleed_immunity(true) // 3 pieces needed for full immunity
             .crafting_cost(vec![
                 CostIngredient { item_name: "Animal Leather".to_string(), quantity: 10 },
@@ -1103,12 +1103,12 @@ pub fn get_armor_definitions() -> Vec<ItemDefinition> {
             .bleed_chance_on_melee(0.10) // 10% chance to inflict bleed on melee
             .build(),
 
-        // Tayngax Totem (Tern) - Stamina regeneration bonus
+        // Tayngax Totem (Tern) - Endurance bonus
         ItemBuilder::new("Tayngax Totem", "A tern skull adorned with wave and wind patterns. The tayngax spirit grants the tireless endurance of the seabird that rides the coastal winds without rest.", ItemCategory::Armor)
             .icon("tayngax_totem.png")
             .equippable(Some(EquipmentSlotType::Back))
             .armor_resistances(ArmorResistances::zero())
-            .stamina_regen_modifier(0.15) // +15% stamina regen
+            .stamina_regen_modifier(0.15) // +15% endurance: reduced hunger/thirst drain
             .build(),
 
         // Qaangax Totem (Crow) - Reflects melee damage

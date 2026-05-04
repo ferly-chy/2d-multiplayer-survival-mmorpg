@@ -726,8 +726,7 @@ pub fn process_active_consumable_effects_tick(ctx: &ReducerContext, _args: Proce
                             amount_this_tick = 0.0; // No per-tick stat change
                         }
                         EffectType::StaminaBoost => {
-                            // TODO: Implement reduced hunger/thirst drain
-                            // This will be handled by stat decay system, not effect tick
+                            // Reduced hunger/thirst drain is handled by player_stats, not effect tick.
                             amount_this_tick = 0.0; // No per-tick stat change
                         }
                         EffectType::NightVision => {

@@ -1423,6 +1423,7 @@ const PlayerUI: React.FC<PlayerUIProps> = ({
                         'Ulax Charm': { emoji: '🐇', description: 'Hare spirit: +8% movement speed' },
                         'Angunax Totem': { emoji: '🦉', description: 'Owl spirit: permanent night vision' },
                         'Alax Totem': { emoji: '🦈', description: 'Shark spirit: +15% water speed, 10% bleed on melee' },
+                        'Tayngax Totem': { emoji: '🐦', description: 'Tern spirit: -15% hunger/thirst drain' },
                     };
                     
                     const totemInfo = boneTotemStatusMap[backItemDef.name];

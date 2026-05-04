@@ -194,7 +194,7 @@ const BONE_CARVING_RECIPES: BoneCarvingRecipe[] = [
             { itemName: "Rope", quantity: 2 },
         ],
         craftingTimeSecs: 55,
-        description: "+15% stamina regeneration",
+        description: "-15% hunger/thirst drain",
         animalSource: "Tern",
     },
     {

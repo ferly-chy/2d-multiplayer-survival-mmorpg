@@ -375,6 +375,13 @@ pub fn process_player_stats(ctx: &ReducerContext, _schedule: PlayerStatSchedule)
                 player_id, (1.0 - crate::active_effects::STAMINA_BOOST_DRAIN_REDUCTION) * 100.0, hunger_drain_rate);
         }
         // <<< END BROTH EFFECT >>>
+
+        let endurance_drain_reduction = crate::armor::calculate_stamina_regen_modifier(ctx, player_id).clamp(0.0, 0.5);
+        if endurance_drain_reduction > 0.0 {
+            hunger_drain_rate *= 1.0 - endurance_drain_reduction;
+            log::trace!("Player {:?} has endurance gear - hunger drain reduced by {:.0}% to {:.4}/sec",
+                player_id, endurance_drain_reduction * 100.0, hunger_drain_rate);
+        }
         
         let new_hunger = (player.hunger - (elapsed_seconds * hunger_drain_rate)).max(0.0).min(PLAYER_MAX_HUNGER);
         
@@ -393,6 +400,12 @@ pub fn process_player_stats(ctx: &ReducerContext, _schedule: PlayerStatSchedule)
                 player_id, (1.0 - crate::active_effects::STAMINA_BOOST_DRAIN_REDUCTION) * 100.0, thirst_drain_rate);
         }
         // <<< END BROTH EFFECT >>>
+
+        if endurance_drain_reduction > 0.0 {
+            thirst_drain_rate *= 1.0 - endurance_drain_reduction;
+            log::trace!("Player {:?} has endurance gear - thirst drain reduced by {:.0}% to {:.4}/sec",
+                player_id, endurance_drain_reduction * 100.0, thirst_drain_rate);
+        }
         
         let new_thirst = (player.thirst - (elapsed_seconds * thirst_drain_rate)).max(0.0).min(PLAYER_MAX_THIRST);
 

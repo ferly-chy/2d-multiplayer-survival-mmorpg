@@ -145,7 +145,7 @@ pub struct ItemDefinition {
     pub damage_type: Option<crate::models::DamageType>, // What type of damage this weapon deals
     pub armor_resistances: Option<crate::models::ArmorResistances>, // Typed resistance values
     pub movement_speed_modifier: Option<f32>, // -0.2 = -20% speed, 0.1 = +10% speed
-    pub stamina_regen_modifier: Option<f32>, // 0.1 = +10% stamina regen
+    pub stamina_regen_modifier: Option<f32>, // Legacy name: 0.1 = 10% reduced hunger/thirst drain
     pub reflects_melee_damage: Option<f32>, // % of melee damage reflected back to attacker
     pub fire_damage_multiplier: Option<f32>, // 2.0 = double fire damage taken
     pub detection_radius_bonus: Option<f32>, // 0.1 = +10% detection radius

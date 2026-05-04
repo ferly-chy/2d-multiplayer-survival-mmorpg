@@ -213,7 +213,7 @@ pub fn get_bone_carving_recipes() -> Vec<BoneCarvingRecipe> {
                 BoneCarvingIngredient { item_name: "Rope".to_string(), quantity: 2 },
             ],
             crafting_time_secs: 55,
-            description: "+15% stamina regeneration".to_string(),
+            description: "-15% hunger/thirst drain".to_string(),
         },
         // 12. Qaangax Totem (Crow - Aggressive Defender)
         BoneCarvingRecipe {
