@@ -237,7 +237,7 @@ const DayNightCycleTracker: React.FC<DayNightCycleTrackerProps> = ({
 
     const getWeatherDisplay = (weather: any, isWinter: boolean = false) => {
         if (isWinter) {
-            switch (weather.tag) {
+            switch (weather?.tag) {
                 case 'Clear': return 'Clear';
                 case 'LightRain': return 'Light Snow';
                 case 'ModerateRain': return 'Snow';
@@ -246,7 +246,7 @@ const DayNightCycleTracker: React.FC<DayNightCycleTrackerProps> = ({
                 default: return 'Unknown';
             }
         }
-        switch (weather.tag) {
+        switch (weather?.tag) {
             case 'Clear': return 'Clear';
             case 'LightRain': return 'Light Rain';
             case 'ModerateRain': return 'Moderate Rain';
@@ -258,7 +258,7 @@ const DayNightCycleTracker: React.FC<DayNightCycleTrackerProps> = ({
 
     const getWeatherEmoji = (weather: any, isWinter: boolean = false) => {
         if (isWinter) {
-            switch (weather.tag) {
+            switch (weather?.tag) {
                 case 'Clear': return '❄️';
                 case 'LightRain': return '🌨️';
                 case 'ModerateRain': return '🌨️';
@@ -267,7 +267,7 @@ const DayNightCycleTracker: React.FC<DayNightCycleTrackerProps> = ({
                 default: return '❄️';
             }
         }
-        switch (weather.tag) {
+        switch (weather?.tag) {
             case 'Clear': return '☀️';
             case 'LightRain': return '🌦️';
             case 'ModerateRain': return '🌧️';
@@ -277,8 +277,8 @@ const DayNightCycleTracker: React.FC<DayNightCycleTrackerProps> = ({
         }
     };
 
-    const getSeasonDisplay = (season: Season) => {
-        switch (season.tag) {
+    const getSeasonDisplay = (season?: Season | null) => {
+        switch (season?.tag) {
             case 'Spring': return 'Spring';
             case 'Summer': return 'Summer';
             case 'Autumn': return 'Autumn';
@@ -287,8 +287,8 @@ const DayNightCycleTracker: React.FC<DayNightCycleTrackerProps> = ({
         }
     };
 
-    const getSeasonIcon = (season: Season): string => {
-        switch (season.tag) {
+    const getSeasonIcon = (season?: Season | null): string => {
+        switch (season?.tag) {
             case 'Spring': return springIcon;
             case 'Summer': return summerIcon;
             case 'Autumn': return autumnIcon;
@@ -297,8 +297,8 @@ const DayNightCycleTracker: React.FC<DayNightCycleTrackerProps> = ({
         }
     };
 
-    const getSeasonColor = (season: Season) => {
-        switch (season.tag) {
+    const getSeasonColor = (season?: Season | null) => {
+        switch (season?.tag) {
             case 'Spring': return SEASON_COLORS.spring;
             case 'Summer': return SEASON_COLORS.summer;
             case 'Autumn': return SEASON_COLORS.autumn;
