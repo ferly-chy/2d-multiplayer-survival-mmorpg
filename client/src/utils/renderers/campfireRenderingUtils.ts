@@ -57,6 +57,7 @@ export const CAMPFIRE_LIGHT_RAMP_UP_MS = 9800;
 
 /** Monument "fv_campfire" world Y offset (fishing / hunting village). */
 export const STATIC_MONUMENT_CAMPFIRE_Y_OFFSET = -135;
+const STATIC_MONUMENT_CAMPFIRE_FIRE_ANCHOR_DROP_PX = 24;
 
 /** Fire column anchor in world pixels for placed campfires (entity base at posY). Smaller Y = higher on screen. */
 export function getPlacedCampfireFireAnchorWorld(posX: number, posY: number): { x: number; y: number } {
@@ -67,7 +68,7 @@ export function getPlacedCampfireFireAnchorWorld(posX: number, posY: number): { 
 /** Fire anchor for static monument campfires (image centered at world pos). */
 export function getStaticMonumentCampfireFireAnchorWorld(posX: number, posY: number): { x: number; y: number } {
   const visualCenterY = posY + STATIC_MONUMENT_CAMPFIRE_Y_OFFSET;
-  return { x: posX, y: visualCenterY + CAMPFIRE_HEIGHT * 0.08 - 8 };
+  return { x: posX, y: visualCenterY + CAMPFIRE_HEIGHT * 0.08 - 8 + STATIC_MONUMENT_CAMPFIRE_FIRE_ANCHOR_DROP_PX };
 }
 
 // --- Other Local Constants ---

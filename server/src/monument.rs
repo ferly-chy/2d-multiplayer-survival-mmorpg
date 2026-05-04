@@ -62,6 +62,7 @@ pub mod clearance {
 /// Prevents overlapping entities at monuments
 pub const MONUMENT_SPAWN_MIN_DISTANCE: f32 = 50.0;
 pub const MONUMENT_SPAWN_MIN_DISTANCE_SQ: f32 = MONUMENT_SPAWN_MIN_DISTANCE * MONUMENT_SPAWN_MIN_DISTANCE;
+const VILLAGE_QUARRY_CLEARANCE_TILES: i32 = 24;
 
 /// Represents an occupied position at a monument
 #[derive(Clone, Debug)]
@@ -82,6 +83,43 @@ pub fn is_position_occupied(x: f32, y: f32, radius: f32, occupied: &[OccupiedPos
             return true;
         }
     }
+    false
+}
+
+fn is_tile_near_quarry_dirt(
+    quarry_dirt: &[Vec<bool>],
+    tile_x: usize,
+    tile_y: usize,
+    radius_tiles: i32,
+) -> bool {
+    if quarry_dirt.is_empty() || quarry_dirt[0].is_empty() {
+        return false;
+    }
+
+    let height = quarry_dirt.len() as i32;
+    let width = quarry_dirt[0].len() as i32;
+    let center_x = tile_x as i32;
+    let center_y = tile_y as i32;
+    let radius_sq = radius_tiles * radius_tiles;
+
+    for dy in -radius_tiles..=radius_tiles {
+        for dx in -radius_tiles..=radius_tiles {
+            if dx * dx + dy * dy > radius_sq {
+                continue;
+            }
+
+            let check_x = center_x + dx;
+            let check_y = center_y + dy;
+            if check_x < 0 || check_y < 0 || check_x >= width || check_y >= height {
+                continue;
+            }
+
+            if quarry_dirt[check_y as usize][check_x as usize] {
+                return true;
+            }
+        }
+    }
+
     false
 }
 
@@ -602,6 +640,7 @@ pub fn generate_fishing_village(
     shore_distance: &[Vec<f64>],
     river_network: &[Vec<bool>],
     lake_map: &[Vec<bool>],
+    quarry_dirt: &[Vec<bool>],
     shipwreck_centers: &[(f32, f32)], // Avoid placing near shipwreck
     hot_spring_centers: &[(f32, f32, i32)], // Avoid placing near hot springs (x, y, radius)
     width: usize,
@@ -631,6 +670,10 @@ pub fn generate_fishing_village(
             if shore_dist >= min_shore_dist && shore_dist <= max_shore_dist {
                 // Must not be on river or lake
                 if river_network[y][x] || lake_map[y][x] {
+                    continue;
+                }
+
+                if is_tile_near_quarry_dirt(quarry_dirt, x, y, VILLAGE_QUARRY_CLEARANCE_TILES) {
                     continue;
                 }
                 
@@ -1096,6 +1139,7 @@ pub fn generate_hunting_village(
     shore_distance: &[Vec<f64>],
     river_network: &[Vec<bool>],
     lake_map: &[Vec<bool>],
+    quarry_dirt: &[Vec<bool>],
     forest_areas: &[Vec<bool>],
     tundra_areas: &[Vec<bool>],
     hot_spring_centers: &[(f32, f32, i32)],
@@ -1135,6 +1179,10 @@ pub fn generate_hunting_village(
             if shore_dist >= min_shore_dist && forest_areas[y][x] && !tundra_areas[y][x] {
                 // Must not be on river or lake
                 if river_network[y][x] || lake_map[y][x] {
+                    continue;
+                }
+
+                if is_tile_near_quarry_dirt(quarry_dirt, x, y, VILLAGE_QUARRY_CLEARANCE_TILES) {
                     continue;
                 }
                 
@@ -1843,6 +1891,7 @@ pub fn generate_alpine_village(
     shore_distance: &[Vec<f64>],
     river_network: &[Vec<bool>],
     lake_map: &[Vec<bool>],
+    quarry_dirt: &[Vec<bool>],
     alpine_areas: &[Vec<bool>],
     hot_spring_centers: &[(f32, f32, i32)],
     shipwreck_centers: &[(f32, f32)],
@@ -1880,6 +1929,10 @@ pub fn generate_alpine_village(
             
             if shore_dist >= min_shore_dist && alpine_areas[y][x] {
                 if river_network[y][x] || lake_map[y][x] {
+                    continue;
+                }
+
+                if is_tile_near_quarry_dirt(quarry_dirt, x, y, VILLAGE_QUARRY_CLEARANCE_TILES) {
                     continue;
                 }
                 

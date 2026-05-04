@@ -829,7 +829,7 @@ fn generate_world_features(config: &WorldGenConfig, noise: &Perlin) -> WorldFeat
     // Generate fishing village monument on south beach (opposite side from shipwreck)
     // Must be at least 2000px (~42 tiles) away from hot springs
     let (fishing_village_center, fishing_village_parts) = crate::monument::generate_fishing_village(
-        noise, &shore_distance, &river_network, &lake_map, &shipwreck_centers, &hot_spring_centers, width, height
+        noise, &shore_distance, &river_network, &lake_map, &quarry_dirt, &shipwreck_centers, &hot_spring_centers, width, height
     );
     
     // Generate whale bone graveyard monument on beach (separate from shipwreck and fishing village)
@@ -847,7 +847,7 @@ fn generate_world_features(config: &WorldGenConfig, noise: &Perlin) -> WorldFeat
     // Generate hunting village monument in forest biome (safe zone with tree ring)
     // Must be in forest (not tundra), away from hot springs, quarries, and other monuments
     let (hunting_village_center, hunting_village_parts) = crate::monument::generate_hunting_village(
-        noise, &shore_distance, &river_network, &lake_map, &forest_areas, &tundra_areas, &hot_spring_centers,
+        noise, &shore_distance, &river_network, &lake_map, &quarry_dirt, &forest_areas, &tundra_areas, &hot_spring_centers,
         &shipwreck_centers, fishing_village_center, whale_bone_graveyard_center, &large_quarry_positions, width, height
     );
     
@@ -871,7 +871,7 @@ fn generate_world_features(config: &WorldGenConfig, noise: &Perlin) -> WorldFeat
     // Generate alpine village monument in alpine biome (single lodge, path + dirt center, overrun with grass)
     // Must be away from weather station and other monuments
     let (alpine_village_center, alpine_village_parts) = crate::monument::generate_alpine_village(
-        noise, &shore_distance, &river_network, &lake_map, &alpine_areas, &hot_spring_centers,
+        noise, &shore_distance, &river_network, &lake_map, &quarry_dirt, &alpine_areas, &hot_spring_centers,
         &shipwreck_centers, fishing_village_center, whale_bone_graveyard_center, hunting_village_center,
         crashed_research_drone_center, weather_station_center, &large_quarry_positions, width, height
     );
