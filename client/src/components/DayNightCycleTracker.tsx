@@ -205,8 +205,8 @@ const DayNightCycleTracker: React.FC<DayNightCycleTrackerProps> = ({
     const tutorialComplete = currentTutorialProgress?.tutorialCompleted ?? false;
 
     // Helper functions
-    const getTimeOfDayDisplay = (timeOfDay: TimeOfDay) => {
-        switch (timeOfDay.tag) {
+    const getTimeOfDayDisplay = (timeOfDay?: TimeOfDay | null) => {
+        switch (timeOfDay?.tag) {
             case 'Dawn': return 'Dawn';
             case 'TwilightMorning': return 'Twilight';
             case 'Morning': return 'Morning';
@@ -220,8 +220,8 @@ const DayNightCycleTracker: React.FC<DayNightCycleTrackerProps> = ({
         }
     };
 
-    const getTimeEmoji = (timeOfDay: TimeOfDay) => {
-        switch (timeOfDay.tag) {
+    const getTimeEmoji = (timeOfDay?: TimeOfDay | null) => {
+        switch (timeOfDay?.tag) {
             case 'Dawn': return '🌅';
             case 'TwilightMorning': return '🌆';
             case 'Morning': return '☀️';
@@ -481,7 +481,7 @@ const DayNightCycleTracker: React.FC<DayNightCycleTrackerProps> = ({
     // ==================== MINIMIZED VIEW ====================
     if (isMinimized) {
         const timeTooltipText = getTimeOfDayDisplay(worldState.timeOfDay) + 
-            (worldState.isFullMoon && (worldState.timeOfDay.tag === 'Night' || worldState.timeOfDay.tag === 'Midnight') ? ' • Full Moon' : '');
+            (worldState.isFullMoon && (worldState.timeOfDay?.tag === 'Night' || worldState.timeOfDay?.tag === 'Midnight') ? ' • Full Moon' : '');
         
         return (
             <div
@@ -741,7 +741,7 @@ const DayNightCycleTracker: React.FC<DayNightCycleTrackerProps> = ({
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                                     <span style={{ fontSize: '9px', color: ACCENT_CYAN, letterSpacing: '1px' }}>
                                         {getTimeOfDayDisplay(worldState.timeOfDay).toUpperCase()}
-                                        {worldState.isFullMoon && (worldState.timeOfDay.tag === 'Night' || worldState.timeOfDay.tag === 'Midnight') && ' • FULL MOON'}
+                                        {worldState.isFullMoon && (worldState.timeOfDay?.tag === 'Night' || worldState.timeOfDay?.tag === 'Midnight') && ' • FULL MOON'}
                                     </span>
                                     <span style={{ fontSize: '8px', color: '#6b7280' }}>Day {worldState.dayOfYear}/{DAYS_PER_YEAR}</span>
                                 </div>
