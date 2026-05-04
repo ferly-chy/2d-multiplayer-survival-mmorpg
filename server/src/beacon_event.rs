@@ -82,6 +82,9 @@ pub struct BeaconDropEvent {
 /// Rolls a percentage chance and spawns a beacon if conditions are met
 pub fn on_dusk_started(ctx: &ReducerContext) {
     log::info!("[BeaconEvent] Dusk has started, checking beacon spawn conditions...");
+
+    // Reconcile expired/orphaned events before deciding whether an active beacon blocks a new spawn.
+    cleanup_expired_beacon_events(ctx);
     
     // Check if at least 1 player is online
     let online_players = ctx.db.player().iter().filter(|p| p.is_online).count();
@@ -326,25 +329,44 @@ fn send_beacon_spawn_announcement(ctx: &ReducerContext, grid_x: i32, grid_y: i32
 pub fn cleanup_expired_beacon_events(ctx: &ReducerContext) {
     let current_time = ctx.timestamp;
     
-    // Find and deactivate expired events
-    let expired_events: Vec<BeaconDropEvent> = ctx.db.beacon_drop_event()
+    // Find and deactivate expired events, plus orphaned events whose beacon row was deleted/destroyed.
+    let events_to_deactivate: Vec<BeaconDropEvent> = ctx.db.beacon_drop_event()
         .iter()
-        .filter(|e| e.is_active && current_time >= e.expires_at)
+        .filter(|e| {
+            if !e.is_active {
+                return false;
+            }
+
+            if current_time >= e.expires_at {
+                return true;
+            }
+
+            match ctx.db.lantern().id().find(&e.lantern_id) {
+                Some(lantern) => lantern.is_destroyed,
+                None => true,
+            }
+        })
         .collect();
     
-    for mut event in expired_events {
+    for mut event in events_to_deactivate {
+        let expired = current_time >= event.expires_at;
         event.is_active = false;
         ctx.db.beacon_drop_event().id().update(event.clone());
         
-        // Also destroy the associated lantern if it still exists
-        if let Some(mut lantern) = ctx.db.lantern().id().find(&event.lantern_id) {
-            if !lantern.is_destroyed {
-                lantern.is_destroyed = true;
-                lantern.destroyed_at = Some(current_time);
-                ctx.db.lantern().id().update(lantern);
-                log::info!("[BeaconEvent] Expired beacon {} destroyed at ({:.0}, {:.0})", 
-                          event.lantern_id, event.world_x, event.world_y);
+        if expired {
+            // Also destroy the associated lantern if it still exists.
+            if let Some(mut lantern) = ctx.db.lantern().id().find(&event.lantern_id) {
+                if !lantern.is_destroyed {
+                    lantern.is_destroyed = true;
+                    lantern.destroyed_at = Some(current_time);
+                    ctx.db.lantern().id().update(lantern);
+                    log::info!("[BeaconEvent] Expired beacon {} destroyed at ({:.0}, {:.0})", 
+                              event.lantern_id, event.world_x, event.world_y);
+                }
             }
+        } else {
+            log::info!("[BeaconEvent] Deactivated orphaned beacon event {} for missing/destroyed lantern {}", 
+                      event.id, event.lantern_id);
         }
     }
 }
