@@ -499,7 +499,7 @@ export function renderGameCanvasFrame(args: any): void {
   // Merge y-sorted campfires so emitters match the renderer even if visibleCampfiresMap is stale same frame.
   const fireOverlayTimeMs = performance.now();
   syncCampfireSmokePlumeBuild(
-    buildCampfireBurningStateMap(visibleCampfiresMap, currentYSortedEntities as any[]),
+    buildCampfireBurningStateMap(campfires, currentYSortedEntities as any[]),
     fireOverlayTimeMs,
   );
   // Re-read ref here so torch fire anchor matches this frame’s facing (not server `player.direction`).

@@ -71,6 +71,7 @@ export function useGameCanvasParticleRuntime({
   }, [sceneRuntime.monumentParts]);
 
   const computeCampfireFireOverlayEmitters = useCampfireFireOverlayEmitters({
+    campfiresMap: sceneRuntime.campfires,
     visibleCampfiresMap: sceneRuntime.visibleCampfiresMap,
     staticCampfires: villageCampfirePositions,
   });
