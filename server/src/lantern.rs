@@ -648,6 +648,11 @@ pub fn process_lantern_logic_scheduled(ctx: &ReducerContext, schedule_args: Lant
                 }
             }
             
+            // Keep the minimap/server-event row in sync before deleting the beacon entity.
+            if lantern.is_monument {
+                crate::beacon_event::on_beacon_destroyed(ctx, lantern_id);
+            }
+
             // Delete the beacon entity
             ctx.db.lantern().id().delete(lantern_id);
             
