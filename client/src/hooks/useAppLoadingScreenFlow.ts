@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 interface UseAppLoadingScreenFlowOptions {
   connectionError: unknown;
@@ -29,7 +29,7 @@ export function useAppLoadingScreenFlow({
   musicSystem,
   revealSovaSoundBoxUI,
 }: UseAppLoadingScreenFlowOptions) {
-  const [loadingSequenceComplete, setLoadingSequenceComplete] = useState(false);
+  const musicStartRequestedRef = useRef(false);
 
   useEffect(() => {
     if (loggedInPlayer && dbIdentity) {
@@ -68,23 +68,35 @@ export function useAppLoadingScreenFlow({
 
   const isSpacetimeReady = !spacetimeLoading && !!connection && !!dbIdentity;
   const hasPlayerDataOrUsername = loggedInPlayer || storedUsername;
-  const shouldShowLoadingScreen =
-    isAuthenticated &&
-    hasPlayerDataOrUsername &&
-    (authLoading || !isSpacetimeReady || !loadingSequenceComplete);
 
-  const handleSequenceComplete = useCallback(() => {
-    console.log('[App] Loading sequence complete, setting loadingSequenceComplete to true');
-    setLoadingSequenceComplete(true);
+  useEffect(() => {
+    if (!isAuthenticated) {
+      musicStartRequestedRef.current = false;
+      return;
+    }
+
+    if (authLoading || !isSpacetimeReady || !hasPlayerDataOrUsername) {
+      return;
+    }
+
     revealSovaSoundBoxUI();
 
-    if (!musicSystem.isPlaying) {
-      console.log('[App] Starting background music...');
+    if (!musicSystem.isPlaying && !musicStartRequestedRef.current) {
+      musicStartRequestedRef.current = true;
+      console.log('[App] Starting background music after game readiness...');
       musicSystem.start().catch((error) => {
+        musicStartRequestedRef.current = false;
         console.warn('[App] Failed to start music:', error);
       });
     }
-  }, [musicSystem, revealSovaSoundBoxUI]);
+  }, [
+    authLoading,
+    hasPlayerDataOrUsername,
+    isAuthenticated,
+    isSpacetimeReady,
+    musicSystem,
+    revealSovaSoundBoxUI,
+  ]);
 
   useEffect(() => {
     console.log(
@@ -92,20 +104,8 @@ export function useAppLoadingScreenFlow({
     );
   }, [isSpacetimeReady, spacetimeLoading, connection, dbIdentity]);
 
-  useEffect(() => {
-    if (shouldShowLoadingScreen && loadingSequenceComplete) {
-      setLoadingSequenceComplete(false);
-      if (musicSystem.isPlaying) {
-        console.log('[App] Stopping music due to returning to loading screen');
-        musicSystem.stop();
-      }
-    }
-  }, [shouldShowLoadingScreen, loadingSequenceComplete, musicSystem]);
-
   return {
     storedUsername,
     isSpacetimeReady,
-    shouldShowLoadingScreen,
-    handleSequenceComplete,
   };
 }

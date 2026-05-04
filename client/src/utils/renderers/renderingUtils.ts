@@ -381,6 +381,57 @@ const GHOST_TRAIL_FADE_MS = 200; // Fade out over 200ms
 const clientJumpStartTimes = new Map<string, number>();
 const lastKnownServerJumpTimes = new Map<string, number>(); // playerId -> last known server timestamp
 
+const renderCyberpunkPlayerPlaceholder = (
+  ctx: CanvasRenderingContext2D,
+  player: Pick<SpacetimeDBPlayer, 'positionX' | 'positionY' | 'direction'>,
+  nowMs: number,
+  jumpOffsetY: number = 0,
+) => {
+  const pulse = 0.55 + Math.sin(nowMs / 140) * 0.2;
+  const x = player.positionX;
+  const y = player.positionY - jumpOffsetY;
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(0, 221, 255, 0.9)';
+  ctx.shadowBlur = 12;
+  ctx.strokeStyle = `rgba(0, 221, 255, ${pulse})`;
+  ctx.fillStyle = 'rgba(8, 14, 32, 0.72)';
+  ctx.lineWidth = 2;
+
+  ctx.beginPath();
+  ctx.ellipse(x, y + 18, 15, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.rect(x - 12, y - 22, 24, 36);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(255, 0, 255, 0.78)';
+  ctx.beginPath();
+  if (player.direction === 'up') {
+    ctx.moveTo(x, y - 30);
+    ctx.lineTo(x - 6, y - 18);
+    ctx.lineTo(x + 6, y - 18);
+  } else if (player.direction === 'left') {
+    ctx.moveTo(x - 18, y - 4);
+    ctx.lineTo(x - 6, y - 10);
+    ctx.lineTo(x - 6, y + 2);
+  } else if (player.direction === 'right') {
+    ctx.moveTo(x + 18, y - 4);
+    ctx.lineTo(x + 6, y - 10);
+    ctx.lineTo(x + 6, y + 2);
+  } else {
+    ctx.moveTo(x, y + 20);
+    ctx.lineTo(x - 6, y + 8);
+    ctx.lineTo(x + 6, y + 8);
+  }
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+};
+
 interface RenderYSortedEntitiesProps {
   ctx: CanvasRenderingContext2D;
   ySortedEntities: YSortedEntityType[];
@@ -1189,12 +1240,13 @@ export const renderYSortedEntities = ({
                 isOnSeaTransitionTile,
                 isSwimmingInHotSpringWater
               );
+            } else {
+              renderCyberpunkPlayerPlaceholder(ctx, playerForRendering, nowMs, jumpOffset);
             }
             // Swipe arc drawn AFTER player so it's visible on top (up/left: item beneath player)
             if (canRenderItem && equipment && !isSwimmingSplitRender) {
               renderMeleeSwipeArcIfSwinging(ctx, playerForRendering, equipment, itemDef!, nowMs, jumpOffset, localPlayerId);
             }
-            // heroImg not loaded yet - skip rendering silently (will render once loaded)
           } else { // This covers 'down' or 'right'
               // For DOWN or RIGHT, item should be rendered ABOVE the player
             // console.log(`[DEBUG] Rendering player ${playerId} (down/right) - heroImg available:`, !!heroImg, 'direction:', playerForRendering.direction);
@@ -1264,8 +1316,9 @@ export const renderYSortedEntities = ({
                 isOnSeaTransitionTile,
                 isSwimmingInHotSpringWater
               );
+            } else {
+              renderCyberpunkPlayerPlaceholder(ctx, playerForRendering, nowMs, jumpOffset);
             }
-            // heroImg not loaded yet - skip rendering silently (will render once loaded)
             if (canRenderItem && equipment && !isSwimmingSplitRender) {
                   // Use the rendered direction so local held-item orientation matches the body instantly.
                   // Pass snorkeling state for underwater teal tint effect

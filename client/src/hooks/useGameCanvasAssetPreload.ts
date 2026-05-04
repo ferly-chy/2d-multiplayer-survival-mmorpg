@@ -6,7 +6,6 @@ import { preloadWildAnimalImages } from '../utils/renderers/wildAnimalRenderingU
 import { preloadAnimalCorpseImages } from '../utils/renderers/animalCorpseRenderingUtils';
 import { preloadFumaroleImages } from '../utils/renderers/fumaroleRenderingUtils';
 import { preloadBasaltColumnImages } from '../utils/renderers/basaltColumnRenderingUtils';
-import { itemIcons } from '../utils/itemIconUtils';
 import { touchCampfireFireWebGLInit } from '../utils/renderers/campfireFireOverlayUtils';
 import foundationWoodTileUrl from '../assets/tiles/foundation_wood.png';
 import foundationTwigTileUrl from '../assets/tiles/foundation_twig.png';
@@ -60,19 +59,6 @@ export function useGameCanvasAssetPreload({
   const deathMarkerImg = useMemo(() => {
     return itemImagesRef.current?.get('death_marker.png');
   }, [imageLoadTrigger, itemImagesRef]);
-
-  useEffect(() => {
-    Object.entries(itemIcons).forEach(([assetName, iconSrc]) => {
-      if (iconSrc && typeof iconSrc === 'string' && !itemImagesRef.current?.has(assetName)) {
-        const img = new Image();
-        img.src = iconSrc;
-        img.onload = () => {
-          itemImagesRef.current?.set(assetName, img);
-        };
-        img.onerror = () => console.error(`Failed to preload item image asset: ${assetName} (Source: ${iconSrc})`);
-      }
-    });
-  }, [itemImagesRef]);
 
   useEffect(() => {
     touchCampfireFireWebGLInit();

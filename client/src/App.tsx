@@ -13,7 +13,6 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 // Components
 import LoginScreen from './components/LoginScreen';
 import GameplayRuntimeBridge from './components/GameplayRuntimeBridge';
-import CyberpunkLoadingScreen from './components/CyberpunkLoadingScreen';
 
 // Blog Components
 import BlogPage from './blog/BlogPage';
@@ -41,9 +40,6 @@ import { useSovaSoundBox } from './hooks/useSovaSoundBox';
 import { useMusicSystemWithSelectors } from './hooks/useMusicSystemWithSelectors';
 import { useErrorDisplay } from './contexts/ErrorDisplayContext';
 import { useSettings } from './contexts/SettingsContext';
-
-// Asset Preloading
-import { useAssetPreload } from './hooks/useAssetPreload';
 
 // Assets & Styles
 import './App.css';
@@ -123,8 +119,6 @@ function AppContent() {
     const { cancelPlacement, startPlacement, setPlacementWarning } = placementActions; // Destructure actions
     const { showError } = useErrorDisplay();
     
-    // Asset preloading (extracted to hook)
-    const { assetProgress, assetsLoaded } = useAssetPreload();
     const { grassEnabled } = useSettings();
 
     // --- useSpacetimeTables: writer only (subscription setup); consumers read via selectors ---
@@ -150,7 +144,7 @@ function AppContent() {
     });
     
     // --- SOVA Sound Box Hook (for deterministic SOVA voice notifications) ---
-    const { showSovaSoundBox, hideSovaSoundBox, revealSovaSoundBoxUI, SovaSoundBoxComponent } = useSovaSoundBox();
+    const { showSovaSoundBox, revealSovaSoundBoxUI, SovaSoundBoxComponent } = useSovaSoundBox();
 
     // --- Sound & Music Systems (selector-backed) ---
     const musicSystem = useMusicSystemWithSelectors(connection, identityHex);
@@ -185,8 +179,6 @@ function AppContent() {
     const {
         storedUsername,
         isSpacetimeReady,
-        shouldShowLoadingScreen,
-        handleSequenceComplete,
     } = useAppLoadingScreenFlow({
         connectionError,
         isAuthenticated,
@@ -202,26 +194,8 @@ function AppContent() {
     // --- Render Logic ---
     return (
         <div className="App" style={{ backgroundColor: '#111' }}>
-            {/* Show loading screen only when needed */} 
-            {shouldShowLoadingScreen && (
-                <CyberpunkLoadingScreen 
-                    authLoading={authLoading}
-                    spacetimeLoading={spacetimeLoading}
-                    onSequenceComplete={handleSequenceComplete}
-                    hasSeenSovaIntro={loggedInPlayer?.seenTutorialIds?.includes('crashIntro')}
-                    musicPreloadProgress={musicSystem.preloadProgress}
-                    musicPreloadComplete={musicSystem.preloadProgress >= 1 && !musicSystem.isLoading}
-                    assetProgress={assetProgress}
-                    assetsLoaded={assetsLoaded}
-                    showSovaSoundBox={showSovaSoundBox}
-                    hideSovaSoundBox={hideSovaSoundBox}
-                    hasStoredUsername={!!storedUsername}
-                    hasLastKnownPlayer={typeof localStorage !== 'undefined' && !!localStorage.getItem('lastKnownPlayerInfo')}
-                />
-            )}
-
-            {/* Conditional Rendering: Login vs Game (only if not showing loading screen) */}
-            {!shouldShowLoadingScreen && !isAuthenticated && (
+            {/* Conditional Rendering: Login vs Game */}
+            {!isAuthenticated && (
                  <LoginScreen
                     handleJoinGame={loginRedirect} // Correctly pass loginRedirect
                     loggedInPlayer={null}
@@ -235,7 +209,7 @@ function AppContent() {
             )}
 
             {/* If authenticated but not yet registered/connected to game */}
-            {!shouldShowLoadingScreen && isAuthenticated && !localPlayerRegistered && (
+            {isAuthenticated && !localPlayerRegistered && (
                  <LoginScreen 
                     handleJoinGame={handleAttemptRegisterPlayer} // Pass the updated handler
                     loggedInPlayer={loggedInPlayer}
@@ -250,7 +224,7 @@ function AppContent() {
             )}
             
             {/* If authenticated AND registered/game ready */}
-            {!shouldShowLoadingScreen && isAuthenticated && localPlayerRegistered && loggedInPlayer && (
+            {isAuthenticated && localPlayerRegistered && loggedInPlayer && (
                 (() => { 
                     const localPlayerIdentityHex = dbIdentity ? dbIdentity.toHexString() : undefined;
                     return (

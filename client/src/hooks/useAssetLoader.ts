@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { imageManager } from '../utils/renderers/imageManager';
 import { itemIcons } from '../utils/itemIconUtils';
 
 // Import asset paths
@@ -56,41 +55,85 @@ export function useAssetLoader(): AssetLoaderResult {
   const droneImageRef = useRef<HTMLImageElement | null>(null);
   const shelterImageRef = useRef<HTMLImageElement | null>(null);
 
-    useEffect(() => {
+  useEffect(() => {
+    let disposed = false;
     let loadedCount = 0;
     const totalStaticAssets = 6 + 5 + 1 + 1 + 2 + 1; // hero images (6) + clouds (5) + shelter (1) + campfire (1) + burlap/death (2) + drone (1) = 16 total
-    
-    // Count total item icons to preload
-    const itemIconEntries = Object.entries(itemIcons).filter(([key, iconPath]) => iconPath);
-    const totalItemIcons = itemIconEntries.length;
-    const totalAssets = totalStaticAssets + totalItemIcons;
-    
-    console.log(`[useAssetLoader] Starting to load ${totalAssets} assets (${totalStaticAssets} static + ${totalItemIcons} item icons)`);
+
+    const itemIconEntries = Object.entries(itemIcons).filter(([, iconPath]) => iconPath);
+
+    console.log(`[useAssetLoader] Loading ${totalStaticAssets} critical canvas assets; ${itemIconEntries.length} item icons will warm lazily`);
 
     const checkLoadingComplete = () => {
-      if (loadedCount === totalAssets) {
-        console.log(`[useAssetLoader] All ${totalAssets} assets loaded successfully!`);
+      if (!disposed && loadedCount === totalStaticAssets) {
+        console.log(`[useAssetLoader] Critical canvas assets loaded; gameplay can render while remaining assets warm`);
         setIsLoadingAssets(false);
       }
     };
 
-    const loadImage = (src: string, ref?: React.MutableRefObject<HTMLImageElement | null>, mapRef?: React.MutableRefObject<Map<string, HTMLImageElement>>, mapKey?: string) => {
+    const loadImage = (
+      src: string,
+      ref?: React.MutableRefObject<HTMLImageElement | null>,
+      mapRef?: React.MutableRefObject<Map<string, HTMLImageElement>>,
+      mapKey?: string,
+      countForReady: boolean = true,
+    ) => {
+      if (mapRef && mapKey && mapRef.current.has(mapKey)) {
+        if (countForReady) {
+          loadedCount++;
+          checkLoadingComplete();
+        }
+        return;
+      }
+
       const img = new Image();
-      img.src = src;
       img.onload = () => {
+        if (disposed) return;
         if (ref) ref.current = img;
         if (mapRef && mapKey) {
           mapRef.current.set(mapKey, img);
           // console.log(`[useAssetLoader] Successfully loaded image: ${mapKey}`);
         }
-        loadedCount++;
-        checkLoadingComplete();
+        if (countForReady) {
+          loadedCount++;
+          checkLoadingComplete();
+        }
       };
       img.onerror = () => {
+        if (disposed) return;
         console.error(`Failed to load image: ${mapKey || src}`);
-        loadedCount++; 
-        checkLoadingComplete();
+        if (countForReady) {
+          loadedCount++;
+          checkLoadingComplete();
+        }
       };
+      img.decoding = 'async';
+      img.loading = 'eager';
+      img.src = src;
+    };
+
+    const warmItemIconsInBackground = () => {
+      let index = 0;
+      const batchSize = 4;
+      const delayMs = 80;
+
+      const loadNextBatch = () => {
+        if (disposed || index >= itemIconEntries.length) {
+          return;
+        }
+
+        const batchEnd = Math.min(index + batchSize, itemIconEntries.length);
+        for (; index < batchEnd; index++) {
+          const [key, iconPath] = itemIconEntries[index];
+          if (iconPath) {
+            loadImage(iconPath, undefined, itemImagesRef, key, false);
+          }
+        }
+
+        window.setTimeout(loadNextBatch, delayMs);
+      };
+
+      window.setTimeout(loadNextBatch, 0);
     };
 
     // --- Load Static Images --- 
@@ -115,39 +158,25 @@ export function useAssetLoader(): AssetLoaderResult {
     // Load Shelter Image
     const shelterImg = new Image();
     shelterImg.onload = () => {
+      if (disposed) return;
       shelterImageRef.current = shelterImg;
       loadedCount++;
       checkLoadingComplete();
     };
     shelterImg.onerror = () => {
+      if (disposed) return;
       console.error('Failed to load shelter image.');
       loadedCount++;
       checkLoadingComplete();
     };
+    shelterImg.decoding = 'async';
     shelterImg.src = shelterSpritePath;
 
-    // Preload ALL item icons using ImageManager - this blocks completion until done
-    console.log('[useAssetLoader] Preloading item icons via ImageManager...');
-    itemIconEntries.forEach(([key, iconPath]) => {
-      if (!iconPath) return; // Skip undefined paths
-      
-      // Preload with ImageManager for in-game access
-      imageManager.preloadImage(iconPath);
-      
-      // Also count towards our loading completion
-      const img = new Image();
-      img.onload = () => {
-        loadedCount++;
-        checkLoadingComplete();
-      };
-      img.onerror = () => {
-        console.error(`Failed to preload item icon: ${key} -> ${iconPath}`);
-        loadedCount++;
-        checkLoadingComplete();
-      };
-      img.src = iconPath;
-    });
+    warmItemIconsInBackground();
 
+    return () => {
+      disposed = true;
+    };
   }, []); // Runs once on mount
 
   // Return the refs and loading state
