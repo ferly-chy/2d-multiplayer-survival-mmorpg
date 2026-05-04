@@ -4,6 +4,7 @@ use crate::Player; // For the struct
 use crate::player; // For the table trait
 use crate::items::{ItemDefinition, item_definition as ItemDefinitionTableTrait}; // To check item properties
 use crate::items::{InventoryItem, inventory_item as InventoryItemTableTrait}; // Added for item consumption
+use crate::active_equipment::active_equipment as ActiveEquipmentTableTrait;
 use crate::consumables::{MAX_HEALTH_VALUE, MAX_THIRST_VALUE, MIN_STAT_VALUE}; // Import constants from consumables
 use rand::Rng; // For random number generation
 use log;
@@ -135,9 +136,40 @@ const HOT_LADLE_SELF_BURN_DAMAGE: f32 = 2.0;
 const HOT_LADLE_SELF_BURN_DURATION_SECS: f32 = 3.0;
 const HOT_LADLE_SELF_BURN_TICK_INTERVAL: f32 = 2.0;
 
+fn clear_active_equipment_if_consumed_item(
+    ctx: &ReducerContext,
+    player_id: Identity,
+    item_instance_id: u64,
+    effect_type: &EffectType,
+) {
+    let active_equipments = ctx.db.active_equipment();
+    let Some(mut equipment) = active_equipments.player_identity().find(&player_id) else {
+        return;
+    };
+
+    if equipment.equipped_item_instance_id != Some(item_instance_id) {
+        return;
+    }
+
+    equipment.equipped_item_def_id = None;
+    equipment.equipped_item_instance_id = None;
+    equipment.swing_start_time_ms = 0;
+    equipment.icon_asset_name = None;
+    equipment.loaded_ammo_def_id = None;
+    equipment.loaded_ammo_count = 0;
+    equipment.is_ready_to_fire = false;
+    active_equipments.player_identity().update(equipment);
+
+    log::info!(
+        "[ItemConsumption] Cleared active equipment for player {:?}: consumed held item {} after {:?}.",
+        player_id,
+        item_instance_id,
+        effect_type
+    );
+}
+
 fn process_hot_combat_ladle_self_burn(ctx: &ReducerContext) {
     use crate::combat_ladle_heating::{is_combat_ladle, is_combat_ladle_hot_at, check_and_expire_hot_ladle};
-    use crate::active_equipment::active_equipment as ActiveEquipmentTableTrait;
 
     let active_equipments = ctx.db.active_equipment();
     let inventory_items = ctx.db.inventory_item();
@@ -1025,6 +1057,8 @@ pub fn process_active_consumable_effects_tick(ctx: &ReducerContext, _args: Proce
         if let Some(mut inventory_item) = ctx.db.inventory_item().instance_id().find(&item_instance_id) {
             log::info!("[ItemConsumption] Attempting to consume item_instance_id: {} for player {:?} after {:?} effect (applied: {:?}). Current quantity: {}", 
                 item_instance_id, player_id, effect_type, amount_applied.unwrap_or(0.0), inventory_item.quantity);
+
+            clear_active_equipment_if_consumed_item(ctx, player_id, item_instance_id, &effect_type);
             
             if inventory_item.quantity > 0 {
                 inventory_item.quantity -= 1;
