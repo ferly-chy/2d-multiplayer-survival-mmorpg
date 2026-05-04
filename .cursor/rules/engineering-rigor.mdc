@@ -1,8 +1,6 @@
 ---
-description: enforce core software engineering principles (clean, maintainable, scalable code)
-alwaysApply: false
+alwaysApply: true
 ---
-
 Apply senior-level engineering rigor to every change.
 
 Priorities (in order):

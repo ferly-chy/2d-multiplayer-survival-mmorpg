@@ -7,6 +7,7 @@ import {
 } from '../animalCollisionUtils';
 import { UNDERWATER_TINT_FILTER } from './underwaterEffectsUtils';
 import { drawShorelineWaterLine, drawUnderwaterShadowOnly } from './swimmingEffectsUtils';
+import { renderCyberpunkAssetPlaceholder } from './cyberpunkAssetPlaceholder';
 
 // Import breeding data types for age-based rendering
 import type { CaribouBreedingData, WalrusBreedingData, CaribouAgeStage, WalrusAgeStage } from '../../generated/types';
@@ -1245,28 +1246,6 @@ export function renderWildAnimal({
     const useSpriteSheet = spriteSheetImage && spriteSheetImage.complete;
     const animalImage = spriteSheetImage;
 
-    // Get fallback color for each species
-    const getFallbackColor = (species: AnimalSpecies): string => {
-        switch (species.tag) {
-            case 'CinderFox': return '#FF6B35'; // Orange
-            case 'TundraWolf': return '#4A90E2'; // Blue  
-            case 'CableViper': return '#7ED321'; // Green
-            case 'ArcticWalrus': return '#8B6914'; // Brown
-            case 'BeachCrab': return '#E85D04'; // Orange-red
-            case 'Tern': return '#E0E0E0'; // Light gray/white
-            case 'Crow': return '#1A1A1A'; // Black
-            case 'Caribou': return '#8B7355'; // Brown/tan (caribou fur color)
-            case 'SalmonShark': return '#708090'; // Slate gray (shark skin color)
-            case 'Jellyfish': return '#E6B0FF'; // Light purple (jellyfish glow)
-            // Night hostile NPCs
-            case 'Shorebound': return '#2C5F2D'; // Dark forest green
-            case 'Shardkin': return '#4A0E4E'; // Dark purple
-            case 'DrownedWatch': return '#1B3A4B'; // Deep ocean blue
-            case 'Bee': return '#1A1A1A'; // Black (for the tiny bee dot)
-            default: return '#9013FE'; // Purple
-        }
-    };
-
     // Bees are rendered as simple black dots - no spritesheet
     const isBee = animal.species.tag === 'Bee';
     const useImageFallback = isBee || !animalImage || !animalImage.complete;
@@ -1506,31 +1485,16 @@ export function renderWildAnimal({
 
             ctx.restore();
         } else {
-            // Normal fallback for other animals
-            const radius = Math.min(renderWidth, renderHeight) / 3;
-
-            // Apply white flash to fallback color
-            let fillColor = getFallbackColor(animal.species);
-            if (isFlashing) {
-                fillColor = '#FFFFFF'; // Flash white
-            }
-
-            ctx.fillStyle = fillColor;
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 2;
-
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.stroke();
-
-            // Add a simple indicator for the species (letter)
-            ctx.fillStyle = isFlashing ? '#000000' : '#FFFFFF'; // Invert letter color when flashing
-            ctx.font = '12px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            const letter = animal.species.tag.charAt(0);
-            ctx.fillText(letter, centerX, centerY);
+            renderCyberpunkAssetPlaceholder(ctx, {
+                x: centerX,
+                y: centerY,
+                width: renderWidth,
+                height: renderHeight,
+                nowMs,
+                shape: 'animal',
+                label: animal.species.tag,
+                alpha: isFlashing ? 1 : 0.88,
+            });
         }
     } else {
         // --- Prepare sprite on offscreen canvas (for white flash tinting and sprite sheet extraction) ---

@@ -1,6 +1,7 @@
 import { GrassAppearanceType } from '../../generated/types';
 import { imageManager } from './imageManager';
 import { InterpolatedGrassData } from '../../hooks/useGrassInterpolation';
+import { renderCyberpunkAssetPlaceholder } from './cyberpunkAssetPlaceholder';
 
 // Import grass assets directly
 import grass1TextureUrl from '../../assets/doodads/grass1.png';
@@ -345,8 +346,15 @@ export function renderGrass(
     if (!img || !img.complete || img.naturalHeight === 0) {
         const alpha = lodLevel === 'far' ? 0.3 : 0.7;
         const size = lodLevel === 'far' ? 16 : 32;
-        ctx.fillStyle = `rgba(34, 139, 34, ${alpha})`;
-        ctx.fillRect(grass.serverPosX - size * 0.5, grass.serverPosY - size, size, size);
+        renderCyberpunkAssetPlaceholder(ctx, {
+            x: grass.serverPosX,
+            y: grass.serverPosY - size * 0.5,
+            width: size * 0.72,
+            height: size,
+            nowMs,
+            shape: 'plant',
+            alpha,
+        });
         return;
     }
 

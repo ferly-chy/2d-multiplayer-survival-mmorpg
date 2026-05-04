@@ -32,6 +32,7 @@ import buoyImage from '../../assets/doodads/buoy.png'; // Variant 6 (indestructi
 import { drawDynamicGroundShadow, calculateShakeOffsets } from './shadowUtils';
 import { GroundEntityConfig, renderConfiguredGroundEntity } from './genericGroundRenderer'; // Import generic renderer
 import { imageManager } from './imageManager'; // Import image manager
+import { renderCyberpunkAssetPlaceholder } from './cyberpunkAssetPlaceholder';
 import { isNightTime } from '../../config/dayNightConstants';
 import { worldPosToTileKey } from './placementRenderingUtils';
 
@@ -575,9 +576,19 @@ function renderSeaBarrelWithWaterEffects(
     const img = imageManager.getImage(imageSource);
     
     if (!img || !img.complete || img.naturalWidth === 0) {
-        // Fallback color
-        ctx.fillStyle = '#8B4513';
-        ctx.fillRect(barrel.posX - 20, barrel.posY - 40, 40, 40);
+        const drawWidth = variantIndex === 4 ? BARREL5_WIDTH : variantIndex === 6 ? BUOY_WIDTH : BARREL_WIDTH;
+        const drawHeight = variantIndex === 4 ? BARREL5_HEIGHT : variantIndex === 6 ? BUOY_HEIGHT : BARREL_HEIGHT;
+        const yOffset = variantIndex === 4 ? 24 : variantIndex === 6 ? 28 : 12;
+        renderCyberpunkAssetPlaceholder(ctx, {
+            x: barrel.posX,
+            y: barrel.posY - drawHeight / 2 - yOffset,
+            width: drawWidth,
+            height: drawHeight,
+            nowMs,
+            shape: variantIndex === 6 ? 'circle' : 'rect',
+            label: variantIndex === 6 ? 'NAV' : 'CR8',
+            alpha: 0.9,
+        });
         return;
     }
     

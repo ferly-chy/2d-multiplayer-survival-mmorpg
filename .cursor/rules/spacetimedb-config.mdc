@@ -1,8 +1,7 @@
 ---
 description: Locked SpacetimeDB versions for this project; never upgrade/downgrade automatically
-alwaysApply: true
+alwaysApply: false
 ---
-
 # SpacetimeDB Configuration
 
 ## Required Versions (IMMUTABLE)

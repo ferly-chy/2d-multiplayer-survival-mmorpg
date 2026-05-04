@@ -4,6 +4,7 @@ import { GroundEntityConfig, renderConfiguredGroundEntity } from './genericGroun
 import { imageManager } from './imageManager';
 import { getItemIcon } from '../itemIconUtils'; // Import item icon utility
 import { SEA_BARREL_WATER_CONFIG } from './barrelRenderingUtils';
+import { renderCyberpunkAssetPlaceholder } from './cyberpunkAssetPlaceholder';
 
 // --- Constants --- 
 const DRAW_WIDTH = 48;
@@ -295,8 +296,16 @@ function renderDroppedItemWithWaterEffects(
 ): void {
     const { img, drawWidth, drawHeight } = getDroppedItemImageAndSize(item, itemDef);
     if (!img || !img.complete || img.naturalWidth === 0) {
-        ctx.fillStyle = '#A0522D';
-        ctx.fillRect(renderX - drawWidth / 2, renderY - drawHeight / 2, drawWidth, drawHeight);
+        renderCyberpunkAssetPlaceholder(ctx, {
+            x: renderX,
+            y: renderY,
+            width: drawWidth,
+            height: drawHeight,
+            nowMs,
+            shape: 'item',
+            label: itemDef?.name?.slice(0, 3) ?? 'ITM',
+            alpha: 0.85,
+        });
         return;
     }
 

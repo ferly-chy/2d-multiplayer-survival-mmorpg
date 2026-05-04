@@ -2,6 +2,7 @@ import type { PlayerCorpse as SpacetimeDBPlayerCorpse, Player as SpacetimeDBPlay
 import { renderPlayer, IDLE_FRAME_INDEX } from './playerRenderingUtils';
 import { Identity, Timestamp } from 'spacetimedb';
 import { calculateShakeOffsets } from './shadowUtils';
+import { renderCyberpunkAssetPlaceholder } from './cyberpunkAssetPlaceholder';
 
 // Constants for shake effect
 const SHAKE_DURATION_MS = 150;     // How long the shake effect lasts
@@ -148,7 +149,17 @@ export function renderPlayerCorpse({
   const heroImg = isCorpseOnWater ? heroWaterImageRef.current : heroImageRef.current;
   
   if (!heroImg) {
-    console.warn("[renderPlayerCorpse] Hero image not loaded, cannot render corpse sprite.");
+    renderCyberpunkAssetPlaceholder(ctx, {
+      x: renderPosX,
+      y: renderPosY - 16,
+      width: 44,
+      height: 56,
+      nowMs,
+      shape: 'animal',
+      label: 'BIO',
+      alpha: 0.72,
+      rotation: Math.PI / 2,
+    });
     return;
   }
 

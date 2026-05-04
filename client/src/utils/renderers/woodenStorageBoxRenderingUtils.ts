@@ -26,6 +26,7 @@ import { GroundEntityConfig, renderConfiguredGroundEntity } from './genericGroun
 import { imageManager } from './imageManager';
 import { renderDecorativeBees } from './decorativeBeeRenderingUtils';
 import { isCompoundMonument } from '../../config/compoundBuildings';
+import { renderCyberpunkAssetPlaceholder } from './cyberpunkAssetPlaceholder';
 
 // --- Constants --- (Keep exportable if used elsewhere)
 export const BOX_WIDTH = 64; 
@@ -419,9 +420,16 @@ function renderFishTrapWithWaterEffects(
     const img = imageManager.getImage(fishTrapImage);
     
     if (!img || !img.complete || img.naturalWidth === 0) {
-        // Fallback color
-        ctx.fillStyle = '#8B7355';
-        ctx.fillRect(box.posX - 32, box.posY - 64, 64, 64);
+        renderCyberpunkAssetPlaceholder(ctx, {
+            x: box.posX,
+            y: box.posY - FISH_TRAP_HEIGHT / 2 - 20,
+            width: FISH_TRAP_WIDTH,
+            height: FISH_TRAP_HEIGHT,
+            nowMs,
+            shape: 'rect',
+            label: 'TRP',
+            alpha: 0.85,
+        });
         return;
     }
     

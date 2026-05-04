@@ -1,4 +1,5 @@
 import { imageManager } from './imageManager';
+import { renderCyberpunkAssetPlaceholder } from './cyberpunkAssetPlaceholder';
 
 interface BaseEntity {
     posX: number;
@@ -255,10 +256,21 @@ export function renderConfiguredGroundEntity<T extends BaseEntity>({
         }
 
     } else if (config.fallbackColor && !entity.isDestroyed) {
-        const fallbackWidth = 32;
-        const fallbackHeight = 32;
+        if (onlyDrawShadow) return;
+        const fallbackDimensions = config.getTargetDimensions(
+            { naturalWidth: 64, naturalHeight: 64 } as HTMLImageElement,
+            entity,
+        );
+        const fallbackWidth = Math.max(24, Math.min(180, fallbackDimensions.width || 32));
+        const fallbackHeight = Math.max(24, Math.min(220, fallbackDimensions.height || 32));
         const { drawX: baseDrawX, drawY: baseDrawY } = config.calculateDrawPosition(entity, fallbackWidth, fallbackHeight);
-        ctx.fillStyle = config.fallbackColor;
-        ctx.fillRect(baseDrawX, baseDrawY, fallbackWidth, fallbackHeight);
+        renderCyberpunkAssetPlaceholder(ctx, {
+            x: baseDrawX + fallbackWidth / 2,
+            y: baseDrawY + fallbackHeight / 2,
+            width: fallbackWidth,
+            height: fallbackHeight,
+            nowMs,
+            shape: fallbackHeight > fallbackWidth * 1.35 ? 'plant' : 'diamond',
+        });
     }
 } 

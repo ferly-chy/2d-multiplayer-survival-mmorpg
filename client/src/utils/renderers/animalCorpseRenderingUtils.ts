@@ -1,6 +1,7 @@
 import { AnimalCorpse as SpacetimeDBAnimalCorpse } from '../../generated/types';
 import { imageManager } from './imageManager';
 import { calculateShakeOffsets } from './shadowUtils';
+import { renderCyberpunkAssetPlaceholder } from './cyberpunkAssetPlaceholder';
 
 // Import release pattern spritesheets (4x4 layout) - used for most animals
 import cableViperWalkingSheet from '../../assets/cable_viper_walking_release.png';
@@ -348,9 +349,17 @@ export const renderAnimalCorpse = (
   const renderSize = getCorpseRenderSize(corpse.animalSpecies);
   
   if (!spriteSheet || !spriteSheet.complete) {
-    // Fallback: render a simple rectangle if image not loaded
-    ctx.fillStyle = '#8B4513'; // Brown color for corpse
-    ctx.fillRect(screenX - renderSize.width / 2, screenY - renderSize.height / 2, renderSize.width, renderSize.height);
+    renderCyberpunkAssetPlaceholder(ctx, {
+      x: screenX,
+      y: screenY,
+      width: renderSize.width,
+      height: renderSize.height,
+      nowMs: currentTime,
+      shape: 'animal',
+      label: 'BIO',
+      alpha: 0.72,
+      rotation: Math.PI,
+    });
     return;
   }
 
