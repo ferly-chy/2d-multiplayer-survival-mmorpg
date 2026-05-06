@@ -1,4 +1,5 @@
 // Import all blog posts
+import brothBulletsCoreGameLoop from './posts/broth-bullets-core-game-loop';
 import brothBulletsMay2026Update from './posts/broth-bullets-may-2026-update';
 import redditAigamedevFeedbackFebruary2026 from './posts/reddit-aigamedev-feedback-february-2026';
 import spacetimedbMaincloudVsSelfHostingGuide from './posts/spacetimedb-maincloud-vs-self-hosting-guide';
@@ -39,6 +40,7 @@ import brothBulletsCookingSystemEmergentGameplay from './posts/broth-bullets-coo
 // Export posts as an array, sorted by date (newest first)
 export const blogPosts = [
   // May 2026 Posts
+  brothBulletsCoreGameLoop, // May 6, 2026 - Core Game Loop Vision
   brothBulletsMay2026Update, // May 6, 2026 - Development Update
   // February 2026 Posts
   redditAigamedevFeedbackFebruary2026, // February 15, 2026 - Reddit r/aigamedev feedback
