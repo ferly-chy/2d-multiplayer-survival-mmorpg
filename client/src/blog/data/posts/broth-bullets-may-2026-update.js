@@ -7,7 +7,7 @@ export default {
   authorImage: "/images/blog/author-marty.jpg",
   authorTwitter: "seloslav",
   excerpt: "The old login gate is gone, first-load assets now materialize through your ocular implant, and the client has picked up a round of rendering, caching, and particle polish.",
-  coverImage: "/images/blog/may-2026-update-cover.jpg",
+  coverImage: "/images/blog/may-2026-update-cover.png",
   content: `
     <p>It's been a while since the last development update, and the work since then has been less about one giant headline feature and more about making Broth & Bullets feel faster, stranger, and easier to get into. A survival game can have all the systems in the world, but if the first thirty seconds feel like paperwork, people bounce.</p>
 
