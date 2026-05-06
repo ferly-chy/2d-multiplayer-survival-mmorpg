@@ -37,7 +37,7 @@ import { BARBECUE_HEIGHT, BARBECUE_RENDER_Y_OFFSET } from '../utils/renderers/ba
 import { FIRE_PATCH_VISUAL_RADIUS } from '../utils/renderers/firePatchRenderingUtils';
 import { BuildingCluster } from '../utils/buildingVisibilityUtils';
 import { FOUNDATION_TILE_SIZE } from '../config/gameConfig';
-import { getCompoundEerieLightsWithPositions, getWorldCenter, isCompoundMonument } from '../config/compoundBuildings';
+import { getWorldCenter, isCompoundMonument } from '../config/compoundBuildings';
 
 export interface ColorPoint {
   r: number; g: number; b: number; a: number;
@@ -1414,58 +1414,9 @@ export function useDayNightCycle({
             maskCtx.globalCompositeOperation = 'destination-out';
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // INDIVIDUAL EERIE LIGHT HOTSPOTS - scattered organically around compound
-        // These add localized bright spots with particles on top of the base illumination
-        // ═══════════════════════════════════════════════════════════════
-        const eerieLights = getCompoundEerieLightsWithPositions();
-        eerieLights.forEach(({ worldX, worldY, radius, intensity }) => {
-            const screenX = worldX + cameraOffsetX;
-            const screenY = worldY + cameraOffsetY;
-            const lightRadius = radius * intensity;
-            if (
-                screenX + lightRadius < 0 ||
-                screenX - lightRadius > canvasSize.width ||
-                screenY + lightRadius < 0 ||
-                screenY - lightRadius > canvasSize.height
-            ) {
-                return;
-            }
-            
-            // Small localized cutout hotspot
-            const maskGradient = maskCtx.createRadialGradient(
-                screenX, screenY, lightRadius * 0.03,
-                screenX, screenY, lightRadius
-            );
-            maskGradient.addColorStop(0, 'rgba(0,0,0,0.50)');    // Moderate center boost
-            maskGradient.addColorStop(0.25, 'rgba(0,0,0,0.35)'); // Quick falloff
-            maskGradient.addColorStop(0.5, 'rgba(0,0,0,0.18)');  // Mid fade
-            maskGradient.addColorStop(0.75, 'rgba(0,0,0,0.06)'); // Soft edge
-            maskGradient.addColorStop(1, 'rgba(0,0,0,0)');       // Complete fade
-            
-            maskCtx.fillStyle = maskGradient;
-            maskCtx.beginPath();
-            maskCtx.arc(screenX, screenY, lightRadius, 0, Math.PI * 2);
-            maskCtx.fill();
-            
-            // Localized eerie tint
-            maskCtx.globalCompositeOperation = 'source-over';
-            const glowRadius = lightRadius * 0.8;
-            const glowGradient = maskCtx.createRadialGradient(
-                screenX, screenY, 0,
-                screenX, screenY, glowRadius
-            );
-            glowGradient.addColorStop(0, 'rgba(80, 120, 200, 0.12)');    // Blue center
-            glowGradient.addColorStop(0.3, 'rgba(140, 100, 220, 0.08)'); // Purple blend
-            glowGradient.addColorStop(0.6, 'rgba(140, 100, 220, 0.04)'); // Fading
-            glowGradient.addColorStop(1, 'rgba(30, 50, 100, 0)');        // Transparent
-            
-            maskCtx.fillStyle = glowGradient;
-            maskCtx.beginPath();
-            maskCtx.arc(screenX, screenY, glowRadius, 0, Math.PI * 2);
-            maskCtx.fill();
-            maskCtx.globalCompositeOperation = 'destination-out';
-        });
+        // Individual compound hotspots are rendered in the late world pass. Keeping
+        // them out of the fullscreen night mask avoids 32 extra gradients per frame
+        // when the central compound is visible.
 
         // Render fire patch light cutouts (smaller than campfires, same size as the patch)
         firePatches.forEach(firePatch => {

@@ -25,7 +25,7 @@ const EERIE_HIGHLIGHT = { r: 180, g: 200, b: 255 };  // Bright ethereal highligh
 
 // Rising particle configuration. Keep this lightweight: all compound lights can be
 // visible at once, so per-particle radial gradients are too expensive for the hot path.
-const PARTICLE_COUNT = 4;
+const PARTICLE_COUNT = 1;
 const PARTICLE_LIFETIME_SECONDS = 5.0;
 const PARTICLE_SPAWN_RADIUS = 60;
 const PARTICLE_MIN_SIZE = 2;
@@ -90,7 +90,6 @@ function renderCompoundEerieLight(
 ): void {
     if (!isNightTime(cycleProgress)) return;
 
-    // Calculate time-based intensity (fade in/out at twilight)
     let timeIntensity = light.intensity;
     if (cycleProgress < LIGHT_FADE_FULL_AT) {
         const fadeProgress = (cycleProgress - NIGHT_LIGHTS_ON) / (LIGHT_FADE_FULL_AT - NIGHT_LIGHTS_ON);
@@ -101,57 +100,20 @@ function renderCompoundEerieLight(
     }
 
     const currentTimeSeconds = nowMs / 1000;
-
-    // Multi-layered breathing effect
-    const breathingIntensity = 1.0
-        + Math.sin(currentTimeSeconds * 0.3) * 0.08
-        + Math.sin(currentTimeSeconds * 0.6) * 0.05
-        + Math.sin(currentTimeSeconds * 1.0) * 0.03;
-
-    const finalIntensity = timeIntensity * breathingIntensity;
+    const finalIntensity = timeIntensity * (1.0 + Math.sin(currentTimeSeconds * 0.45) * 0.08);
     if (finalIntensity <= 0.01) return;
 
     const screenX = light.worldX + cameraOffsetX;
     const screenY = light.worldY + cameraOffsetY;
-
-    // Ghostly drift
-    const driftX = Math.sin(currentTimeSeconds * 0.25) * 3;
-    const driftY = Math.cos(currentTimeSeconds * 0.2) * 2;
-
-    ctx.save();
-
-    // ═══════════════════════════════════════════════════════════
-    // LAYER 1: OUTER ETHEREAL HALO
-    // ═══════════════════════════════════════════════════════════
-    const outerHaloRadius = light.radius * 1.3;
-    const outerHaloGradient = ctx.createRadialGradient(
-        screenX + driftX, screenY + driftY, 0,
-        screenX + driftX, screenY + driftY, outerHaloRadius
-    );
-    outerHaloGradient.addColorStop(0, `rgba(${EERIE_DEEP.r}, ${EERIE_DEEP.g}, ${EERIE_DEEP.b}, ${0.12 * finalIntensity})`);
-    outerHaloGradient.addColorStop(0.4, `rgba(${EERIE_DEEP.r}, ${EERIE_DEEP.g}, ${EERIE_DEEP.b}, ${0.08 * finalIntensity})`);
-    outerHaloGradient.addColorStop(0.7, `rgba(${EERIE_DEEP.r}, ${EERIE_DEEP.g}, ${EERIE_DEEP.b}, ${0.04 * finalIntensity})`);
-    outerHaloGradient.addColorStop(1, `rgba(${EERIE_DEEP.r}, ${EERIE_DEEP.g}, ${EERIE_DEEP.b}, 0)`);
-
-    ctx.fillStyle = outerHaloGradient;
-    ctx.beginPath();
-    ctx.arc(screenX + driftX, screenY + driftY, outerHaloRadius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // ═══════════════════════════════════════════════════════════
-    // LAYER 2: MAIN AMBIENT GLOW
-    // ═══════════════════════════════════════════════════════════
-    const ambientRadius = light.radius * 0.9;
+    const ambientRadius = light.radius;
     const ghostlyPulse = 1.0 + Math.sin(currentTimeSeconds * 1.5) * 0.06;
     const ambientGradient = ctx.createRadialGradient(
         screenX, screenY, 0,
         screenX, screenY, ambientRadius
     );
-    ambientGradient.addColorStop(0, `rgba(${EERIE_PRIMARY.r}, ${EERIE_PRIMARY.g}, ${EERIE_PRIMARY.b}, ${0.22 * finalIntensity * ghostlyPulse})`);
-    ambientGradient.addColorStop(0.2, `rgba(${EERIE_PRIMARY.r}, ${EERIE_PRIMARY.g}, ${EERIE_PRIMARY.b}, ${0.18 * finalIntensity})`);
-    ambientGradient.addColorStop(0.4, `rgba(${EERIE_ACCENT.r}, ${EERIE_ACCENT.g}, ${EERIE_ACCENT.b}, ${0.14 * finalIntensity})`);
-    ambientGradient.addColorStop(0.6, `rgba(${EERIE_ACCENT.r}, ${EERIE_ACCENT.g}, ${EERIE_ACCENT.b}, ${0.09 * finalIntensity})`);
-    ambientGradient.addColorStop(0.8, `rgba(${EERIE_DEEP.r}, ${EERIE_DEEP.g}, ${EERIE_DEEP.b}, ${0.05 * finalIntensity})`);
+    ambientGradient.addColorStop(0, `rgba(${EERIE_HIGHLIGHT.r}, ${EERIE_HIGHLIGHT.g}, ${EERIE_HIGHLIGHT.b}, ${0.16 * finalIntensity * ghostlyPulse})`);
+    ambientGradient.addColorStop(0.35, `rgba(${EERIE_PRIMARY.r}, ${EERIE_PRIMARY.g}, ${EERIE_PRIMARY.b}, ${0.12 * finalIntensity})`);
+    ambientGradient.addColorStop(0.7, `rgba(${EERIE_ACCENT.r}, ${EERIE_ACCENT.g}, ${EERIE_ACCENT.b}, ${0.06 * finalIntensity})`);
     ambientGradient.addColorStop(1, `rgba(${EERIE_DEEP.r}, ${EERIE_DEEP.g}, ${EERIE_DEEP.b}, 0)`);
 
     ctx.fillStyle = ambientGradient;
@@ -159,50 +121,6 @@ function renderCompoundEerieLight(
     ctx.arc(screenX, screenY, ambientRadius, 0, Math.PI * 2);
     ctx.fill();
 
-    // ═══════════════════════════════════════════════════════════
-    // LAYER 3: INNER CORE RADIANCE
-    // ═══════════════════════════════════════════════════════════
-    const coreRadius = light.radius * 0.35;
-    const corePulse = 1.0 + Math.sin(currentTimeSeconds * 1.2) * 0.12;
-    const coreGradient = ctx.createRadialGradient(
-        screenX, screenY - 10, 0,
-        screenX, screenY - 10, coreRadius
-    );
-    coreGradient.addColorStop(0, `rgba(${EERIE_HIGHLIGHT.r}, ${EERIE_HIGHLIGHT.g}, ${EERIE_HIGHLIGHT.b}, ${0.25 * finalIntensity * corePulse})`);
-    coreGradient.addColorStop(0.3, `rgba(${EERIE_PRIMARY.r}, ${EERIE_PRIMARY.g}, ${EERIE_PRIMARY.b}, ${0.18 * finalIntensity})`);
-    coreGradient.addColorStop(0.6, `rgba(${EERIE_ACCENT.r}, ${EERIE_ACCENT.g}, ${EERIE_ACCENT.b}, ${0.10 * finalIntensity})`);
-    coreGradient.addColorStop(1, `rgba(${EERIE_ACCENT.r}, ${EERIE_ACCENT.g}, ${EERIE_ACCENT.b}, 0)`);
-
-    ctx.fillStyle = coreGradient;
-    ctx.beginPath();
-    ctx.arc(screenX, screenY - 10, coreRadius, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
-
-    // ═══════════════════════════════════════════════════════════
-    // LAYER 4: GROUND LIGHT POOL (elliptical)
-    // ═══════════════════════════════════════════════════════════
-    const poolRadius = light.radius * 0.5;
-    const poolPulse = 1.0 + Math.sin(currentTimeSeconds * 0.6) * 0.08;
-    const poolAlpha = 0.25 * finalIntensity * poolPulse;
-
-    ctx.save();
-    ctx.translate(screenX, screenY + 10);
-    ctx.scale(1, 0.35); // Flatten vertically for ground pool
-    const poolGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, poolRadius);
-    poolGradient.addColorStop(0, `rgba(${EERIE_PRIMARY.r}, ${EERIE_PRIMARY.g}, ${EERIE_PRIMARY.b}, ${poolAlpha})`);
-    poolGradient.addColorStop(0.4, `rgba(${EERIE_ACCENT.r}, ${EERIE_ACCENT.g}, ${EERIE_ACCENT.b}, ${poolAlpha * 0.6})`);
-    poolGradient.addColorStop(1, `rgba(${EERIE_DEEP.r}, ${EERIE_DEEP.g}, ${EERIE_DEEP.b}, 0)`);
-    ctx.fillStyle = poolGradient;
-    ctx.beginPath();
-    ctx.arc(0, 0, poolRadius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // ═══════════════════════════════════════════════════════════
-    // LAYER 5: RISING GHOSTLY PARTICLES
-    // ═══════════════════════════════════════════════════════════
     renderEerieParticles(ctx, light, screenX, screenY, nowMs, finalIntensity);
 }
 

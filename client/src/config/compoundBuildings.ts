@@ -314,16 +314,23 @@ export const COMPOUND_EERIE_LIGHTS: CompoundEerieLight[] = [
   { id: 'eerie_16', offsetX:  880, offsetY: -150, radius: 140, intensity: 0.64 },
 ];
 
+let cachedCompoundEerieLightsWithPositions: Array<CompoundEerieLight & { worldX: number; worldY: number }> | null = null;
+
 /**
  * Get compound eerie lights with world positions.
  */
 export function getCompoundEerieLightsWithPositions(): Array<CompoundEerieLight & { worldX: number; worldY: number }> {
+  if (cachedCompoundEerieLightsWithPositions) {
+    return cachedCompoundEerieLightsWithPositions;
+  }
+
   const center = getWorldCenter();
-  return COMPOUND_EERIE_LIGHTS.map(light => ({
+  cachedCompoundEerieLightsWithPositions = COMPOUND_EERIE_LIGHTS.map(light => ({
     ...light,
     worldX: center.x + light.offsetX,
     worldY: center.y + light.offsetY,
   }));
+  return cachedCompoundEerieLightsWithPositions;
 }
 
 /**

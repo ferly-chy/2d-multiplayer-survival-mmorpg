@@ -113,6 +113,13 @@ const OPTIMISTIC_AXE_RANGE = DEFAULT_MELEE_ATTACK_RANGE;
 const OPTIMISTIC_PICK_RANGE = DEFAULT_MELEE_ATTACK_RANGE;
 const OPTIMISTIC_SPEAR_RANGE = SPEAR_MELEE_ATTACK_RANGE;
 
+function getReducerErrorMessage(err: unknown): string {
+    const status = (err as { status?: { tag?: string; value?: string } } | undefined)?.status;
+    if (status?.tag === 'Failed' && status.value) return status.value;
+    if (err instanceof Error) return err.message;
+    return String(err ?? '');
+}
+
 // Define a comprehensive props interface for the hook
 interface InputHandlerProps {
     canvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -803,22 +810,12 @@ export const useInputHandler = ({
         }
 
         if (!localEquipment || localEquipment.equippedItemDefId === null || localEquipment.equippedItemInstanceId === null) {
-            // Unarmed
-            const nowPerf = performance.now();
-            if (nowPerf < nextMeleeSwingAllowedPerfRef.current) return;
-            const attackIntervalMs = SWING_COOLDOWN_MS;
-            suppressMeleeHeldTickAfterMouseDownRef.current = true;
-            try {
-                // 🎬 CLIENT-AUTHORITATIVE ANIMATION: Register swing immediately for smooth visuals
-                registerLocalPlayerSwing();
-                // Whoosh aligned with animation; server echo skipped for local in useSoundSystem (avoids RTT + doubles).
-                playImmediateSound('weapon_swing', 0.8);
-                connectionRef.current.reducers.useEquippedItem({});
-                nextMeleeSwingAllowedPerfRef.current = nowPerf + attackIntervalMs;
-            } catch (err) {
-                console.error("[attemptSwing Unarmed] Error calling useEquippedItem reducer:", err);
-                nextMeleeSwingAllowedPerfRef.current = performance.now() + 50;
-            }
+            // Server-side use_equipped_item intentionally requires an item. Empty hands
+            // have no gameplay action, so do not send a reducer that will reject.
+            isMouseDownRef.current = false;
+            suppressMeleeHeldTickAfterMouseDownRef.current = false;
+            nextMeleeSwingAllowedPerfRef.current = performance.now() + SWING_COOLDOWN_MS;
+            return;
         } else {
             // Armed (melee/tool)
             if (!itemDef) return;
@@ -951,7 +948,11 @@ export const useInputHandler = ({
                         }
                     }
                 }
-                connectionRef.current.reducers.useEquippedItem({});
+                connectionRef.current.reducers.useEquippedItem({})
+                    .catch((err: unknown) => {
+                        console.warn('[attemptSwing Armed] useEquippedItem failed:', getReducerErrorMessage(err));
+                        nextMeleeSwingAllowedPerfRef.current = performance.now() + 50;
+                    });
                 nextMeleeSwingAllowedPerfRef.current = nowPerf + attackIntervalMs;
             } catch (err) {
                 console.error("[attemptSwing Armed] Error calling useEquippedItem reducer:", err);
@@ -1872,7 +1873,17 @@ export const useInputHandler = ({
                                 // Not on water - check if container has water for watering crops
                                 if (hasWaterContent(waterContainer)) {
                                     // console.log("[InputHandler] Water container with water equipped. Calling water_crops reducer.");
-                                    connectionRef.current.reducers.waterCrops({ containerInstanceId: localPlayerActiveEquipment.equippedItemInstanceId });
+                                    // Watering is a discrete click action. Do not leave mouse-down active,
+                                    // or the frame loop will also swing/use the bottle while held.
+                                    isMouseDownRef.current = false;
+                                    connectionRef.current.reducers.waterCrops({ containerInstanceId: localPlayerActiveEquipment.equippedItemInstanceId })
+                                        .catch((err: unknown) => {
+                                            const message = getReducerErrorMessage(err);
+                                            if (message.toLowerCase().includes('already water at that location')) {
+                                                return;
+                                            }
+                                            console.warn('[InputHandler] Failed to water crops:', message);
+                                        });
                                     return;
                                 } else {
                                     // console.log('[InputHandler] No water content - falling through to normal swing behavior');
@@ -2269,7 +2280,10 @@ export const useInputHandler = ({
                             // console.log("[InputHandler CTXMENU] Calling useEquippedItem for Bandage.");
                             // 🔊 IMMEDIATE SOUND: Play button click for bandage use
                             // playButtonClickSound(0.6);
-                            connectionRef.current.reducers.useEquippedItem({});
+                            connectionRef.current.reducers.useEquippedItem({})
+                                .catch((err: unknown) => {
+                                    console.warn('[InputHandler CTXMENU] Bandage use failed:', getReducerErrorMessage(err));
+                                });
                         } else {
                             console.warn("[InputHandler CTXMENU] No connection or reducers to call useEquippedItem for Bandage.");
                         }
@@ -2281,7 +2295,10 @@ export const useInputHandler = ({
                             // console.log("[InputHandler CTXMENU] Calling useEquippedItem for Selo Olive Oil / Med Kit.");
                             // 🔊 IMMEDIATE SOUND: Play button click for consumable use
                             // playButtonClickSound(0.6);
-                            connectionRef.current.reducers.useEquippedItem({});
+                            connectionRef.current.reducers.useEquippedItem({})
+                                .catch((err: unknown) => {
+                                    console.warn('[InputHandler CTXMENU] Medical consumable use failed:', getReducerErrorMessage(err));
+                                });
                         } else {
                             console.warn("[InputHandler CTXMENU] No connection or reducers to call useEquippedItem for Selo Olive Oil / Med Kit.");
                         }
@@ -2590,6 +2607,9 @@ export const useInputHandler = ({
                     } else if (equippedItemDef?.category?.tag === "RangedWeapon") {
                         // Semi-auto weapons fire on click/mousedown path only.
                         // Avoid re-firing while mouse is held in per-frame loop.
+                    } else if (equippedItemDef && isWaterContainer(equippedItemDef.name)) {
+                        // Water containers are handled as a one-shot watering action on mousedown.
+                        // Holding the button should not repeatedly swing/use the bottle.
                     } else {
                         heldMeleeSwingUnlessDuplicateOfMouseDown();
                     }
