@@ -82,6 +82,7 @@ interface RenderEntityWorldPassesOptions {
   caribouBreedingData: any;
   walrusBreedingData: any;
   chunkWeather: any;
+  grassAnimationEnabled?: boolean;
   seaTransitionTileLookup: Map<string, boolean>;
   waterTileLookup: Map<string, boolean>;
   swimmingPlayersForBottomHalf: any[];
@@ -163,6 +164,7 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
     caribouBreedingData,
     walrusBreedingData,
     chunkWeather,
+    grassAnimationEnabled = true,
     seaTransitionTileLookup,
     waterTileLookup,
     swimmingPlayersForBottomHalf,
@@ -255,6 +257,7 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
         caribouBreedingData,
         walrusBreedingData,
         chunkWeather,
+        grassAnimationEnabled,
         seaTransitionTileLookup,
         waterTileLookup,
         projectileCollisionCircles,

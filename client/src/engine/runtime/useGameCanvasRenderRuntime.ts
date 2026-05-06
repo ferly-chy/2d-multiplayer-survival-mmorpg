@@ -40,6 +40,7 @@ interface UseGameCanvasRenderRuntimeOptions {
   alwaysShowPlayerNames: boolean;
   waterSurfaceEffectsEnabled: boolean;
   footprintsEnabled: boolean;
+  grassAnimationEnabled: boolean;
   worldParticlesQuality: number;
   cloudsEnabled: boolean;
   showPrecipitation: boolean;
@@ -105,6 +106,7 @@ export function useGameCanvasRenderRuntime({
   alwaysShowPlayerNames,
   waterSurfaceEffectsEnabled,
   footprintsEnabled,
+  grassAnimationEnabled,
   worldParticlesQuality,
   cloudsEnabled,
   showPrecipitation,
@@ -227,6 +229,7 @@ export function useGameCanvasRenderRuntime({
     localPlayerIsCrouching,
     waterSurfaceEffectsEnabled,
     footprintsEnabled,
+    grassAnimationEnabled,
     renderWorldPreparationPasses,
     renderEntityWorldPasses,
     renderScreenSpaceWorldEffects,
@@ -382,6 +385,7 @@ export function useGameCanvasRenderRuntime({
     localPlayerIsCrouching,
     waterSurfaceEffectsEnabled,
     footprintsEnabled,
+    grassAnimationEnabled,
     hoveredPlayerIds,
     handlePlayerHover,
     worldParticlesQuality,

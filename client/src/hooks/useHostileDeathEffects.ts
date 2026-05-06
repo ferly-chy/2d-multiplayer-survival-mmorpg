@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { Particle } from './useCampfireParticles'; // Reuse Particle type
+import { getClampedRafDeltaMs } from '../utils/frameDelta';
 
 // --- Hostile Death Particle Constants ---
 // AAA pixel art style blue/purple ethereal sparks for hostile NPC deaths
@@ -182,8 +183,7 @@ export function useHostileDeathEffects({
     useEffect(() => {
         const updateParticles = () => {
             const now = performance.now();
-            const deltaTime = now - lastUpdateTimeRef.current;
-            lastUpdateTimeRef.current = now;
+            const deltaTime = getClampedRafDeltaMs(now, lastUpdateTimeRef);
             
             if (deltaTime <= 0) {
                 animationFrameRef.current = requestAnimationFrame(updateParticles);

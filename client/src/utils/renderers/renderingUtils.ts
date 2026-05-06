@@ -520,6 +520,8 @@ interface RenderYSortedEntitiesProps {
   caribouBreedingData?: Map<string, CaribouBreedingData>;
   walrusBreedingData?: Map<string, WalrusBreedingData>;
   chunkWeather?: Map<string, { currentWeather?: { tag?: string } }>;
+  /** When false, grass has no sway and animated beach grass uses strip frame 0 only. */
+  grassAnimationEnabled?: boolean;
   seaTransitionTileLookup?: Map<string, boolean>; // Shore transition tiles (Beach/Sea, Beach/HotSpringWater, Asphalt/Sea): player renders as normal, not swimming
   waterTileLookup?: Map<string, boolean>; // Fast tile water lookup for immediate local land/sea sprite switching
   /** Collision circles for client-side projectile hit prediction (arrows stop at targets) */
@@ -605,6 +607,7 @@ export const renderYSortedEntities = ({
   caribouBreedingData,
   walrusBreedingData,
   chunkWeather,
+  grassAnimationEnabled = true,
   seaTransitionTileLookup, // Sea transition tiles: player renders as normal, not swimming
   waterTileLookup, // Fast tile water lookup for immediate local land/sea sprite switching
   projectileCollisionCircles,
@@ -1665,7 +1668,7 @@ export const renderYSortedEntities = ({
       } else if (type === 'grass') {
           // Grass rendered from Y-sorted entities - use 'near' LOD since it's already visibility filtered
           // Sway scales with chunk weather: Clear=minimal gentle sway, storms=dramatic
-          renderGrass(ctx, entity as InterpolatedGrassData, nowMs, cycleProgress, false, true, 'near', chunkWeather);
+          renderGrass(ctx, entity as InterpolatedGrassData, nowMs, cycleProgress, false, true, 'near', chunkWeather, grassAnimationEnabled);
       } else if (type === 'projectile') {
           const projectile = entity as SpacetimeDBProjectile;
           

@@ -14,6 +14,7 @@ import {
   FURNACE_TYPE_LARGE
 } from '../utils/renderers/furnaceRenderingUtils';
 import { isCompoundMonument } from '../config/compoundBuildings';
+import { getClampedRafDeltaMs } from '../utils/frameDelta';
 
 export interface FurnaceParticle {
   x: number;
@@ -41,8 +42,11 @@ export function useFurnaceParticles({ visibleFurnacesMap }: { visibleFurnacesMap
 
   const updateParticles = useCallback(() => {
     const now = performance.now();
-    const deltaTime = now - lastTimeRef.current;
-    lastTimeRef.current = now;
+    const deltaTime = getClampedRafDeltaMs(now, lastTimeRef);
+    if (deltaTime <= 0) {
+      animationRef.current = requestAnimationFrame(updateParticles);
+      return;
+    }
 
     // Update existing particles IN PLACE (no new array allocation when possible)
     let writeIndex = 0;

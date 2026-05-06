@@ -3,6 +3,7 @@ import {
     HarvestableResource as SpacetimeDBHarvestableResource,
 } from '../generated/types';
 import { Particle } from './useCampfireParticles'; // Reuse Particle type
+import { getClampedRafDeltaMs } from '../utils/frameDelta';
 
 // --- Sparkle Particle Constants ---
 const SPARKLE_PARTICLE_LIFETIME_MIN = 800;  // Longer lifetime for graceful rise
@@ -46,8 +47,7 @@ export function useResourceSparkleParticles({
     useEffect(() => {
         const updateParticles = () => {
             const now = performance.now();
-            const deltaTime = now - lastUpdateTimeRef.current;
-            lastUpdateTimeRef.current = now;
+            const deltaTime = getClampedRafDeltaMs(now, lastUpdateTimeRef);
             
             if (deltaTime <= 0) {
                 animationFrameRef.current = requestAnimationFrame(updateParticles);

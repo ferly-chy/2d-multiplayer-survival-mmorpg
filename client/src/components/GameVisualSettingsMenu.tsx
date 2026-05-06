@@ -12,6 +12,7 @@ export const DEFAULT_VISUAL_SETTINGS = {
     stormAtmosphereEnabled: true,    // Enable storm darkening/desaturation layer
     statusOverlaysEnabled: true,     // Enable cold/low health screen overlays
     grassEnabled: true,              // Enable grass rendering and subscriptions
+    grassAnimationEnabled: true,     // Wind sway + beach grass filmstrip
     alwaysShowPlayerNames: true,     // Show player names above heads at all times
     cloudsEnabled: true,             // Enable cloud layer
     waterSurfaceEffectsEnabled: true,// Enable voronoi/caustic water effects
@@ -26,11 +27,8 @@ export const DEFAULT_VISUAL_SETTINGS = {
 
 const POST_PROCESSING_PRESETS = {
     off: { bloomIntensity: 0, vignetteIntensity: 0, chromaticAberrationIntensity: 0, colorCorrection: 50 },
-    cozy: { bloomIntensity: 36, vignetteIntensity: 20, chromaticAberrationIntensity: 12, colorCorrection: 60 }, // previous defaults, stronger
     vibrant: { bloomIntensity: 42, vignetteIntensity: 12, chromaticAberrationIntensity: 0, colorCorrection: 82 },
-    cinematic: { bloomIntensity: 48, vignetteIntensity: 100, chromaticAberrationIntensity: 26, colorCorrection: 58 },
     desaturated: { bloomIntensity: 24, vignetteIntensity: 70, chromaticAberrationIntensity: 0, colorCorrection: 18 },
-    clean: { bloomIntensity: 14, vignetteIntensity: 8, chromaticAberrationIntensity: 0, colorCorrection: 53 },
 } as const;
 
 interface GameVisualSettingsMenuProps {
@@ -53,6 +51,8 @@ const GameVisualSettingsMenu: React.FC<GameVisualSettingsMenuProps> = ({
         setStatusOverlaysEnabled: onStatusOverlaysChange,
         grassEnabled,
         setGrassEnabled: onGrassChange,
+        grassAnimationEnabled,
+        setGrassAnimationEnabled: onGrassAnimationEnabledChange,
         alwaysShowPlayerNames,
         setAlwaysShowPlayerNames: onAlwaysShowPlayerNamesChange,
         cloudsEnabled,
@@ -111,6 +111,7 @@ const GameVisualSettingsMenu: React.FC<GameVisualSettingsMenuProps> = ({
         onWaterSurfaceEffectsIntensityChange(DEFAULT_VISUAL_SETTINGS.waterSurfaceEffectsIntensity);
         onWorldParticlesQualityChange(DEFAULT_VISUAL_SETTINGS.worldParticlesQuality);
         onFootprintsEnabledChange(DEFAULT_VISUAL_SETTINGS.footprintsEnabled);
+        onGrassAnimationEnabledChange(DEFAULT_VISUAL_SETTINGS.grassAnimationEnabled);
         onFixedSimulationModeChange('off');
         applyPostProcessingPreset('off');
     };
@@ -126,6 +127,7 @@ const GameVisualSettingsMenu: React.FC<GameVisualSettingsMenuProps> = ({
         onWaterSurfaceEffectsIntensityChange(0);
         onWorldParticlesQualityChange(0);
         onFootprintsEnabledChange(false);
+        onGrassAnimationEnabledChange(false);
         applyPostProcessingPreset('off');
     };
 
@@ -758,6 +760,21 @@ const GameVisualSettingsMenu: React.FC<GameVisualSettingsMenuProps> = ({
                         </label>
                     </div>
 
+                    {/* Grass animation (sway + beach filmstrip) */}
+                    <div style={settingCardStyle}>
+                        <div style={{ fontFamily: '"Press Start 2P", cursive', fontSize: '16px', color: '#88cc44', marginBottom: '12px', textShadow: '0 0 8px #88cc44', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <FontAwesomeIcon icon={faLeaf} style={{ color: '#88cc44', textShadow: '0 0 8px #88cc44', fontSize: '14px' }} />
+                            GRASS ANIMATION: {grassAnimationEnabled ? 'ON' : 'OFF'}
+                        </div>
+                        <div style={{ fontFamily: '"Press Start 2P", cursive', fontSize: '12px', color: '#aaffaa', marginBottom: '8px', opacity: 0.75, letterSpacing: '0.5px', textAlign: 'left' }}>
+                            Wind sway on grass and animated beach grass. Off uses a static pose (first filmstrip frame; no sway).
+                        </div>
+                        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontFamily: '"Press Start 2P", cursive', fontSize: '14px', color: grassAnimationEnabled ? '#88cc44' : '#666', textShadow: grassAnimationEnabled ? '0 0 5px #88cc44' : 'none' }}>
+                            <input type="checkbox" checked={grassAnimationEnabled} onChange={(e) => onGrassAnimationEnabledChange(e.target.checked)} style={{ marginRight: '10px', transform: 'scale(1.5)', accentColor: '#88cc44' }} />
+                            ENABLE GRASS ANIMATION
+                        </label>
+                    </div>
+
                     {/* Fixed Simulation - Performance / High-refresh tuning */}
                     <div style={settingCardStyle}>
                         <div style={{ fontFamily: '"Press Start 2P", cursive', fontSize: '16px', color: '#b8a0ff', marginBottom: '12px', textShadow: '0 0 8px #b8a0ff', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1013,38 +1030,6 @@ const GameVisualSettingsMenu: React.FC<GameVisualSettingsMenuProps> = ({
                                 OFF (DEFAULT)
                             </button>
                             <button
-                                onClick={() => applyPostProcessingPreset('cozy')}
-                                className={styles.menuButton}
-                                style={{
-                                    flex: '1 1 170px',
-                                    minWidth: '150px',
-                                    background: 'linear-gradient(135deg, rgba(30, 65, 45, 0.85), rgba(20, 45, 30, 0.95))',
-                                    color: '#ffffff',
-                                    border: '2px solid #66ffb3',
-                                    borderRadius: '8px',
-                                    padding: '12px 14px',
-                                    fontFamily: '"Press Start 2P", cursive',
-                                    fontSize: '13px',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s ease',
-                                    boxShadow: '0 0 15px rgba(102, 255, 179, 0.35), inset 0 0 10px rgba(102, 255, 179, 0.12)',
-                                    textShadow: '0 0 5px rgba(102, 255, 179, 0.85)',
-                                    letterSpacing: '1px',
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(45, 85, 60, 0.95), rgba(25, 55, 38, 1))';
-                                    e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)';
-                                    e.currentTarget.style.boxShadow = '0 0 25px rgba(102, 255, 179, 0.6), inset 0 0 15px rgba(102, 255, 179, 0.2)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(30, 65, 45, 0.85), rgba(20, 45, 30, 0.95))';
-                                    e.currentTarget.style.transform = 'translateY(0px) scale(1)';
-                                    e.currentTarget.style.boxShadow = '0 0 15px rgba(102, 255, 179, 0.35), inset 0 0 10px rgba(102, 255, 179, 0.12)';
-                                }}
-                            >
-                                COZY
-                            </button>
-                            <button
                                 onClick={() => applyPostProcessingPreset('vibrant')}
                                 className={styles.menuButton}
                                 style={{
@@ -1065,50 +1050,6 @@ const GameVisualSettingsMenu: React.FC<GameVisualSettingsMenuProps> = ({
                                 }}
                             >
                                 VIBRANT
-                            </button>
-                            <button
-                                onClick={() => applyPostProcessingPreset('cinematic')}
-                                className={styles.menuButton}
-                                style={{
-                                    flex: '1 1 170px',
-                                    minWidth: '150px',
-                                    background: 'linear-gradient(135deg, rgba(48, 30, 70, 0.88), rgba(28, 15, 45, 0.96))',
-                                    color: '#ffffff',
-                                    border: '2px solid #c58cff',
-                                    borderRadius: '8px',
-                                    padding: '12px 14px',
-                                    fontFamily: '"Press Start 2P", cursive',
-                                    fontSize: '13px',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s ease',
-                                    boxShadow: '0 0 15px rgba(197, 140, 255, 0.35), inset 0 0 10px rgba(197, 140, 255, 0.12)',
-                                    textShadow: '0 0 5px rgba(197, 140, 255, 0.85)',
-                                    letterSpacing: '1px',
-                                }}
-                            >
-                                CINEMATIC
-                            </button>
-                            <button
-                                onClick={() => applyPostProcessingPreset('clean')}
-                                className={styles.menuButton}
-                                style={{
-                                    flex: '1 1 170px',
-                                    minWidth: '150px',
-                                    background: 'linear-gradient(135deg, rgba(26, 48, 65, 0.88), rgba(15, 30, 45, 0.96))',
-                                    color: '#ffffff',
-                                    border: '2px solid #7ccfff',
-                                    borderRadius: '8px',
-                                    padding: '12px 14px',
-                                    fontFamily: '"Press Start 2P", cursive',
-                                    fontSize: '13px',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s ease',
-                                    boxShadow: '0 0 15px rgba(124, 207, 255, 0.35), inset 0 0 10px rgba(124, 207, 255, 0.12)',
-                                    textShadow: '0 0 5px rgba(124, 207, 255, 0.85)',
-                                    letterSpacing: '1px',
-                                }}
-                            >
-                                CLEAN
                             </button>
                             <button
                                 onClick={() => applyPostProcessingPreset('desaturated')}

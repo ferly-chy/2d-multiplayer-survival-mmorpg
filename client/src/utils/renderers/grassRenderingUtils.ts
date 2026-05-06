@@ -321,6 +321,7 @@ function isInViewport(
  * Renders a single grass entity with LOD-based optimizations.
  * Sway amplitude scales with chunk weather for swaying types. Beach grass uses strip animation instead of sway; animation speed scales with chunk weather.
  * @param chunkWeather - Optional map of chunk weather (chunkIndex -> weather)
+ * @param grassAnimationEnabled - When false, no wind sway and beach grass strip stays on frame 0.
  */
 export function renderGrass(
     ctx: CanvasRenderingContext2D,
@@ -330,7 +331,8 @@ export function renderGrass(
     onlyDrawShadow?: boolean,
     _skipDrawingShadow?: boolean,
     lodLevel: LODLevel = 'near',
-    chunkWeather?: ChunkWeatherMap
+    chunkWeather?: ChunkWeatherMap,
+    grassAnimationEnabled: boolean = true
 ) {
     // Early exits
     if (grass.health <= 0 || onlyDrawShadow || lodLevel === 'cull') return;
@@ -359,9 +361,10 @@ export function renderGrass(
     }
 
     const isBeachGrassStrip = tag === BEACH_GRASS_TAG;
-    const beachFrame = isBeachGrassStrip
-        ? beachGrassFrameIndex(nowMs, grass.swayOffsetSeed, chunkWeather, grass.chunkIndex)
-        : 0;
+    const beachFrame =
+        isBeachGrassStrip && grassAnimationEnabled
+            ? beachGrassFrameIndex(nowMs, grass.swayOffsetSeed, chunkWeather, grass.chunkIndex)
+            : 0;
 
     // Calculate dimensions (beach uses one square frame from the horizontal strip)
     const baseWidth = grassTargetWidths[tag] || DEFAULT_GRASS_WIDTH;
@@ -425,7 +428,7 @@ export function renderGrass(
     const weatherSwayMult = chunkWeather ? getWeatherSwayMultiplier(chunkWeather, grass.chunkIndex) : 1.0;
     
     // Calculate sway animation (only for near/mid LOD and swaying types)
-    const canSway = shouldGrassSway(tag) && weatherSwayMult > 0;
+    const canSway = grassAnimationEnabled && shouldGrassSway(tag) && weatherSwayMult > 0;
     const swayOffset = (seed % 1000) / 1000.0;
     let swayAngleDeg = 0;
     
@@ -499,7 +502,8 @@ export function renderGrassEntities(
     viewportHeight: number,
     onlyDrawShadow?: boolean,
     _skipDrawingShadow?: boolean,
-    chunkWeather?: ChunkWeatherMap
+    chunkWeather?: ChunkWeatherMap,
+    grassAnimationEnabled: boolean = true
 ) {
     // Update frame counter (single increment per batch)
     frameCounter++;
@@ -625,7 +629,7 @@ export function renderGrassEntities(
             ctx.imageSmoothingEnabled = lodLevel !== 'far';
         }
         
-        renderGrass(ctx, item.grass, nowMs, cycleProgress, false, false, lodLevel, chunkWeather);
+        renderGrass(ctx, item.grass, nowMs, cycleProgress, false, false, lodLevel, chunkWeather, grassAnimationEnabled);
     }
     
     // Reset canvas state
@@ -655,7 +659,8 @@ export function renderGrassFromInterpolation(
     cameraY?: number,
     _viewportWidth?: number,
     _viewportHeight?: number,
-    chunkWeather?: ChunkWeatherMap
+    chunkWeather?: ChunkWeatherMap,
+    grassAnimationEnabled: boolean = true
 ) {
     // Calculate LOD if camera position provided
     let lodLevel: LODLevel = 'near';
@@ -665,7 +670,7 @@ export function renderGrassFromInterpolation(
         lodLevel = getLODLevel(dx * dx + dy * dy);
     }
     
-    renderGrass(ctx, grass, nowMs, cycleProgress, onlyDrawShadow, skipDrawingShadow, lodLevel, chunkWeather);
+    renderGrass(ctx, grass, nowMs, cycleProgress, onlyDrawShadow, skipDrawingShadow, lodLevel, chunkWeather, grassAnimationEnabled);
 }
 
 // PERFORMANCE: Utility to optimize canvas state for grass rendering

@@ -12,6 +12,7 @@
 
 import { getCompoundEerieLightsWithPositions, CompoundEerieLight } from '../../config/compoundBuildings';
 import { isNightTime, NIGHT_LIGHTS_ON, LIGHT_FADE_FULL_AT, TWILIGHT_MORNING_FADE_START, TWILIGHT_MORNING_END } from '../../config/dayNightConstants';
+import { ENABLE_CENTRAL_COMPOUND_EERIE_PARTICLES } from '../../config/visualFeatureFlags';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFIGURATION - Eerie Nanobot Light Palette
@@ -121,7 +122,9 @@ function renderCompoundEerieLight(
     ctx.arc(screenX, screenY, ambientRadius, 0, Math.PI * 2);
     ctx.fill();
 
-    renderEerieParticles(ctx, light, screenX, screenY, nowMs, finalIntensity);
+    if (ENABLE_CENTRAL_COMPOUND_EERIE_PARTICLES) {
+        renderEerieParticles(ctx, light, screenX, screenY, nowMs, finalIntensity);
+    }
 }
 
 /**

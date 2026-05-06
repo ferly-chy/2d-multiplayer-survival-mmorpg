@@ -33,6 +33,8 @@ export interface SettingsContextType {
     stormAtmosphereEnabled: boolean;
     statusOverlaysEnabled: boolean;
     grassEnabled: boolean;
+    /** When false, grass uses static pose (no wind sway; beach strip stays on frame 0). */
+    grassAnimationEnabled: boolean;
     alwaysShowPlayerNames: boolean;
     cloudsEnabled: boolean;
     waterSurfaceEffectsEnabled: boolean;
@@ -52,6 +54,7 @@ export interface SettingsContextType {
     setStormAtmosphereEnabled: (enabled: boolean) => void;
     setStatusOverlaysEnabled: (enabled: boolean) => void;
     setGrassEnabled: (enabled: boolean) => void;
+    setGrassAnimationEnabled: (enabled: boolean) => void;
     setAlwaysShowPlayerNames: (enabled: boolean) => void;
     setCloudsEnabled: (enabled: boolean) => void;
     setWaterSurfaceEffectsEnabled: (enabled: boolean) => void;
@@ -181,6 +184,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     });
     const [statusOverlaysEnabled, _setStatusOverlays] = useState(() => loadBool('statusOverlaysEnabled', true));
     const [grassEnabled, _setGrass] = useState(() => loadBool('grassEnabled', true));
+    const [grassAnimationEnabled, _setGrassAnimationEnabled] = useState(() => loadBool('grassAnimationEnabled', true));
     const [alwaysShowPlayerNames, _setPlayerNames] = useState(() => loadBool('alwaysShowPlayerNames', true));
     const [cloudsEnabled, _setCloudsEnabled] = useState(() => loadBool('cloudsEnabled', true));
     const [waterSurfaceEffectsEnabled, _setWaterSurfaceEffectsEnabled] = useState(() => loadBool('waterSurfaceEffectsEnabled', true));
@@ -238,6 +242,11 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     const setGrassEnabled = useCallback((e: boolean) => {
         _setGrass(e);
         localStorage.setItem('grassEnabled', e.toString());
+    }, []);
+
+    const setGrassAnimationEnabled = useCallback((e: boolean) => {
+        _setGrassAnimationEnabled(e);
+        localStorage.setItem('grassAnimationEnabled', e.toString());
     }, []);
 
     const setAlwaysShowPlayerNames = useCallback((e: boolean) => {
@@ -341,6 +350,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         stormAtmosphereEnabled,
         statusOverlaysEnabled,
         grassEnabled,
+        grassAnimationEnabled,
         alwaysShowPlayerNames,
         cloudsEnabled,
         waterSurfaceEffectsEnabled,
@@ -360,6 +370,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         setStormAtmosphereEnabled,
         setStatusOverlaysEnabled,
         setGrassEnabled,
+        setGrassAnimationEnabled,
         setAlwaysShowPlayerNames,
         setCloudsEnabled,
         setWaterSurfaceEffectsEnabled,
@@ -375,13 +386,13 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     }), [
         musicVolume, soundVolume, environmentalVolume,
         allShadowsEnabled, treeShadowsEnabled, weatherOverlayEnabled, stormAtmosphereEnabled, statusOverlaysEnabled,
-        grassEnabled, alwaysShowPlayerNames, cloudsEnabled, waterSurfaceEffectsEnabled,
+        grassEnabled, grassAnimationEnabled, alwaysShowPlayerNames, cloudsEnabled, waterSurfaceEffectsEnabled,
         waterSurfaceEffectsIntensity, worldParticlesQuality, footprintsEnabled, bloomIntensity,
         vignetteIntensity, chromaticAberrationIntensity, colorCorrection,
         fixedSimulationMode, displayRefreshRateHz, fixedSimulationEnabled,
         setMusicVolume, setSoundVolume, setEnvironmentalVolume,
         setAllShadowsEnabled, setTreeShadowsEnabled, setWeatherOverlayEnabled, setStormAtmosphereEnabled, setStatusOverlaysEnabled,
-        setGrassEnabled, setAlwaysShowPlayerNames, setCloudsEnabled, setWaterSurfaceEffectsEnabled,
+        setGrassEnabled, setGrassAnimationEnabled, setAlwaysShowPlayerNames, setCloudsEnabled, setWaterSurfaceEffectsEnabled,
         setWaterSurfaceEffectsIntensity, setWorldParticlesQuality, setFootprintsEnabled,
         setBloomIntensity, setVignetteIntensity, setChromaticAberrationIntensity, setColorCorrection,
         setFixedSimulationMode,

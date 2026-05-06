@@ -10,6 +10,7 @@ import {
     getTorchGpuFlameAnchorWorld,
     TORCH_FLAME_ANCHOR_FIRE_BASE_Y_OFFSET,
 } from '../utils/renderers/torchFlameAnchorWorldUtils';
+import { getClampedRafDeltaMs } from '../utils/frameDelta';
 
 // --- Particle Constants for Torch (can be adjusted) ---
 const TORCH_PARTICLE_LIFETIME_MIN = 100;  // Slightly longer for better visibility
@@ -80,8 +81,7 @@ export function useTorchParticles({
     useEffect(() => {
         const updateParticles = () => {
             const now = performance.now();
-            const deltaTime = now - lastUpdateTimeRef.current;
-            lastUpdateTimeRef.current = now;
+            const deltaTime = getClampedRafDeltaMs(now, lastUpdateTimeRef);
             
             if (deltaTime <= 0) {
                 animationFrameRef.current = requestAnimationFrame(updateParticles);

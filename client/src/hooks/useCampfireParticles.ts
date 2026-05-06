@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Campfire as SpacetimeDBCampfire } from '../generated/types';
 import { CAMPFIRE_RENDER_Y_OFFSET, CAMPFIRE_HEIGHT } from '../utils/renderers/campfireRenderingUtils';
+import { getClampedRafDeltaMs } from '../utils/frameDelta';
 
 // Steady fire/smoke: WebGL overlay (campfireFireOverlayUtils). This hook only drives hot-zone smoke_burst particles.
 
@@ -57,8 +58,7 @@ export function useCampfireParticles({
   useEffect(() => {
     const updateParticles = () => {
       const now = performance.now();
-      const deltaTime = now - lastUpdateTimeRef.current;
-      lastUpdateTimeRef.current = now;
+      const deltaTime = getClampedRafDeltaMs(now, lastUpdateTimeRef);
 
       if (deltaTime <= 0) {
         animationFrameRef.current = requestAnimationFrame(updateParticles);

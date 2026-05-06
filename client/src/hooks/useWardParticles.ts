@@ -8,6 +8,7 @@ import {
     LANTERN_RENDER_Y_OFFSET,
     getLanternDimensions
 } from '../utils/renderers/lanternRenderingUtils';
+import { getClampedRafDeltaMs } from '../utils/frameDelta';
 
 // ============================================================================
 // WARD PARTICLE SYSTEM
@@ -140,8 +141,7 @@ export function useWardParticles({
     useEffect(() => {
         const updateParticles = () => {
             const now = performance.now();
-            const deltaTime = now - lastUpdateTimeRef.current;
-            lastUpdateTimeRef.current = now;
+            const deltaTime = getClampedRafDeltaMs(now, lastUpdateTimeRef);
 
             if (deltaTime <= 0) {
                 animationFrameRef.current = requestAnimationFrame(updateParticles);

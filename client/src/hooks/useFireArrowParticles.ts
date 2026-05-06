@@ -10,6 +10,7 @@ import { JUMP_DURATION_MS, JUMP_HEIGHT_PX } from '../config/gameConfig';
 import { gameConfig } from '../config/gameConfig';
 import { sampleProjectileState } from '../utils/projectileSampling';
 import { getProjectileTrackingKey } from '../utils/renderers/projectileRenderingUtils';
+import { getClampedRafDeltaMs } from '../utils/frameDelta';
 
 // --- Fire Arrow Particle Constants (more visible than before) ---
 const FIRE_ARROW_PARTICLE_LIFETIME_MIN = 80;  // Longer lifetime
@@ -119,8 +120,7 @@ export function useFireArrowParticles({
 
         const updateParticles = () => {
             const now = performance.now();
-            const deltaTime = now - lastUpdateTimeRef.current;
-            lastUpdateTimeRef.current = now;
+            const deltaTime = getClampedRafDeltaMs(now, lastUpdateTimeRef);
             
             if (deltaTime <= 0) {
                 animationFrameRef.current = requestAnimationFrame(updateParticles);

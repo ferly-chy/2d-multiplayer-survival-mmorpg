@@ -12,6 +12,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { Particle } from './useCampfireParticles';
 import { WildAnimal as SpacetimeDBWildAnimal, Player as SpacetimeDBPlayer, AnimalCorpse as SpacetimeDBAnimalCorpse } from '../generated/types';
+import { getClampedRafDeltaMs } from '../utils/frameDelta';
 
 // --- Blood Particle Constants ---
 const BLOOD_PARTICLE_LIFETIME_MIN = 200;
@@ -211,8 +212,7 @@ export function useImpactParticles({
     useEffect(() => {
         const updateParticles = () => {
             const now = performance.now();
-            const deltaTime = now - lastUpdateTimeRef.current;
-            lastUpdateTimeRef.current = now;
+            const deltaTime = getClampedRafDeltaMs(now, lastUpdateTimeRef);
             
             if (deltaTime <= 0) {
                 animationFrameRef.current = requestAnimationFrame(updateParticles);

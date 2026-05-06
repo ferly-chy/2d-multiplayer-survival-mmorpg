@@ -5,6 +5,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { Barbecue } from '../generated/types';
 import { BARBECUE_HEIGHT, BARBECUE_RENDER_Y_OFFSET } from '../utils/renderers/barbecueRenderingUtils';
+import { getClampedRafDeltaMs } from '../utils/frameDelta';
 
 export interface BarbecueParticle {
   x: number;
@@ -32,8 +33,11 @@ export function useBarbecueParticles({ visibleBarbecuesMap }: { visibleBarbecues
 
   const updateParticles = useCallback(() => {
     const now = performance.now();
-    const deltaTime = now - lastTimeRef.current;
-    lastTimeRef.current = now;
+    const deltaTime = getClampedRafDeltaMs(now, lastTimeRef);
+    if (deltaTime <= 0) {
+      animationRef.current = requestAnimationFrame(updateParticles);
+      return;
+    }
 
     // Update existing particles IN PLACE (no new array allocation when possible)
     let writeIndex = 0;

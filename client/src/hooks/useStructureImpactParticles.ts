@@ -15,6 +15,7 @@ import { Particle } from './useCampfireParticles';
 import { WallCell as SpacetimeDBWallCell, Door as SpacetimeDBDoor, Shelter as SpacetimeDBShelter } from '../generated/types';
 import { FOUNDATION_TILE_SIZE } from '../config/gameConfig';
 import { SHELTER_DIMS } from '../utils/clientCollision';
+import { getClampedRafDeltaMs } from '../utils/frameDelta';
 
 // --- Spark Particle Constants ---
 const SPARK_PARTICLE_LIFETIME_MIN = 150;
@@ -113,8 +114,7 @@ export function useStructureImpactParticles({
     useEffect(() => {
         const updateParticles = () => {
             const now = performance.now();
-            const deltaTime = now - lastUpdateTimeRef.current;
-            lastUpdateTimeRef.current = now;
+            const deltaTime = getClampedRafDeltaMs(now, lastUpdateTimeRef);
             
             if (deltaTime <= 0) {
                 animationFrameRef.current = requestAnimationFrame(updateParticles);

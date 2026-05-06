@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { FirePatch as SpacetimeDBFirePatch, Player as SpacetimeDBPlayer } from '../generated/types';
 import { FIRE_PATCH_VISUAL_RADIUS } from '../utils/renderers/firePatchRenderingUtils';
+import { getClampedRafDeltaMs } from '../utils/frameDelta';
 
 // --- Particle System Types and Constants ---
 export interface Particle {
@@ -100,8 +101,7 @@ export function useFirePatchParticles({
     useEffect(() => {
         const updateParticles = () => {
             const now = performance.now();
-            const deltaTime = now - lastUpdateTimeRef.current;
-            lastUpdateTimeRef.current = now;
+            const deltaTime = getClampedRafDeltaMs(now, lastUpdateTimeRef);
             
             if (deltaTime <= 0) {
                 animationFrameRef.current = requestAnimationFrame(updateParticles);
