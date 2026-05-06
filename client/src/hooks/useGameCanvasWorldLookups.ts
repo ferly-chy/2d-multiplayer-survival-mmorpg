@@ -1,8 +1,6 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { useWorldTileCache } from './useWorldTileCache';
+import { useMemo, useRef } from 'react';
 import { detectHotSprings } from '../utils/hotSpringDetector';
 import { detectQuarries } from '../utils/quarryDetector';
-import { getTileTypeFromChunkData } from '../utils/renderers/placementRenderingUtils';
 import { isOceanTileTag, isWaterTileTag } from '../utils/tileTypeGuards';
 import { gameConfig } from '../config/gameConfig';
 
@@ -11,7 +9,6 @@ const WORLD_TILE_RENDER_BUFFER_TILES = 4;
 
 interface UseGameCanvasWorldLookupsOptions {
   worldChunkDataMap: Map<string, any> | undefined;
-  connection: any;
   cameraOffsetX: number;
   cameraOffsetY: number;
   canvasWidth: number;
@@ -21,7 +18,6 @@ interface UseGameCanvasWorldLookupsOptions {
 
 export function useGameCanvasWorldLookups({
   worldChunkDataMap,
-  connection,
   cameraOffsetX,
   cameraOffsetY,
   canvasWidth,
@@ -104,19 +100,25 @@ export function useGameCanvasWorldLookups({
 
   const seaTransitionTileLookup = useMemo(() => {
     const lookup = new Map<string, boolean>();
-    if (!connection) return lookup;
     const isLandAtShore = (tileType: string | null) => tileType === 'Beach' || tileType === 'Asphalt';
     // Include hot spring water so barrel shadows / transition skips match sea-style shoreline rules
     const isShoreWater = (tileType: string | null) =>
       isOceanTileTag(tileType) || tileType === 'HotSpringWater';
+    const tileTypesByCoord = new Map<string, string>();
+    visibleWorldTiles.forEach((tile) => {
+      tileTypesByCoord.set(`${tile.worldX},${tile.worldY}`, tile.tileType?.tag ?? 'Grass');
+    });
+    const getVisibleTileType = (tx: number, ty: number): string | null =>
+      tileTypesByCoord.get(`${tx},${ty}`) ?? null;
+
     visibleWorldTiles.forEach((tile) => {
       const tx = tile.worldX;
       const ty = tile.worldY;
-      const center = getTileTypeFromChunkData(connection, tx, ty);
-      const n = getTileTypeFromChunkData(connection, tx, ty - 1);
-      const s = getTileTypeFromChunkData(connection, tx, ty + 1);
-      const e = getTileTypeFromChunkData(connection, tx + 1, ty);
-      const w = getTileTypeFromChunkData(connection, tx - 1, ty);
+      const center = getVisibleTileType(tx, ty);
+      const n = getVisibleTileType(tx, ty - 1);
+      const s = getVisibleTileType(tx, ty + 1);
+      const e = getVisibleTileType(tx + 1, ty);
+      const w = getVisibleTileType(tx - 1, ty);
       const hasWater = isShoreWater(n) || isShoreWater(s) || isShoreWater(e) || isShoreWater(w);
       const hasLand = isLandAtShore(n) || isLandAtShore(s) || isLandAtShore(e) || isLandAtShore(w);
       const isTransition = (isShoreWater(center) && hasLand) || (isLandAtShore(center) && hasWater);
@@ -125,9 +127,7 @@ export function useGameCanvasWorldLookups({
       }
     });
     return lookup;
-  }, [connection, visibleWorldTiles]);
-
-  const { proceduralRenderer, isInitialized: isWorldRendererInitialized, updateTileCache } = useWorldTileCache();
+  }, [visibleWorldTiles]);
 
   const detectedHotSprings = useMemo(() => {
     return detectHotSprings((worldChunkDataMap ?? EMPTY_MAP) as Map<string, any>);
@@ -136,12 +136,6 @@ export function useGameCanvasWorldLookups({
   const detectedQuarries = useMemo(() => {
     return detectQuarries((worldChunkDataMap ?? EMPTY_MAP) as Map<string, any>);
   }, [worldChunkDataMap]);
-
-  useEffect(() => {
-    if (visibleWorldTiles.size > 0) {
-      updateTileCache(visibleWorldTiles);
-    }
-  }, [visibleWorldTiles, updateTileCache]);
 
   const lastShoreCheckPosRef = useRef({ x: 0, y: 0 });
   const cachedDistanceToShoreRef = useRef(9999);
@@ -194,8 +188,6 @@ export function useGameCanvasWorldLookups({
   }, [localPlayer]);
 
   return {
-    proceduralRenderer,
-    isWorldRendererInitialized,
     visibleWorldTiles,
     waterTileLookup,
     seaTransitionTileLookup,

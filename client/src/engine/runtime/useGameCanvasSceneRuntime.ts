@@ -80,7 +80,6 @@ export function useGameCanvasSceneRuntime({
 
   const worldLookups = useGameCanvasWorldLookups({
     worldChunkDataMap,
-    connection,
     cameraOffsetX,
     cameraOffsetY,
     canvasWidth: canvasSize.width,

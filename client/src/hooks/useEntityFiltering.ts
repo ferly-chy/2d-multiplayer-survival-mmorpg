@@ -1208,10 +1208,23 @@ export function useEntityFiltering(
     if (!players) return [];
     const result: SpacetimeDBPlayer[] = [];
     for (const e of players.values()) {
-      if (e.isOnline && isInView(e.positionX, e.positionY, 64, 64, viewBounds)) result.push(e);
+      if (!e.isOnline) continue;
+
+      const playerId = e.identity?.toHexString();
+      const isLocalPlayer = Boolean(localPlayerId && playerId === localPlayerId);
+
+      // The camera follows predicted local movement, while the replicated server
+      // position can lag briefly at chunk boundaries. Never cull the local player
+      // from the render list because of that transient mismatch.
+      if (isLocalPlayer) {
+        result.push(e);
+        continue;
+      }
+
+      if (isInView(e.positionX, e.positionY, 64, 64, viewBounds)) result.push(e);
     }
     return result;
-  }, [players, viewBounds]);
+  }, [players, viewBounds, localPlayerId]);
 
   const visibleWoodenStorageBoxes = useMemo(() =>
     filterMapToArray(woodenStorageBoxes, e => isInView(e.posX, e.posY, 64, 64, viewBounds)),

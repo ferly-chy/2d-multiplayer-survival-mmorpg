@@ -195,7 +195,16 @@ export class TileDoodadRenderer {
     private loadImage(src: string): Promise<HTMLImageElement | null> {
         return new Promise((resolve) => {
             const img = new Image();
-            img.onload = () => resolve(img);
+            img.onload = async () => {
+                if (typeof img.decode === 'function') {
+                    try {
+                        await img.decode();
+                    } catch {
+                        // Keep rendering available if decode() rejects after load.
+                    }
+                }
+                resolve(img);
+            };
             img.onerror = () => {
                 console.warn(`[TileDoodadRenderer] Failed to load image: ${src}`);
                 resolve(null);

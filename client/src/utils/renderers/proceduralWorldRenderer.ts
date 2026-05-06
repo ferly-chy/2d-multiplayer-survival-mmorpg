@@ -80,6 +80,7 @@ export class ProceduralWorldRenderer {
 
     /** Skip redundant updateTileCache when same map reference passed (e.g. standing still). */
     private lastWorldTilesRef: Map<string, WorldTile> | null = null;
+    private transitionInfoCache = new Map<string, DualGridTileInfo[]>();
     
     private animationTime = 0;
     private isInitialized = false;
@@ -129,7 +130,14 @@ export class ProceduralWorldRenderer {
     private loadImage(src: string, key: string): Promise<void> {
         return new Promise((resolve, reject) => {
             const img = new Image();
-            img.onload = () => {
+            img.onload = async () => {
+                if (typeof img.decode === 'function') {
+                    try {
+                        await img.decode();
+                    } catch {
+                        // Some browsers reject decode() for already usable images.
+                    }
+                }
                 this.tileCache.images.set(key, img);
                 resolve();
             };
@@ -145,11 +153,24 @@ export class ProceduralWorldRenderer {
         this.lastWorldTilesRef = worldTiles;
 
         this.tileCache.tiles.clear();
+        this.transitionInfoCache.clear();
         worldTiles.forEach((tile) => {
             const tileKey = `${tile.worldX}_${tile.worldY}`;
             this.tileCache.tiles.set(tileKey, tile);
         });
         this.tileCache.lastUpdate = Date.now();
+    }
+
+    private getTransitionInfo(logicalX: number, logicalY: number): DualGridTileInfo[] {
+        const cacheKey = `${logicalX}_${logicalY}`;
+        const cached = this.transitionInfoCache.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const transitions = getDualGridTileInfoMultiLayer(logicalX, logicalY, this.tileCache.tiles);
+        this.transitionInfoCache.set(cacheKey, transitions);
+        return transitions;
     }
     
     public renderProceduralWorld(
@@ -286,7 +307,7 @@ export class ProceduralWorldRenderer {
         tileSize: number,
         currentTimeMs: number
     ): void {
-        const transitions = getDualGridTileInfoMultiLayer(logicalX, logicalY, this.tileCache.tiles);
+        const transitions = this.getTransitionInfo(logicalX, logicalY);
         if (transitions.length === 0) return;
 
         const pixelX = Math.floor((logicalX + 0.5) * tileSize);
@@ -546,7 +567,7 @@ export class ProceduralWorldRenderer {
         showDebugOverlay: boolean = false
     ) {
         // Get ALL Dual Grid transition layers (handles 3+ terrain junctions)
-        const transitions = getDualGridTileInfoMultiLayer(logicalX, logicalY, this.tileCache.tiles);
+        const transitions = this.getTransitionInfo(logicalX, logicalY);
         
         // If no transitions needed (all corners same terrain), skip
         if (transitions.length === 0) {
@@ -814,7 +835,7 @@ export class ProceduralWorldRenderer {
         tileSize: number,
         showDebugOverlay: boolean = false
     ) {
-        const transitions = getDualGridTileInfoMultiLayer(logicalX, logicalY, this.tileCache.tiles);
+        const transitions = this.getTransitionInfo(logicalX, logicalY);
         if (transitions.length === 0) return;
 
         const seaDeepSeaTransitions = transitions.filter((tileInfo) => {

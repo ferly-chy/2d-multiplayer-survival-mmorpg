@@ -6,17 +6,18 @@ class WorldChunkDataRuntime {
   private connection: DbConnection | null = null;
   private chunkCache = new Map<string, WorldChunkData>();
   private handle: { unsubscribe?: () => void } | null = null;
+  private pendingCommitTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly handleChunkInsert = (_ctx: unknown, row: WorldChunkData) => {
     this.chunkCache.set(`${row.chunkX},${row.chunkY}`, row);
-    this.commit();
+    this.scheduleCommit();
   };
   private readonly handleChunkUpdate = (_ctx: unknown, _oldRow: WorldChunkData, row: WorldChunkData) => {
     this.chunkCache.set(`${row.chunkX},${row.chunkY}`, row);
-    this.commit();
+    this.scheduleCommit();
   };
   private readonly handleChunkDelete = (_ctx: unknown, row: WorldChunkData) => {
     this.chunkCache.delete(`${row.chunkX},${row.chunkY}`);
-    this.commit();
+    this.scheduleCommit();
   };
 
   start(connection: DbConnection | null): void {
@@ -60,6 +61,11 @@ class WorldChunkDataRuntime {
     }
     this.handle = null;
 
+    if (this.pendingCommitTimer) {
+      clearTimeout(this.pendingCommitTimer);
+      this.pendingCommitTimer = null;
+    }
+
     if (this.connection) {
       this.connection.db.world_chunk_data.removeOnInsert(this.handleChunkInsert);
       this.connection.db.world_chunk_data.removeOnUpdate(this.handleChunkUpdate);
@@ -69,6 +75,19 @@ class WorldChunkDataRuntime {
     this.connection = null;
     this.chunkCache.clear();
     runtimeEngine.setWorldChunkDataMap(new Map());
+  }
+
+  private scheduleCommit(): void {
+    if (this.pendingCommitTimer) {
+      return;
+    }
+
+    // SpacetimeDB can apply chunk rows in bursts. Publish one snapshot after the
+    // burst instead of forcing React subscribers to recompute for every row.
+    this.pendingCommitTimer = setTimeout(() => {
+      this.pendingCommitTimer = null;
+      this.commit();
+    }, 0);
   }
 
   private commit(): void {
