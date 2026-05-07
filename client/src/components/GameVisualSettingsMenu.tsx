@@ -4,26 +4,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTree, faCloudRain, faHeartPulse, faLeaf, faUsers, faGears } from '@fortawesome/free-solid-svg-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import type { FixedSimulationMode } from '../contexts/SettingsContext';
-
-// Default visual settings based on optimal neural rendering thresholds
-export const DEFAULT_VISUAL_SETTINGS = {
-    allShadowsEnabled: true,         // Enable all in-world shadows
-    weatherOverlayEnabled: true,     // Enable precipitation particles (rain/snow)
-    stormAtmosphereEnabled: true,    // Enable storm darkening/desaturation layer
-    statusOverlaysEnabled: true,     // Enable cold/low health screen overlays
-    grassEnabled: true,              // Enable grass rendering and subscriptions
-    grassAnimationEnabled: true,     // Wind sway + beach grass filmstrip
-    alwaysShowPlayerNames: true,     // Show player names above heads at all times
-    cloudsEnabled: true,             // Enable cloud layer
-    waterSurfaceEffectsEnabled: true,// Enable voronoi/caustic water effects
-    waterSurfaceEffectsIntensity: 75,// Strong enough to feel alive but not noisy
-    worldParticlesQuality: 2,        // 0=off, 1=low, 2=full
-    footprintsEnabled: true,         // Enable sand/snow footprints
-    bloomIntensity: 0,               // Default OFF
-    vignetteIntensity: 0,            // Default OFF
-    chromaticAberrationIntensity: 0, // Default OFF
-    colorCorrection: 50,             // Neutral by default
-} as const;
+import { ADVANCED_VISUAL_DEFAULTS, PERFORMANCE_VISUAL_DEFAULTS } from '../constants/visualSettingsPresets';
 
 const POST_PROCESSING_PRESETS = {
     off: { bloomIntensity: 0, vignetteIntensity: 0, chromaticAberrationIntensity: 0, colorCorrection: 50 },
@@ -43,6 +24,7 @@ const GameVisualSettingsMenu: React.FC<GameVisualSettingsMenuProps> = ({
     const {
         allShadowsEnabled,
         setAllShadowsEnabled: onAllShadowsChange,
+        setTreeShadowsEnabled: onTreeShadowsChange,
         weatherOverlayEnabled,
         setWeatherOverlayEnabled: onWeatherOverlayChange,
         stormAtmosphereEnabled,
@@ -90,6 +72,7 @@ const GameVisualSettingsMenu: React.FC<GameVisualSettingsMenuProps> = ({
 
     const setShadowsEnabled = (enabled: boolean) => {
         onAllShadowsChange(enabled);
+        onTreeShadowsChange(enabled);
     };
 
     const applyPostProcessingPreset = (preset: keyof typeof POST_PROCESSING_PRESETS) => {
@@ -100,34 +83,38 @@ const GameVisualSettingsMenu: React.FC<GameVisualSettingsMenuProps> = ({
         onColorCorrectionChange(values.colorCorrection);
     };
 
-    const applyPresetDefault = () => {
-        setShadowsEnabled(DEFAULT_VISUAL_SETTINGS.allShadowsEnabled);
-        onWeatherOverlayChange(DEFAULT_VISUAL_SETTINGS.weatherOverlayEnabled);
-        onStormAtmosphereChange(DEFAULT_VISUAL_SETTINGS.stormAtmosphereEnabled);
-        onStatusOverlaysChange(DEFAULT_VISUAL_SETTINGS.statusOverlaysEnabled);
-        onAlwaysShowPlayerNamesChange(DEFAULT_VISUAL_SETTINGS.alwaysShowPlayerNames);
-        onCloudsEnabledChange(DEFAULT_VISUAL_SETTINGS.cloudsEnabled);
-        onWaterSurfaceEffectsEnabledChange(DEFAULT_VISUAL_SETTINGS.waterSurfaceEffectsEnabled);
-        onWaterSurfaceEffectsIntensityChange(DEFAULT_VISUAL_SETTINGS.waterSurfaceEffectsIntensity);
-        onWorldParticlesQualityChange(DEFAULT_VISUAL_SETTINGS.worldParticlesQuality);
-        onFootprintsEnabledChange(DEFAULT_VISUAL_SETTINGS.footprintsEnabled);
-        onGrassAnimationEnabledChange(DEFAULT_VISUAL_SETTINGS.grassAnimationEnabled);
+    const applyPresetAdvancedGraphics = () => {
+        const a = ADVANCED_VISUAL_DEFAULTS;
+        onAllShadowsChange(a.allShadowsEnabled);
+        onTreeShadowsChange(a.treeShadowsEnabled);
+        onWeatherOverlayChange(a.weatherOverlayEnabled);
+        onStormAtmosphereChange(a.stormAtmosphereEnabled);
+        onStatusOverlaysChange(a.statusOverlaysEnabled);
+        onAlwaysShowPlayerNamesChange(a.alwaysShowPlayerNames);
+        onCloudsEnabledChange(a.cloudsEnabled);
+        onWaterSurfaceEffectsEnabledChange(a.waterSurfaceEffectsEnabled);
+        onWaterSurfaceEffectsIntensityChange(a.waterSurfaceEffectsIntensity);
+        onWorldParticlesQualityChange(a.worldParticlesQuality);
+        onFootprintsEnabledChange(a.footprintsEnabled);
+        onGrassAnimationEnabledChange(a.grassAnimationEnabled);
         onFixedSimulationModeChange('off');
         applyPostProcessingPreset('off');
     };
 
     const applyPresetPerformance = () => {
-        setShadowsEnabled(false);
-        onWeatherOverlayChange(false);
-        onStormAtmosphereChange(false);
-        onStatusOverlaysChange(false);
-        onAlwaysShowPlayerNamesChange(true);
-        onCloudsEnabledChange(false);
-        onWaterSurfaceEffectsEnabledChange(false);
-        onWaterSurfaceEffectsIntensityChange(0);
-        onWorldParticlesQualityChange(0);
-        onFootprintsEnabledChange(false);
-        onGrassAnimationEnabledChange(false);
+        const p = PERFORMANCE_VISUAL_DEFAULTS;
+        onAllShadowsChange(p.allShadowsEnabled);
+        onTreeShadowsChange(p.treeShadowsEnabled);
+        onWeatherOverlayChange(p.weatherOverlayEnabled);
+        onStormAtmosphereChange(p.stormAtmosphereEnabled);
+        onStatusOverlaysChange(p.statusOverlaysEnabled);
+        onAlwaysShowPlayerNamesChange(p.alwaysShowPlayerNames);
+        onCloudsEnabledChange(p.cloudsEnabled);
+        onWaterSurfaceEffectsEnabledChange(p.waterSurfaceEffectsEnabled);
+        onWaterSurfaceEffectsIntensityChange(p.waterSurfaceEffectsIntensity);
+        onWorldParticlesQualityChange(p.worldParticlesQuality);
+        onFootprintsEnabledChange(p.footprintsEnabled);
+        onGrassAnimationEnabledChange(p.grassAnimationEnabled);
         applyPostProcessingPreset('off');
     };
 
@@ -241,20 +228,31 @@ const GameVisualSettingsMenu: React.FC<GameVisualSettingsMenuProps> = ({
                         }}>
                             VISUAL PRESETS
                         </div>
+                        <div style={{
+                            fontFamily: '"Press Start 2P", cursive',
+                            fontSize: '9px',
+                            color: 'rgba(200, 255, 235, 0.78)',
+                            marginBottom: '12px',
+                            letterSpacing: '0.5px',
+                            textAlign: 'left',
+                            lineHeight: 1.6,
+                        }}>
+                            New sessions default to Performance (stable baseline). Advanced Graphics opt-in enables shadows, weather, clouds, water FX, particles, and grass animation.
+                        </div>
                         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                            <button
-                                onClick={applyPresetDefault}
-                                className={styles.menuButton}
-                                style={{ flex: '1 1 160px', minWidth: '150px', padding: '10px 12px', fontSize: '12px', fontFamily: '"Press Start 2P", cursive' }}
-                            >
-                                DEFAULT
-                            </button>
                             <button
                                 onClick={applyPresetPerformance}
                                 className={styles.menuButton}
                                 style={{ flex: '1 1 160px', minWidth: '150px', padding: '10px 12px', fontSize: '12px', fontFamily: '"Press Start 2P", cursive' }}
                             >
                                 PERFORMANCE
+                            </button>
+                            <button
+                                onClick={applyPresetAdvancedGraphics}
+                                className={styles.menuButton}
+                                style={{ flex: '1 1 160px', minWidth: '150px', padding: '10px 12px', fontSize: '11px', fontFamily: '"Press Start 2P", cursive' }}
+                            >
+                                ADVANCED GRAPHICS
                             </button>
                         </div>
                     </div>
