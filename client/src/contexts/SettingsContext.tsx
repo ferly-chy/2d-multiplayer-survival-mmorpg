@@ -10,7 +10,7 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
-import { PERFORMANCE_VISUAL_DEFAULTS } from '../constants/visualSettingsPresets';
+import { PERFORMANCE_VISUAL_DEFAULTS, migrateVisualSettingsSchemaIfNeeded } from '../constants/visualSettingsPresets';
 
 export type FixedSimulationMode = 'off' | 'auto' | 'on';
 
@@ -163,6 +163,9 @@ function estimateRefreshRateHz(sampleCount = 45): Promise<number> {
 // ---------------------------------------------------------------------------
 
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    // One-time (per schema version) migrate persisted visuals before initial state reads.
+    migrateVisualSettingsSchemaIfNeeded();
+
     // --- Audio ---
     const [musicVolume, _setMusicVolume] = useState(() => loadNumber('musicVolume', 0.20));
     const [soundVolume, _setSoundVolume] = useState(() => loadNumber('soundVolume', 0.50));
