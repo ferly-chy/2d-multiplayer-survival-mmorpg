@@ -81,6 +81,8 @@ export class ProceduralWorldRenderer {
     /** Skip redundant updateTileCache when same map reference passed (e.g. standing still). */
     private lastWorldTilesRef: Map<string, WorldTile> | null = null;
     private tileSignatureCache = new Map<string, string>();
+    private tileSeenEpoch = new Map<string, number>();
+    private currentTileCacheEpoch = 0;
     private transitionInfoCache = new Map<string, DualGridTileInfo[]>();
     
     private animationTime = 0;
@@ -153,12 +155,13 @@ export class ProceduralWorldRenderer {
         if (this.lastWorldTilesRef === worldTiles) return;
         this.lastWorldTilesRef = worldTiles;
 
-        const nextTileKeys = new Set<string>();
+        this.currentTileCacheEpoch += 1;
+        const epoch = this.currentTileCacheEpoch;
         let hasChanges = false;
 
         worldTiles.forEach((tile) => {
             const tileKey = `${tile.worldX}_${tile.worldY}`;
-            nextTileKeys.add(tileKey);
+            this.tileSeenEpoch.set(tileKey, epoch);
 
             const nextSignature = this.getTileCacheSignature(tile);
             if (this.tileSignatureCache.get(tileKey) === nextSignature) {
@@ -172,13 +175,14 @@ export class ProceduralWorldRenderer {
         });
 
         for (const tileKey of this.tileSignatureCache.keys()) {
-            if (nextTileKeys.has(tileKey)) {
+            if (this.tileSeenEpoch.get(tileKey) === epoch) {
                 continue;
             }
 
             const removedTile = this.tileCache.tiles.get(tileKey);
             this.tileCache.tiles.delete(tileKey);
             this.tileSignatureCache.delete(tileKey);
+            this.tileSeenEpoch.delete(tileKey);
 
             if (removedTile) {
                 this.invalidateTransitionsAroundTile(removedTile.worldX, removedTile.worldY);

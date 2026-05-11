@@ -18,6 +18,8 @@ import { getTileTypeFromChunkData } from '../../utils/renderers/placementRenderi
 import type { MutableRefObject } from 'react';
 
 const LOCAL_DODGE_ROLL_VISUAL_DURATION_MS = 180;
+let lastProjectileCollisionEntitiesRef: any[] | null = null;
+let lastProjectileCollisionCircles: ReturnType<typeof buildProjectileCollisionCircles> = [];
 
 interface RenderEntityWorldPassesOptions {
   ctx: CanvasRenderingContext2D;
@@ -182,7 +184,14 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
     hasRepairHammer,
   } = options;
 
-  const projectileCollisionCircles = buildProjectileCollisionCircles(ySortedEntities);
+  const projectileCollisionCircles =
+    ySortedEntities === lastProjectileCollisionEntitiesRef
+      ? lastProjectileCollisionCircles
+      : buildProjectileCollisionCircles(ySortedEntities);
+  if (ySortedEntities !== lastProjectileCollisionEntitiesRef) {
+    lastProjectileCollisionEntitiesRef = ySortedEntities;
+    lastProjectileCollisionCircles = projectileCollisionCircles;
+  }
   const flushBatch = (batch: any[]) => {
     if (batch.length > 0) {
       const localOptimisticJumpPressMsSnapshot = localOptimisticJumpPressMsRef.current;

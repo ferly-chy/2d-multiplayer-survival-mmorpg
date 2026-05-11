@@ -138,6 +138,19 @@ const playerMovementCache = new Map<string, {
   isCurrentlyMoving: boolean;
   lastKnownPosition: { x: number; y: number } | null;
 }>();
+const playerRenderScratchCache = new Map<string, SpacetimeDBPlayer>();
+
+function getPlayerRenderScratch(playerId: string, player: SpacetimeDBPlayer): SpacetimeDBPlayer {
+  let scratch = playerRenderScratchCache.get(playerId);
+  if (!scratch) {
+    scratch = { ...player };
+    playerRenderScratchCache.set(playerId, scratch);
+    return scratch;
+  }
+
+  Object.assign(scratch, player);
+  return scratch;
+}
 
 // Dodge roll visual effects cache
 interface DodgeRollVisualState {
@@ -840,21 +853,17 @@ export const renderYSortedEntities = ({
           let playerForRendering = player;
           if (isLocalPlayer && localPlayerPosition) {
               // Local player uses predicted position AND local facing direction for instant visual feedback
-              playerForRendering = {
-                  ...player,
-                  positionX: localPlayerPosition.x,
-                  positionY: localPlayerPosition.y,
-                  // CLIENT-AUTHORITATIVE: Use local facing direction for instant direction changes (no server lag)
-                  direction: localFacingDirection || player.direction
-              };
+              playerForRendering = getPlayerRenderScratch(playerId, player);
+              playerForRendering.positionX = localPlayerPosition.x;
+              playerForRendering.positionY = localPlayerPosition.y;
+              // CLIENT-AUTHORITATIVE: Use local facing direction for instant direction changes (no server lag)
+              playerForRendering.direction = localFacingDirection || player.direction;
           } else if (!isLocalPlayer && remotePlayerInterpolation) {
               // Remote players use interpolated position between server updates
               const interpolatedPosition = remotePlayerInterpolation.updateAndGetSmoothedPosition(player, localPlayerId);
-              playerForRendering = {
-                  ...player,
-                  positionX: interpolatedPosition.x,
-                  positionY: interpolatedPosition.y
-              };
+              playerForRendering = getPlayerRenderScratch(playerId, player);
+              playerForRendering.positionX = interpolatedPosition.x;
+              playerForRendering.positionY = interpolatedPosition.y;
           }
 
           const lastPos = lastPositionsRef.current.get(playerId);
@@ -892,7 +901,12 @@ export const renderYSortedEntities = ({
           if (hasPositionChanged) {
               movementCache.lastMovementTime = nowMs;
               movementCache.isCurrentlyMoving = true;
-              movementCache.lastKnownPosition = { x: playerForRendering.positionX, y: playerForRendering.positionY };
+              if (movementCache.lastKnownPosition) {
+                  movementCache.lastKnownPosition.x = playerForRendering.positionX;
+                  movementCache.lastKnownPosition.y = playerForRendering.positionY;
+              } else {
+                  movementCache.lastKnownPosition = { x: playerForRendering.positionX, y: playerForRendering.positionY };
+              }
               isPlayerMoving = true;
               movementReason = 'position_change';
           } else {
@@ -919,7 +933,13 @@ export const renderYSortedEntities = ({
           // Skip footprints when player is dodging
           updatePlayerFootprints(connection ?? null, playerForRendering, isPlayerMoving, nowMs, playerDodgeRollStates);
          
-          lastPositionsRef.current.set(playerId, { x: playerForRendering.positionX, y: playerForRendering.positionY });
+          const cachedLastPos = lastPositionsRef.current.get(playerId);
+          if (cachedLastPos) {
+              cachedLastPos.x = playerForRendering.positionX;
+              cachedLastPos.y = playerForRendering.positionY;
+          } else {
+              lastPositionsRef.current.set(playerId, { x: playerForRendering.positionX, y: playerForRendering.positionY });
+          }
 
          let jumpOffset = 0;
          let isCurrentlyJumping = false;
@@ -990,10 +1010,10 @@ export const renderYSortedEntities = ({
              isDodgeRolling = localPredictedDodgeRollVisualState.isDodgeRolling;
              dodgeRollProgress = localPredictedDodgeRollVisualState.progress;
              if (localPredictedDodgeRollVisualState.isDodgeRolling && localPredictedDodgeRollVisualState.direction) {
-               playerForRendering = {
-                 ...playerForRendering,
-                 direction: localPredictedDodgeRollVisualState.direction
-               };
+               if (playerForRendering === player) {
+                 playerForRendering = getPlayerRenderScratch(playerId, player);
+               }
+               playerForRendering.direction = localPredictedDodgeRollVisualState.direction;
              }
            } else {
            const hasOptimistic = localOptimisticDodgeRollStartMs > 0;
@@ -1033,10 +1053,10 @@ export const renderYSortedEntities = ({
             if (dodgeRollState) {
               // Remote polish: use authoritative dodge direction while roll is active.
               if (typeof (dodgeRollState as any).direction === 'string' && (dodgeRollState as any).direction.length > 0) {
-                playerForRendering = {
-                  ...playerForRendering,
-                  direction: (dodgeRollState as any).direction
-                };
+                if (playerForRendering === player) {
+                  playerForRendering = getPlayerRenderScratch(playerId, player);
+                }
+                playerForRendering.direction = (dodgeRollState as any).direction;
               }
 
               // Remote polish: bias interpolated position toward server dodge path.
@@ -1056,11 +1076,11 @@ export const renderYSortedEntities = ({
                 const dodgePathY = sY + (tY - sY) * clampedProgress;
                 const blendedX = playerForRendering.positionX + (dodgePathX - playerForRendering.positionX) * REMOTE_DODGE_POSITION_BLEND;
                 const blendedY = playerForRendering.positionY + (dodgePathY - playerForRendering.positionY) * REMOTE_DODGE_POSITION_BLEND;
-                playerForRendering = {
-                  ...playerForRendering,
-                  positionX: blendedX,
-                  positionY: blendedY
-                };
+                if (playerForRendering === player) {
+                  playerForRendering = getPlayerRenderScratch(playerId, player);
+                }
+                playerForRendering.positionX = blendedX;
+                playerForRendering.positionY = blendedY;
               }
             }
            }
