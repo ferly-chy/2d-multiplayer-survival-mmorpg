@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import styles from './MenuComponents.module.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTree, faCloudRain, faHeartPulse, faLeaf, faUsers, faGears } from '@fortawesome/free-solid-svg-icons';
@@ -17,12 +17,67 @@ interface GameVisualSettingsMenuProps {
     onClose: () => void;
 }
 
+type VisualPresetId = 'advanced' | 'performance' | 'custom';
+
+type VisualPresetSnapshot = Pick<
+    ReturnType<typeof useSettings>,
+    | 'allShadowsEnabled'
+    | 'treeShadowsEnabled'
+    | 'weatherOverlayEnabled'
+    | 'stormAtmosphereEnabled'
+    | 'statusOverlaysEnabled'
+    | 'grassEnabled'
+    | 'grassAnimationEnabled'
+    | 'alwaysShowPlayerNames'
+    | 'cloudsEnabled'
+    | 'waterSurfaceEffectsEnabled'
+    | 'waterSurfaceEffectsIntensity'
+    | 'worldParticlesQuality'
+    | 'footprintsEnabled'
+    | 'bloomIntensity'
+    | 'vignetteIntensity'
+    | 'chromaticAberrationIntensity'
+    | 'colorCorrection'
+>;
+
+function snapshotMatchesPreset(
+    s: VisualPresetSnapshot,
+    preset: typeof ADVANCED_VISUAL_DEFAULTS | typeof PERFORMANCE_VISUAL_DEFAULTS
+): boolean {
+    return (
+        s.allShadowsEnabled === preset.allShadowsEnabled &&
+        s.treeShadowsEnabled === preset.treeShadowsEnabled &&
+        s.weatherOverlayEnabled === preset.weatherOverlayEnabled &&
+        s.stormAtmosphereEnabled === preset.stormAtmosphereEnabled &&
+        s.statusOverlaysEnabled === preset.statusOverlaysEnabled &&
+        s.grassEnabled === preset.grassEnabled &&
+        s.grassAnimationEnabled === preset.grassAnimationEnabled &&
+        s.alwaysShowPlayerNames === preset.alwaysShowPlayerNames &&
+        s.cloudsEnabled === preset.cloudsEnabled &&
+        s.waterSurfaceEffectsEnabled === preset.waterSurfaceEffectsEnabled &&
+        s.waterSurfaceEffectsIntensity === preset.waterSurfaceEffectsIntensity &&
+        s.worldParticlesQuality === preset.worldParticlesQuality &&
+        s.footprintsEnabled === preset.footprintsEnabled &&
+        s.bloomIntensity === preset.bloomIntensity &&
+        s.vignetteIntensity === preset.vignetteIntensity &&
+        s.chromaticAberrationIntensity === preset.chromaticAberrationIntensity &&
+        s.colorCorrection === preset.colorCorrection
+    );
+}
+
+function resolveActiveVisualPreset(s: VisualPresetSnapshot): VisualPresetId {
+    if (snapshotMatchesPreset(s, ADVANCED_VISUAL_DEFAULTS)) return 'advanced';
+    if (snapshotMatchesPreset(s, PERFORMANCE_VISUAL_DEFAULTS)) return 'performance';
+    return 'custom';
+}
+
 const GameVisualSettingsMenu: React.FC<GameVisualSettingsMenuProps> = ({
     onBack,
     onClose,
 }) => {
     const {
         allShadowsEnabled,
+        treeShadowsEnabled,
         setAllShadowsEnabled: onAllShadowsChange,
         setTreeShadowsEnabled: onTreeShadowsChange,
         weatherOverlayEnabled,
@@ -60,6 +115,48 @@ const GameVisualSettingsMenu: React.FC<GameVisualSettingsMenuProps> = ({
         displayRefreshRateHz,
         fixedSimulationEnabled,
     } = useSettings();
+
+    const activeVisualPreset = useMemo(
+        () =>
+            resolveActiveVisualPreset({
+                allShadowsEnabled,
+                treeShadowsEnabled,
+                weatherOverlayEnabled,
+                stormAtmosphereEnabled,
+                statusOverlaysEnabled,
+                grassEnabled,
+                grassAnimationEnabled,
+                alwaysShowPlayerNames,
+                cloudsEnabled,
+                waterSurfaceEffectsEnabled,
+                waterSurfaceEffectsIntensity,
+                worldParticlesQuality,
+                footprintsEnabled,
+                bloomIntensity,
+                vignetteIntensity,
+                chromaticAberrationIntensity,
+                colorCorrection,
+            }),
+        [
+            allShadowsEnabled,
+            treeShadowsEnabled,
+            weatherOverlayEnabled,
+            stormAtmosphereEnabled,
+            statusOverlaysEnabled,
+            grassEnabled,
+            grassAnimationEnabled,
+            alwaysShowPlayerNames,
+            cloudsEnabled,
+            waterSurfaceEffectsEnabled,
+            waterSurfaceEffectsIntensity,
+            worldParticlesQuality,
+            footprintsEnabled,
+            bloomIntensity,
+            vignetteIntensity,
+            chromaticAberrationIntensity,
+            colorCorrection,
+        ]
+    );
 
     const settingCardStyle: React.CSSProperties = {
         marginBottom: '25px',
@@ -228,31 +325,103 @@ const GameVisualSettingsMenu: React.FC<GameVisualSettingsMenuProps> = ({
                         }}>
                             VISUAL PRESETS
                         </div>
+                        <div
+                            style={{
+                                fontFamily: '"Segoe UI", system-ui, -apple-system, sans-serif',
+                                fontSize: '14px',
+                                fontWeight: 600,
+                                letterSpacing: '0.4px',
+                                textAlign: 'left',
+                                marginBottom: '10px',
+                                lineHeight: 1.45,
+                                color: activeVisualPreset === 'advanced'
+                                    ? '#7dffc8'
+                                    : activeVisualPreset === 'performance'
+                                      ? '#7cd8ff'
+                                      : '#ffd27a',
+                                textShadow:
+                                    activeVisualPreset === 'custom'
+                                        ? '0 0 12px rgba(255, 210, 122, 0.35)'
+                                        : activeVisualPreset === 'performance'
+                                          ? '0 0 12px rgba(100, 210, 255, 0.35)'
+                                          : '0 0 12px rgba(0, 255, 136, 0.25)',
+                            }}
+                        >
+                            {activeVisualPreset === 'advanced' && '● Active: Advanced Graphics'}
+                            {activeVisualPreset === 'performance' && '● Active: Performance'}
+                            {activeVisualPreset === 'custom' && '● Active: Custom mix (does not match a preset)'}
+                        </div>
                         <div style={{
-                            fontFamily: '"Press Start 2P", cursive',
-                            fontSize: '9px',
-                            color: 'rgba(200, 255, 235, 0.78)',
-                            marginBottom: '12px',
-                            letterSpacing: '0.5px',
+                            fontFamily: '"Segoe UI", system-ui, -apple-system, sans-serif',
+                            fontSize: '14px',
+                            color: 'rgba(228, 248, 255, 0.92)',
+                            marginBottom: '14px',
+                            letterSpacing: '0.02em',
                             textAlign: 'left',
-                            lineHeight: 1.6,
+                            lineHeight: 1.55,
                         }}>
-                            New sessions default to Performance (stable baseline). Advanced Graphics opt-in enables shadows, weather, clouds, water FX, particles, and grass animation.
+                            Sshadows, weather, clouds, water FX, full particles, and grass animation.
+                            Choose <strong style={{ color: '#7cd8ff' }}>Performance</strong>
+                            {' '}for a lighter GPU load. You can still fine-tune every option below.
                         </div>
                         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                             <button
-                                onClick={applyPresetPerformance}
-                                className={styles.menuButton}
-                                style={{ flex: '1 1 160px', minWidth: '150px', padding: '10px 12px', fontSize: '12px', fontFamily: '"Press Start 2P", cursive' }}
-                            >
-                                PERFORMANCE
-                            </button>
-                            <button
+                                type="button"
+                                aria-pressed={activeVisualPreset === 'advanced'}
                                 onClick={applyPresetAdvancedGraphics}
                                 className={styles.menuButton}
-                                style={{ flex: '1 1 160px', minWidth: '150px', padding: '10px 12px', fontSize: '11px', fontFamily: '"Press Start 2P", cursive' }}
+                                style={{
+                                    flex: '1 1 160px',
+                                    minWidth: '150px',
+                                    padding: '10px 12px',
+                                    fontSize: '11px',
+                                    fontFamily: '"Press Start 2P", cursive',
+                                    border:
+                                        activeVisualPreset === 'advanced'
+                                            ? '2px solid #00ff88'
+                                            : '2px solid rgba(0, 255, 136, 0.28)',
+                                    boxShadow:
+                                        activeVisualPreset === 'advanced'
+                                            ? '0 0 18px rgba(0, 255, 136, 0.45), inset 0 0 12px rgba(0, 255, 136, 0.12)'
+                                            : 'none',
+                                    background:
+                                        activeVisualPreset === 'advanced'
+                                            ? 'linear-gradient(135deg, rgba(0, 60, 45, 0.85), rgba(0, 35, 28, 0.92))'
+                                            : undefined,
+                                    opacity: activeVisualPreset === 'advanced' ? 1 : 0.82,
+                                }}
                             >
                                 ADVANCED GRAPHICS
+                                {activeVisualPreset === 'advanced' ? ' ✓' : ''}
+                            </button>
+                            <button
+                                type="button"
+                                aria-pressed={activeVisualPreset === 'performance'}
+                                onClick={applyPresetPerformance}
+                                className={styles.menuButton}
+                                style={{
+                                    flex: '1 1 160px',
+                                    minWidth: '150px',
+                                    padding: '10px 12px',
+                                    fontSize: '12px',
+                                    fontFamily: '"Press Start 2P", cursive',
+                                    border:
+                                        activeVisualPreset === 'performance'
+                                            ? '2px solid #4ec8ff'
+                                            : '2px solid rgba(100, 200, 255, 0.28)',
+                                    boxShadow:
+                                        activeVisualPreset === 'performance'
+                                            ? '0 0 18px rgba(80, 190, 255, 0.4), inset 0 0 12px rgba(80, 190, 255, 0.1)'
+                                            : 'none',
+                                    background:
+                                        activeVisualPreset === 'performance'
+                                            ? 'linear-gradient(135deg, rgba(15, 45, 70, 0.88), rgba(10, 28, 48, 0.94))'
+                                            : undefined,
+                                    opacity: activeVisualPreset === 'performance' ? 1 : 0.82,
+                                }}
+                            >
+                                PERFORMANCE
+                                {activeVisualPreset === 'performance' ? ' ✓' : ''}
                             </button>
                         </div>
                     </div>

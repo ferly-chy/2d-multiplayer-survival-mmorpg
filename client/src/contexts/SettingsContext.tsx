@@ -10,7 +10,7 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
-import { PERFORMANCE_VISUAL_DEFAULTS, migrateVisualSettingsSchemaIfNeeded } from '../constants/visualSettingsPresets';
+import { ADVANCED_VISUAL_DEFAULTS, migrateVisualSettingsSchemaIfNeeded } from '../constants/visualSettingsPresets';
 
 export type FixedSimulationMode = 'off' | 'auto' | 'on';
 
@@ -176,35 +176,35 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         const saved = localStorage.getItem('allShadowsEnabled');
         if (saved !== null) return saved === 'true';
         // Backward compatibility: if legacy tree shadow setting exists, mirror it.
-        return loadBool('treeShadowsEnabled', PERFORMANCE_VISUAL_DEFAULTS.treeShadowsEnabled);
+        return loadBool('treeShadowsEnabled', ADVANCED_VISUAL_DEFAULTS.treeShadowsEnabled);
     });
     const [treeShadowsEnabled, _setTreeShadows] = useState(() =>
-        loadBool('treeShadowsEnabled', PERFORMANCE_VISUAL_DEFAULTS.treeShadowsEnabled));
+        loadBool('treeShadowsEnabled', ADVANCED_VISUAL_DEFAULTS.treeShadowsEnabled));
     const [weatherOverlayEnabled, _setWeatherOverlay] = useState(() =>
-        loadBool('weatherOverlayEnabled', PERFORMANCE_VISUAL_DEFAULTS.weatherOverlayEnabled));
+        loadBool('weatherOverlayEnabled', ADVANCED_VISUAL_DEFAULTS.weatherOverlayEnabled));
     const [stormAtmosphereEnabled, _setStormAtmosphere] = useState(() => {
         const saved = localStorage.getItem('stormAtmosphereEnabled');
         if (saved !== null) return saved === 'true';
         const legacy = localStorage.getItem('weatherOverlayEnabled');
-        return legacy !== null ? legacy === 'true' : PERFORMANCE_VISUAL_DEFAULTS.stormAtmosphereEnabled;
+        return legacy !== null ? legacy === 'true' : ADVANCED_VISUAL_DEFAULTS.stormAtmosphereEnabled;
     });
     const [statusOverlaysEnabled, _setStatusOverlays] = useState(() =>
-        loadBool('statusOverlaysEnabled', PERFORMANCE_VISUAL_DEFAULTS.statusOverlaysEnabled));
-    const [grassEnabled, _setGrass] = useState(() => loadBool('grassEnabled', PERFORMANCE_VISUAL_DEFAULTS.grassEnabled));
+        loadBool('statusOverlaysEnabled', ADVANCED_VISUAL_DEFAULTS.statusOverlaysEnabled));
+    const [grassEnabled, _setGrass] = useState(() => loadBool('grassEnabled', ADVANCED_VISUAL_DEFAULTS.grassEnabled));
     const [grassAnimationEnabled, _setGrassAnimationEnabled] = useState(() =>
-        loadBool('grassAnimationEnabled', PERFORMANCE_VISUAL_DEFAULTS.grassAnimationEnabled));
+        loadBool('grassAnimationEnabled', ADVANCED_VISUAL_DEFAULTS.grassAnimationEnabled));
     const [alwaysShowPlayerNames, _setPlayerNames] = useState(() =>
-        loadBool('alwaysShowPlayerNames', PERFORMANCE_VISUAL_DEFAULTS.alwaysShowPlayerNames));
+        loadBool('alwaysShowPlayerNames', ADVANCED_VISUAL_DEFAULTS.alwaysShowPlayerNames));
     const [cloudsEnabled, _setCloudsEnabled] = useState(() =>
-        loadBool('cloudsEnabled', PERFORMANCE_VISUAL_DEFAULTS.cloudsEnabled));
+        loadBool('cloudsEnabled', ADVANCED_VISUAL_DEFAULTS.cloudsEnabled));
     const [waterSurfaceEffectsEnabled, _setWaterSurfaceEffectsEnabled] = useState(() =>
-        loadBool('waterSurfaceEffectsEnabled', PERFORMANCE_VISUAL_DEFAULTS.waterSurfaceEffectsEnabled));
+        loadBool('waterSurfaceEffectsEnabled', ADVANCED_VISUAL_DEFAULTS.waterSurfaceEffectsEnabled));
     const [waterSurfaceEffectsIntensity, _setWaterSurfaceEffectsIntensity] = useState(() =>
-        loadNumber('waterSurfaceEffectsIntensity', PERFORMANCE_VISUAL_DEFAULTS.waterSurfaceEffectsIntensity, 100));
+        loadNumber('waterSurfaceEffectsIntensity', ADVANCED_VISUAL_DEFAULTS.waterSurfaceEffectsIntensity, 100));
     const [worldParticlesQuality, _setWorldParticlesQuality] = useState(() =>
-        Math.round(loadNumber('worldParticlesQuality', PERFORMANCE_VISUAL_DEFAULTS.worldParticlesQuality, 2)));
+        Math.round(loadNumber('worldParticlesQuality', ADVANCED_VISUAL_DEFAULTS.worldParticlesQuality, 2)));
     const [footprintsEnabled, _setFootprintsEnabled] = useState(() =>
-        loadBool('footprintsEnabled', PERFORMANCE_VISUAL_DEFAULTS.footprintsEnabled));
+        loadBool('footprintsEnabled', ADVANCED_VISUAL_DEFAULTS.footprintsEnabled));
     const [bloomIntensity, _setBloomIntensity] = useState(() => loadNumber('bloomIntensity', 0, 100));
     const [vignetteIntensity, _setVignetteIntensity] = useState(() => loadNumber('vignetteIntensity', 0, 100));
     const [chromaticAberrationIntensity, _setChromaticAberrationIntensity] = useState(() => loadNumber('chromaticAberrationIntensity', 0, 100));
