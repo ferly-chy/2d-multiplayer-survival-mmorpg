@@ -164,6 +164,7 @@ export function renderWorldPreparationPasses({
     showAutotileDebug,
     isSnorkeling,
   );
+  const t0a = mark(showFpsProfiler);
 
   renderWaterPatches(ctx, waterPatches, -cameraOffsetX, -cameraOffsetY, canvasWidth, canvasHeight);
   renderFertilizerPatches(ctx, fertilizerPatches, -cameraOffsetX, -cameraOffsetY, canvasWidth, canvasHeight);
@@ -452,9 +453,12 @@ export function renderWorldPreparationPasses({
       deltaTimeMs / 1000,
       visibleWorldTiles,
     );
+    const t1d = mark(showFpsProfiler);
     renderShorelineOverlay(ctx, cameraOffsetX, cameraOffsetY, canvasWidth, canvasHeight, isSnorkeling);
+    const t2 = mark(showFpsProfiler);
+    return { t0, t0a, t1, t1a, t1b, t1c, t1d, t2, isPlacementTooFarValue, isSnorkeling };
   }
   const t2 = mark(showFpsProfiler);
 
-  return { t0, t1, t1a, t1b, t1c, t2, isPlacementTooFarValue, isSnorkeling };
+  return { t0, t0a, t1, t1a, t1b, t1c, t1d: t1c, t2, isPlacementTooFarValue, isSnorkeling };
 }

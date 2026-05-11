@@ -7,14 +7,24 @@ export interface ProfilerSample {
   frameTime: number;
   entityCount: number;
   phaseWorld: number;
+  phaseWorldBackground: number;
+  phaseWorldPatches: number;
   phaseWater: number;
   phaseWaterSeaStacks: number;
   phaseWaterCaustics: number;
   phaseWaterSwimming: number;
   phaseWaterOverlay: number;
+  phaseWaterShoreline: number;
   phaseEntities: number;
+  phaseEntitiesFootprints: number;
   phaseEntitiesYSorted: number;
   phaseEntitiesShadows: number;
+  phaseEntitiesEffects: number;
+  phaseEntitiesTranslatedUnder: number;
+  phaseEntitiesCampfireFire: number;
+  phaseEntitiesTranslatedOver: number;
+  phaseEntitiesScreenFx: number;
+  phaseEntitiesInteraction: number;
   phaseEntitiesOverlays: number;
   phaseLights: number;
   phaseOther: number;
@@ -86,20 +96,30 @@ export function getSampleCount(): number {
 export function copyToClipboard(): Promise<boolean> {
   if (samples.length === 0 && cameraSamples.length === 0) return Promise.resolve(false);
 
-  const header = 'frameTime,entityCount,world,water,waterSeaStacks,waterCaustics,waterSwimming,waterOverlay,entities,entitiesYSorted,entitiesShadows,entitiesOverlays,lights,other';
+  const header = 'frameTime,entityCount,world,worldBackground,worldPatches,water,waterSeaStacks,waterCaustics,waterSwimming,waterOverlay,waterShoreline,entities,entitiesFootprints,entitiesYSorted,entitiesShadows,entitiesEffects,entitiesTranslatedUnder,entitiesCampfireFire,entitiesTranslatedOver,entitiesScreenFx,entitiesInteraction,entitiesOverlays,lights,other';
   const rows = samples.map(s =>
     [
       s.frameTime.toFixed(2),
       s.entityCount,
       s.phaseWorld.toFixed(2),
+      s.phaseWorldBackground.toFixed(2),
+      s.phaseWorldPatches.toFixed(2),
       s.phaseWater.toFixed(2),
       s.phaseWaterSeaStacks.toFixed(2),
       s.phaseWaterCaustics.toFixed(2),
       s.phaseWaterSwimming.toFixed(2),
       s.phaseWaterOverlay.toFixed(2),
+      s.phaseWaterShoreline.toFixed(2),
       s.phaseEntities.toFixed(2),
+      s.phaseEntitiesFootprints.toFixed(2),
       s.phaseEntitiesYSorted.toFixed(2),
       s.phaseEntitiesShadows.toFixed(2),
+      s.phaseEntitiesEffects.toFixed(2),
+      s.phaseEntitiesTranslatedUnder.toFixed(2),
+      s.phaseEntitiesCampfireFire.toFixed(2),
+      s.phaseEntitiesTranslatedOver.toFixed(2),
+      s.phaseEntitiesScreenFx.toFixed(2),
+      s.phaseEntitiesInteraction.toFixed(2),
       s.phaseEntitiesOverlays.toFixed(2),
       s.phaseLights.toFixed(2),
       s.phaseOther.toFixed(2),
@@ -115,10 +135,18 @@ export function copyToClipboard(): Promise<boolean> {
         const avgWater = samples.reduce((a, s) => a + s.phaseWaterOverlay, 0) / samples.length;
         const avgYSort = samples.reduce((a, s) => a + s.phaseEntitiesYSorted, 0) / samples.length;
         const avgLights = samples.reduce((a, s) => a + s.phaseLights, 0) / samples.length;
+        const avg = (pick: (sample: ProfilerSample) => number) =>
+          samples.reduce((total, sample) => total + pick(sample), 0) / samples.length;
+        const max = (pick: (sample: ProfilerSample) => number) =>
+          Math.max(...samples.map(pick));
         return [
           `=== Profiler Recording (${samples.length} samples) ===`,
           `Avg Frame: ${avgFrame.toFixed(2)}ms | Max: ${maxFrame.toFixed(2)}ms | FPS: ${(1000 / avgFrame).toFixed(1)}`,
           `Avg Water Overlay: ${avgWater.toFixed(2)}ms | YSort: ${avgYSort.toFixed(2)}ms | Lights: ${avgLights.toFixed(2)}ms`,
+          `World Max: BG ${max(s => s.phaseWorldBackground).toFixed(2)}ms | Patches ${max(s => s.phaseWorldPatches).toFixed(2)}ms`,
+          `Water Max: Sea ${max(s => s.phaseWaterSeaStacks).toFixed(2)}ms | Caustics ${max(s => s.phaseWaterCaustics).toFixed(2)}ms | Swim ${max(s => s.phaseWaterSwimming).toFixed(2)}ms | Surface ${max(s => s.phaseWaterOverlay).toFixed(2)}ms | Shore ${max(s => s.phaseWaterShoreline).toFixed(2)}ms`,
+          `Entities Avg/Max: Footprints ${avg(s => s.phaseEntitiesFootprints).toFixed(2)}/${max(s => s.phaseEntitiesFootprints).toFixed(2)}ms | YSort ${avgYSort.toFixed(2)}/${max(s => s.phaseEntitiesYSorted).toFixed(2)}ms | Shadows ${avg(s => s.phaseEntitiesShadows).toFixed(2)}/${max(s => s.phaseEntitiesShadows).toFixed(2)}ms`,
+          `Entity Overlay Max: FX ${max(s => s.phaseEntitiesEffects).toFixed(2)}ms | Under ${max(s => s.phaseEntitiesTranslatedUnder).toFixed(2)}ms | Fire ${max(s => s.phaseEntitiesCampfireFire).toFixed(2)}ms | Over ${max(s => s.phaseEntitiesTranslatedOver).toFixed(2)}ms | Screen ${max(s => s.phaseEntitiesScreenFx).toFixed(2)}ms | UI ${max(s => s.phaseEntitiesInteraction).toFixed(2)}ms`,
           '',
           csv,
         ].join('\n');

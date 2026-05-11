@@ -7,13 +7,22 @@ import * as profilerRecording from '../profilerRecording';
 
 export interface ProfilerTimings {
   t0: number;
+  t0a?: number;
   t1: number;
   t1a: number;
   t1b: number;
   t1c: number;
+  t1d?: number;
   t2: number;
+  t2a?: number;
   t3: number;
   t3a: number;
+  t3b?: number;
+  t3c?: number;
+  t3d?: number;
+  t3e?: number;
+  t3f?: number;
+  t3g?: number;
   t4: number;
   t5: number;
 }
@@ -21,7 +30,7 @@ export interface ProfilerTimings {
 const DISPLAY_UPDATE_INTERVAL_MS = 200;
 const MAX_FRAME_TIMES = 50;
 const PANEL_W = 320;
-const PANEL_H = 268;
+const PANEL_H = 330;
 const HEADER_H = 28;
 const TRACKER_RIGHT = 15;
 const TRACKER_WIDTH = 250;
@@ -45,6 +54,10 @@ export function getRecordButtonBounds(canvasWidth: number): { x: number; y: numb
   return { x: btnX, y: btnY, w: BUTTON_W, h: BUTTON_H };
 }
 
+function elapsed(start?: number, end?: number): number {
+  return start && end && end >= start ? end - start : 0;
+}
+
 export class FpsProfiler {
   private frameTimes: number[] = [];
   private lastDisplayUpdate = 0;
@@ -60,12 +73,22 @@ export class FpsProfiler {
   private phaseWaterCaustics = 0;
   private phaseWaterSwimming = 0;
   private phaseWaterOverlay = 0;
+  private phaseWaterShoreline = 0;
+  private phaseWorldBackground = 0;
+  private phaseWorldPatches = 0;
+  private phaseEntitiesFootprints = 0;
   private phaseEntitiesYSorted = 0;
   private phaseEntitiesShadows = 0;
+  private phaseEntitiesEffects = 0;
+  private phaseEntitiesTranslatedUnder = 0;
+  private phaseEntitiesCampfireFire = 0;
+  private phaseEntitiesTranslatedOver = 0;
+  private phaseEntitiesScreenFx = 0;
+  private phaseEntitiesInteraction = 0;
   private phaseEntitiesOverlays = 0;
 
   update(timings: ProfilerTimings, frameTime: number, entityCount: number): void {
-    const { t0, t1, t1a, t1b, t1c, t2, t3, t3a, t4, t5 } = timings;
+    const { t0, t0a, t1, t1a, t1b, t1c, t1d, t2, t2a, t3, t3a, t3b, t3c, t3d, t3e, t3f, t3g, t4, t5 } = timings;
 
     this.frameTimes.push(frameTime);
     if (this.frameTimes.length > MAX_FRAME_TIMES) this.frameTimes.shift();
@@ -87,34 +110,54 @@ export class FpsProfiler {
         this.phaseLights = t5 - t4;
         this.phaseOther = Math.max(0, frameTime - (t5 - t0));
         if (t1a > 0 && t3a > 0) {
+          this.phaseWorldBackground = elapsed(t0, t0a);
+          this.phaseWorldPatches = elapsed(t0a, t1);
           this.phaseWaterSeaStacks = t1a - t1;
           this.phaseWaterCaustics = t1b - t1a;
           this.phaseWaterSwimming = t1c - t1b;
-          this.phaseWaterOverlay = t2 - t1c;
-          this.phaseEntitiesYSorted = t3 - t2;
+          this.phaseWaterOverlay = elapsed(t1c, t1d);
+          this.phaseWaterShoreline = elapsed(t1d, t2);
+          this.phaseEntitiesFootprints = elapsed(t2, t2a);
+          this.phaseEntitiesYSorted = t3 - (t2a ?? t2);
           this.phaseEntitiesShadows = t3a - t3;
-          this.phaseEntitiesOverlays = t4 - t3a;
+          this.phaseEntitiesEffects = elapsed(t3b, t3c);
+          this.phaseEntitiesTranslatedUnder = elapsed(t3c, t3d);
+          this.phaseEntitiesCampfireFire = elapsed(t3d, t3e);
+          this.phaseEntitiesTranslatedOver = elapsed(t3e, t3f);
+          this.phaseEntitiesScreenFx = elapsed(t3f, t3g);
+          this.phaseEntitiesInteraction = elapsed(t3g, t4);
+          this.phaseEntitiesOverlays = t4 - (t3a > 0 ? t3a : t3);
         }
       }
     }
   }
 
   recordIfActive(timings: ProfilerTimings, frameTime: number, entityCount: number): void {
-    const { t0, t1, t1a, t1b, t1c, t2, t3, t3a, t4, t5 } = timings;
+    const { t0, t0a, t1, t1a, t1b, t1c, t1d, t2, t2a, t3, t3a, t3b, t3c, t3d, t3e, t3f, t3g, t4, t5 } = timings;
     if (!profilerRecording.isProfilerRecording() || t0 <= 0 || t5 <= 0) return;
 
     profilerRecording.addSample({
       frameTime,
       entityCount,
       phaseWorld: t1 - t0,
+      phaseWorldBackground: elapsed(t0, t0a),
+      phaseWorldPatches: elapsed(t0a, t1),
       phaseWater: t2 - t1,
       phaseWaterSeaStacks: t1a > 0 ? t1a - t1 : 0,
       phaseWaterCaustics: t1b > 0 ? t1b - t1a : 0,
       phaseWaterSwimming: t1c > 0 ? t1c - t1b : 0,
-      phaseWaterOverlay: t2 - (t1c > 0 ? t1c : t1),
+      phaseWaterOverlay: elapsed(t1c, t1d),
+      phaseWaterShoreline: elapsed(t1d, t2),
       phaseEntities: t4 - t2,
-      phaseEntitiesYSorted: t3 > 0 ? t3 - t2 : 0,
+      phaseEntitiesFootprints: elapsed(t2, t2a),
+      phaseEntitiesYSorted: t3 > 0 ? t3 - (t2a ?? t2) : 0,
       phaseEntitiesShadows: t3a > 0 ? t3a - t3 : 0,
+      phaseEntitiesEffects: elapsed(t3b, t3c),
+      phaseEntitiesTranslatedUnder: elapsed(t3c, t3d),
+      phaseEntitiesCampfireFire: elapsed(t3d, t3e),
+      phaseEntitiesTranslatedOver: elapsed(t3e, t3f),
+      phaseEntitiesScreenFx: elapsed(t3f, t3g),
+      phaseEntitiesInteraction: elapsed(t3g, t4),
       phaseEntitiesOverlays: t4 - (t3a > 0 ? t3a : t3),
       phaseLights: t5 - t4,
       phaseOther: Math.max(0, frameTime - (t5 - t0)),
@@ -197,13 +240,16 @@ export class FpsProfiler {
     ctx.font = '10px "Press Start 2P", monospace';
     ctx.fillStyle = 'rgba(0, 255, 255, 0.95)';
     ctx.fillText(`World: ${this.phaseWorld.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 98);
-    ctx.fillText(`Water: ${this.phaseWater.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 116);
-    ctx.fillText(`  SeaStacks: ${this.phaseWaterSeaStacks.toFixed(1)} Caustics: ${this.phaseWaterCaustics.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 132);
-    ctx.fillText(`  Swimming: ${this.phaseWaterSwimming.toFixed(1)} Overlay: ${this.phaseWaterOverlay.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 148);
-    ctx.fillText(`Entities: ${this.phaseEntities.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 166);
-    ctx.fillText(`  YSort: ${this.phaseEntitiesYSorted.toFixed(1)} Shadows: ${this.phaseEntitiesShadows.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 182);
-    ctx.fillText(`  Overlays: ${this.phaseEntitiesOverlays.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 198);
-    ctx.fillText(`Lights: ${this.phaseLights.toFixed(1)}ms  Other: ${this.phaseOther.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 220);
+    ctx.fillText(`  BG: ${this.phaseWorldBackground.toFixed(1)} Patches: ${this.phaseWorldPatches.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 116);
+    ctx.fillText(`Water: ${this.phaseWater.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 134);
+    ctx.fillText(`  Sea: ${this.phaseWaterSeaStacks.toFixed(1)} Caust: ${this.phaseWaterCaustics.toFixed(1)} Swim: ${this.phaseWaterSwimming.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 150);
+    ctx.fillText(`  Surf: ${this.phaseWaterOverlay.toFixed(1)} Shore: ${this.phaseWaterShoreline.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 166);
+    ctx.fillText(`Entities: ${this.phaseEntities.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 184);
+    ctx.fillText(`  Foot: ${this.phaseEntitiesFootprints.toFixed(1)} YSort: ${this.phaseEntitiesYSorted.toFixed(1)} Shad: ${this.phaseEntitiesShadows.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 200);
+    ctx.fillText(`  FX: ${this.phaseEntitiesEffects.toFixed(1)} Under: ${this.phaseEntitiesTranslatedUnder.toFixed(1)} Fire: ${this.phaseEntitiesCampfireFire.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 216);
+    ctx.fillText(`  Over: ${this.phaseEntitiesTranslatedOver.toFixed(1)} Screen: ${this.phaseEntitiesScreenFx.toFixed(1)} UI: ${this.phaseEntitiesInteraction.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 232);
+    ctx.fillText(`  TotalOverlays: ${this.phaseEntitiesOverlays.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 248);
+    ctx.fillText(`Lights: ${this.phaseLights.toFixed(1)}ms  Other: ${this.phaseOther.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 270);
 
     ctx.restore();
   }

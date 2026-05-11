@@ -6,6 +6,7 @@ import { renderAllFootprints } from '../../utils/renderers/terrainTrailUtils';
 import { beginProjectileRenderPass } from '../../utils/renderers/projectileRenderingUtils';
 import { worldPosToTileCoords } from '../../utils/renderers/placementRenderingUtils';
 import { logLagDiagnostic } from '../../utils/gameDebugUtils';
+import { mark } from '../../utils/profiler';
 import { renderWardParticles } from '../../hooks/useWardParticles';
 import { renderCutGrassEffects } from '../../effects/cutGrassEffect';
 import { renderArrowBreakEffects } from '../../effects/arrowBreakEffect';
@@ -344,10 +345,12 @@ export function renderGameCanvasFrame(args: any): void {
   );
   const {
     t0: _t0,
+    t0a: _t0a,
     t1: _t1,
     t1a: _t1a,
     t1b: _t1b,
     t1c: _t1c,
+    t1d: _t1d,
     t2: _t2,
     isPlacementTooFarValue,
     isSnorkeling,
@@ -415,6 +418,7 @@ export function renderGameCanvasFrame(args: any): void {
   if (!isSnorkeling && footprintsEnabled) {
     renderAllFootprints(ctx, viewBounds, nowMs);
   }
+  const _t2a = mark(showFpsProfiler);
 
   const { t3: _t3, t3a: _t3a } = renderEntityWorldPasses({
     ctx,
@@ -496,6 +500,7 @@ export function renderGameCanvasFrame(args: any): void {
     targetedFence,
     hasRepairHammer,
   });
+  const _t3b = mark(showFpsProfiler);
 
   // GPU fire only when isBurning (server: new campfires start unlit until fueled + lit).
   // Merge y-sorted campfires so emitters match the renderer even if visibleCampfiresMap is stale same frame.
@@ -544,6 +549,7 @@ export function renderGameCanvasFrame(args: any): void {
   if (typeof window !== 'undefined' && (window as any).renderOtherPlayersFishing) {
     (window as any).renderOtherPlayersFishing(ctx);
   }
+  const _t3c = mark(showFpsProfiler);
 
   const translatedWorldExtrasOpts = {
     ctx,
@@ -642,6 +648,7 @@ export function renderGameCanvasFrame(args: any): void {
   };
 
   renderTranslatedWorldExtrasUnderCampfireOverlay(translatedWorldExtrasOpts);
+  const _t3d = mark(showFpsProfiler);
 
   // Between clouds/debug and interaction UI so E labels and placement preview stay on top.
   renderCampfireFireOverlay(
@@ -653,8 +660,10 @@ export function renderGameCanvasFrame(args: any): void {
     fireOverlayTimeMs,
     fireEmitters,
   );
+  const _t3e = mark(showFpsProfiler);
 
   renderTranslatedWorldExtrasOverCampfireOverlay(translatedWorldExtrasOpts);
+  const _t3f = mark(showFpsProfiler);
 
   ctx.restore();
 
@@ -689,12 +698,31 @@ export function renderGameCanvasFrame(args: any): void {
     activeConsumableEffects,
     localPlayerId,
   });
+  const _t3g = mark(showFpsProfiler);
 
   const { frameTime } = renderLateFramePasses({
     ctx,
     frameStartTime,
     showFpsProfiler,
-    timingMarks: { t0: _t0, t1: _t1, t1a: _t1a, t1b: _t1b, t1c: _t1c, t2: _t2, t3: _t3, t3a: _t3a },
+    timingMarks: {
+      t0: _t0,
+      t0a: _t0a,
+      t1: _t1,
+      t1a: _t1a,
+      t1b: _t1b,
+      t1c: _t1c,
+      t1d: _t1d,
+      t2: _t2,
+      t2a: _t2a,
+      t3: _t3,
+      t3a: _t3a,
+      t3b: _t3b,
+      t3c: _t3c,
+      t3d: _t3d,
+      t3e: _t3e,
+      t3f: _t3f,
+      t3g: _t3g,
+    },
     cameraOffsetX: currentCameraOffsetX,
     cameraOffsetY: currentCameraOffsetY,
     holdInteractionProgress: rd.holdInteractionProgress,

@@ -18,13 +18,22 @@ import { renderMobileTapAnimation } from '../../utils/renderers/mobileRenderingU
 
 interface TimingMarks {
   t0: number;
+  t0a?: number;
   t1: number;
   t1a: number;
   t1b: number;
   t1c: number;
+  t1d?: number;
   t2: number;
+  t2a?: number;
   t3: number;
   t3a: number;
+  t3b?: number;
+  t3c?: number;
+  t3d?: number;
+  t3e?: number;
+  t3f?: number;
+  t3g?: number;
 }
 
 interface RenderLateFramePassesOptions {
