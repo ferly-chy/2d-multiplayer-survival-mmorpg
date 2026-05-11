@@ -155,10 +155,10 @@ pub(crate) const ALPINE_WARMTH_DECAY_MULTIPLIER: f32 = 2.0;  // 100% faster cold
 use crate::{
     Player, // Player struct
     world_state::{self, TimeOfDay, BASE_WARMTH_DRAIN_PER_SECOND, WARMTH_DRAIN_MULTIPLIER_DAWN_DUSK, WARMTH_DRAIN_MULTIPLIER_NIGHT, WARMTH_DRAIN_MULTIPLIER_MIDNIGHT},
-    campfire::{self, Campfire, WARMTH_RADIUS_SQUARED, WARMTH_PER_SECOND},
+    campfire::{WARMTH_RADIUS, WARMTH_RADIUS_SQUARED, WARMTH_PER_SECOND},
     active_equipment, // For unequipping on death
     player_corpse::{self, PlayerCorpse, NUM_CORPSE_SLOTS, PlayerCorpseDespawnSchedule},
-    environment::calculate_chunk_index,
+    environment::{calculate_chunk_index, CHUNK_SIZE_PX, WORLD_HEIGHT_CHUNKS, WORLD_WIDTH_CHUNKS},
 };
 
 // Import table traits
@@ -271,7 +271,6 @@ pub fn process_player_stats(ctx: &ReducerContext, _schedule: PlayerStatSchedule)
     log::trace!("Processing player stats via schedule...");
     let current_time = ctx.timestamp;
     let world_states = ctx.db.world_state();
-    let campfires = ctx.db.campfire();
 
     // Pre-collect village campfire positions (at most 2 in the world: fishing + hunting).
     // Doing this once here avoids a full monument_part scan for every player.
@@ -322,6 +321,29 @@ pub fn process_player_stats(ctx: &ReducerContext, _schedule: PlayerStatSchedule)
     } else {
         HashMap::new()
     };
+
+    // Burning campfires by chunk — avoids O(players × campfires) warmth scans every stat tick.
+    let warmth_chunk_radius = ((WARMTH_RADIUS / CHUNK_SIZE_PX).ceil() as i32 + 1).max(1).min(12);
+    let burning_campfires_by_chunk: HashMap<u32, Vec<(f32, f32, u32)>> = {
+        let mut m: HashMap<u32, Vec<(f32, f32, u32)>> = HashMap::new();
+        for fire in ctx.db.campfire().iter() {
+            if !fire.is_burning {
+                continue;
+            }
+            m.entry(fire.chunk_index)
+                .or_default()
+                .push((fire.pos_x, fire.pos_y, fire.id));
+        }
+        m
+    };
+
+    #[inline]
+    fn chunk_grid_xy(chunk_index: u32) -> (i32, i32) {
+        (
+            (chunk_index % WORLD_WIDTH_CHUNKS) as i32,
+            (chunk_index / WORLD_WIDTH_CHUNKS) as i32,
+        )
+    }
 
     for player_ref in players.iter() {
         let player_id = player_ref.identity;
@@ -493,14 +515,35 @@ pub fn process_player_stats(ctx: &ReducerContext, _schedule: PlayerStatSchedule)
             );
         }
 
-        for fire in campfires.iter() {
-            // Only gain warmth from burning campfires
-            if fire.is_burning {
-                let dx = player.position_x - fire.pos_x;
-                let dy = player.position_y - fire.pos_y;
-                if (dx * dx + dy * dy) < WARMTH_RADIUS_SQUARED {
-                    total_warmth_change_per_sec += WARMTH_PER_SECOND;
-                    log::trace!("Player {:?} gaining warmth from campfire {}", player_id, fire.id);
+        let player_chunk = calculate_chunk_index(player.position_x, player.position_y);
+        let (pcx, pcy) = chunk_grid_xy(player_chunk);
+        for cz in -warmth_chunk_radius..=warmth_chunk_radius {
+            for cx in -warmth_chunk_radius..=warmth_chunk_radius {
+                let ncx = pcx + cx;
+                let ncy = pcy + cz;
+                if ncx < 0 || ncy < 0 {
+                    continue;
+                }
+                let ncx = ncx as u32;
+                let ncy = ncy as u32;
+                if ncx >= WORLD_WIDTH_CHUNKS || ncy >= WORLD_HEIGHT_CHUNKS {
+                    continue;
+                }
+                let chunk_idx = ncy * WORLD_WIDTH_CHUNKS + ncx;
+                let Some(fires_here) = burning_campfires_by_chunk.get(&chunk_idx) else {
+                    continue;
+                };
+                for &(fx, fy, fire_id) in fires_here {
+                    let wdx = player.position_x - fx;
+                    let wdy = player.position_y - fy;
+                    if (wdx * wdx + wdy * wdy) < WARMTH_RADIUS_SQUARED {
+                        total_warmth_change_per_sec += WARMTH_PER_SECOND;
+                        log::trace!(
+                            "Player {:?} gaining warmth from campfire {}",
+                            player_id,
+                            fire_id
+                        );
+                    }
                 }
             }
         }
