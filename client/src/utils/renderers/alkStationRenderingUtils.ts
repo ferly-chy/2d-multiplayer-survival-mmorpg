@@ -50,6 +50,7 @@ export function preloadAlkSubstationImage(): Promise<HTMLImageElement | null> {
     return new Promise((resolve) => {
         import('../../assets/doodads/alk_substation.png').then((module) => {
             const img = new Image();
+            img.decoding = 'async';
             img.onload = () => {
                 alkSubstationImage = img;
                 isSubstationLoading = false;
@@ -81,6 +82,7 @@ export function preloadAlkCentralCompoundImage(): Promise<HTMLImageElement | nul
     return new Promise((resolve) => {
         import('../../assets/doodads/alk_central_compound.png').then((module) => {
             const img = new Image();
+            img.decoding = 'async';
             img.onload = () => {
                 alkCentralCompoundImage = img;
                 isCentralCompoundLoading = false;

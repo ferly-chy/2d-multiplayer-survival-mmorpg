@@ -44,10 +44,13 @@ function loadImage(imageName: string, importPromise: Promise<{ default: string }
     loadingImages.add(imageName);
     importPromise.then((module) => {
         const img = new Image();
+        img.decoding = 'async';
         img.onload = () => {
             buildingImages.set(imageName, img);
             loadingImages.delete(imageName);
-            console.log(`[Monument] ✅ Loaded: ${imageName}`);
+            if (import.meta.env.DEV) {
+                console.log(`[Monument] ✅ Loaded: ${imageName}`);
+            }
         };
         img.onerror = (e) => {
             loadingImages.delete(imageName);
@@ -63,20 +66,29 @@ function loadImage(imageName: string, importPromise: Promise<{ default: string }
 }
 
 /**
- * Preload all monument images (explicit imports like alkStationRenderingUtils.ts)
- * Using ?url suffix to ensure Vite processes these as static assets
- * Includes both static monuments (compound buildings) and dynamic monuments (shipwrecks)
+ * ALK central compound + on-site monument props — fetch these first so production CDN
+ * bandwidth and decode queue prioritize the densest player hub (large PNGs).
+ * Safe to call multiple times; loadImage dedupes.
  */
-export function preloadMonumentImages(): void {
-    // guardpost.png removed - all guardposts/streetlights replaced by eerie ambient lights
+export function preloadAlkCompoundCriticalImages(): void {
     loadImage('shed.png', import('../../assets/doodads/shed.png?url'));
     loadImage('garage.png', import('../../assets/doodads/garage.png?url'));
-    loadImage('alk_food_processor.png', import('../../assets/doodads/alk_food_processor.png?url'));
-    loadImage('alk_weapons_depot.png', import('../../assets/doodads/alk_weapons_depot.png?url'));
     loadImage('warehouse.png', import('../../assets/doodads/warehouse.png?url'));
     loadImage('barracks.png', import('../../assets/doodads/barracks.png?url'));
     loadImage('fuel_depot.png', import('../../assets/doodads/fuel_depot.png?url'));
-    
+    loadImage('alk_food_processor.png', import('../../assets/doodads/alk_food_processor.png?url'));
+    loadImage('alk_weapons_depot.png', import('../../assets/doodads/alk_weapons_depot.png?url'));
+}
+
+function scheduleNonCriticalMonumentPreload(run: () => void): void {
+    if (typeof requestIdleCallback !== 'undefined') {
+        requestIdleCallback(() => run(), { timeout: 2500 });
+    } else {
+        setTimeout(run, 32);
+    }
+}
+
+function preloadRemainingMonumentImages(): void {
     // Shipwreck monument images (hull1, hull2, hull3, etc.)
     loadImage('hull1.png', import('../../assets/doodads/hull1.png?url'));
     loadImage('hull2.png', import('../../assets/doodads/hull2.png?url'));
@@ -133,6 +145,15 @@ export function preloadMonumentImages(): void {
     // Aleutian whale oil road lampposts (along dirt roads)
     loadImage('road_lamp.png', import('../../assets/doodads/road_lamp.png?url'));
     loadImage('road_lamp_off.png', import('../../assets/doodads/road_lamp_off.png?url'));
+}
+
+/**
+ * Preload monument images: compound/ALK hub first, then defer other monuments so production
+ * does not starve the central compound behind dozens of parallel chunk fetches.
+ */
+export function preloadMonumentImages(): void {
+    preloadAlkCompoundCriticalImages();
+    scheduleNonCriticalMonumentPreload(preloadRemainingMonumentImages);
 }
 
 /**
@@ -219,8 +240,9 @@ export function getBuildingImage(imagePath: string): HTMLImageElement | null {
     
         const loader = imageMap[imagePath];
         if (loader) {
-        // Log only once when actually starting to load
-        console.log(`[Monument] Starting load for: ${imagePath}`);
+            if (import.meta.env.DEV) {
+                console.log(`[Monument] Starting load for: ${imagePath}`);
+            }
             loadImage(imagePath, loader());
     } else {
         // No loader for this image - mark as failed to prevent retry spam
@@ -253,91 +275,52 @@ function getPlaceholderColor(buildingId: string): { fill: string; stroke: string
 }
 
 /**
- * Render a placeholder for monuments whose images haven't loaded yet
- * Shows a colored transparent overlay with border and monument info
+ * Lightweight placeholder while monument textures resolve (production-safe: no text,
+ * minimal paths). Matches diegetic "implant still resolving" without hammering fillText.
  */
 function renderPlaceholder(
     ctx: CanvasRenderingContext2D,
     building: CompoundBuilding,
     worldX: number,
-    worldY: number
+    worldY: number,
+    nowMs?: number
 ): void {
     const drawX = worldX - building.width / 2;
     const drawY = worldY - building.height + building.anchorYOffset;
-    
     const color = getPlaceholderColor(building.id);
-    
+    const pulse = nowMs != null ? 0.62 + Math.sin(nowMs / 180) * 0.18 : 0.72;
+
     ctx.save();
-    
-    // Draw filled rectangle with transparency
+    ctx.globalAlpha = pulse;
+    ctx.shadowColor = color.stroke;
+    ctx.shadowBlur = 12;
     ctx.fillStyle = color.fill;
     ctx.fillRect(drawX, drawY, building.width, building.height);
-    
-    // Draw border
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
     ctx.strokeStyle = color.stroke;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2;
     ctx.strokeRect(drawX, drawY, building.width, building.height);
-    
-    // Draw diagonal lines to indicate placeholder
-    ctx.strokeStyle = color.stroke;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([8, 8]);
+    ctx.globalAlpha = 0.75;
     ctx.beginPath();
     ctx.moveTo(drawX, drawY);
     ctx.lineTo(drawX + building.width, drawY + building.height);
     ctx.moveTo(drawX + building.width, drawY);
     ctx.lineTo(drawX, drawY + building.height);
     ctx.stroke();
-    ctx.setLineDash([]);
-    
-    // Draw anchor point marker (where building "feet" are)
-    ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
-    ctx.beginPath();
-    ctx.arc(worldX, worldY, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    
-    // Draw collision radius circle at the ACTUAL collision position
-    // collisionCenterY = worldY - collisionYOffset
-    // With negative collisionYOffset, this moves collision DOWN (south) towards sprite bottom
-    ctx.strokeStyle = 'rgba(255, 0, 0, 0.6)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    const collisionY = worldY - building.collisionYOffset; // Negative offset = positive result = further south
-    ctx.arc(worldX, collisionY, building.collisionRadius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    
-    // Draw building info text
-    ctx.fillStyle = 'white';
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.lineWidth = 3;
-    ctx.font = 'bold 14px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    const centerY = drawY + building.height / 2;
-    
-    // Building ID
-    const idText = building.id;
-    ctx.strokeText(idText, worldX, centerY - 20);
-    ctx.fillText(idText, worldX, centerY - 20);
-    
-    // Dimensions
-    const dimText = `${building.width}×${building.height}`;
-    ctx.font = '12px monospace';
-    ctx.strokeText(dimText, worldX, centerY);
-    ctx.fillText(dimText, worldX, centerY);
-    
-    // Collision radius
-    const collText = `r=${building.collisionRadius}`;
-    ctx.strokeText(collText, worldX, centerY + 18);
-    ctx.fillText(collText, worldX, centerY + 18);
-    
     ctx.restore();
+
+    if (import.meta.env.DEV) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.45)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        const collisionY = worldY - building.collisionYOffset;
+        ctx.arc(worldX, collisionY, building.collisionRadius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    }
 }
 
 /** Water line config for monuments in water (e.g. weather station radar) - matches barrel style */
@@ -499,7 +482,7 @@ export function renderMonument(
     // PERFORMANCE FIX: Removed debug logging that was running every frame
     
     if (!img) {
-        renderPlaceholder(ctx, building, worldX, worldY);
+        renderPlaceholder(ctx, building, worldX, worldY, nowMs);
         return;
     }
     

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { preloadMonumentImages } from '../utils/renderers/monumentRenderingUtils';
+import { preloadAlkStationImages } from '../utils/renderers/alkStationRenderingUtils';
 import { preloadCairnImages } from '../utils/renderers/cairnRenderingUtils';
 import { preloadRoadLamppostImages } from '../utils/renderers/roadLamppostRenderingUtils';
 import { preloadWildAnimalImages } from '../utils/renderers/wildAnimalRenderingUtils';
@@ -62,6 +63,7 @@ export function useGameCanvasAssetPreload({
 
   useEffect(() => {
     touchCampfireFireWebGLInit();
+    void preloadAlkStationImages();
     preloadMonumentImages();
     preloadCairnImages();
     preloadRoadLamppostImages();
