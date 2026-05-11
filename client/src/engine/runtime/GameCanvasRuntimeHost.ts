@@ -193,28 +193,17 @@ export class GameCanvasRuntimeHost {
       bindings.deltaTimeRef.current =
         frameInfo.deltaTime > 0 && frameInfo.deltaTime < 100 ? frameInfo.deltaTime : 16.667;
 
+      runtimeEngine.updateInputState('isAutoWalking', bindings.isAutoWalking);
+
+      // Keep controller scans on the same pose source as rendering. We refresh
+      // again immediately before render after movement simulation has advanced.
+      this.refreshLiveFramePose(bindings);
+
       if (++bindings.interactionScanFrameSkipRef.current % 2 === 0) {
         bindings.updateInteractionResult?.();
       }
 
-      const livePredictedPosition = bindings.getCurrentPositionNow?.() ?? bindings.predictedPositionRef.current;
       const liveFacingDirection = bindings.getCurrentFacingDirectionNow?.() ?? bindings.localFacingDirectionRef.current;
-
-      runtimeEngine.updateInputState('isAutoWalking', bindings.isAutoWalking);
-
-      if (livePredictedPosition) {
-        bindings.predictedPositionRef.current = livePredictedPosition;
-        bindings.cameraOffsetRef.current = {
-          x: (bindings.canvasWidth / 2) - livePredictedPosition.x,
-          y: (bindings.canvasHeight / 2) - livePredictedPosition.y,
-        };
-      } else if (bindings.localPlayer) {
-        bindings.cameraOffsetRef.current = {
-          x: (bindings.canvasWidth / 2) - bindings.localPlayer.positionX,
-          y: (bindings.canvasHeight / 2) - bindings.localPlayer.positionY,
-        };
-      }
-
       if (liveFacingDirection) {
         bindings.localFacingDirectionRef.current = liveFacingDirection;
         runtimeEngine.updateWorldState('facingDirection', liveFacingDirection);
@@ -297,9 +286,32 @@ export class GameCanvasRuntimeHost {
       return;
     }
 
+    if (this.frameBindings) {
+      this.refreshLiveFramePose(this.frameBindings);
+    }
+
     renderGameCanvasFrame({
       ...this.renderContext,
       renderAlpha,
     });
+  }
+
+  private refreshLiveFramePose(bindings: GameCanvasRuntimeFrameBindings): void {
+    const livePredictedPosition = bindings.getCurrentPositionNow?.() ?? bindings.predictedPositionRef.current;
+    if (livePredictedPosition) {
+      bindings.predictedPositionRef.current = livePredictedPosition;
+      bindings.cameraOffsetRef.current = {
+        x: (bindings.canvasWidth / 2) - livePredictedPosition.x,
+        y: (bindings.canvasHeight / 2) - livePredictedPosition.y,
+      };
+      return;
+    }
+
+    if (bindings.localPlayer) {
+      bindings.cameraOffsetRef.current = {
+        x: (bindings.canvasWidth / 2) - bindings.localPlayer.positionX,
+        y: (bindings.canvasHeight / 2) - bindings.localPlayer.positionY,
+      };
+    }
   }
 }
