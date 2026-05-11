@@ -7,6 +7,7 @@ import type { GameLoopMetrics } from '../../hooks/useGameLoop';
 import type { FrameInfo } from '../../hooks/useGameLoop';
 import type { Projectile as SpacetimeDBProjectile } from '../../generated/types';
 import type { CampfireFireGpuEmitter } from '../../utils/renderers/campfireFireOverlayUtils';
+import { addCameraSample } from '../../utils/profilerRecording';
 
 export interface GameCanvasRuntimeRenderContext {
   [key: string]: unknown;
@@ -146,6 +147,17 @@ export class GameCanvasRuntimeHost {
   private controllerSnapshot: GameCanvasRuntimeControllerSnapshot | null = null;
   private particleSnapshot: GameCanvasRuntimeParticleSnapshot | null = null;
   private ambientEffectsSnapshot: GameCanvasRuntimeAmbientEffectsSnapshot | null = null;
+  private cameraProfilerState: {
+    sampleIndex: number;
+    lastSampleTime: number;
+    lastPlayerX: number;
+    lastPlayerY: number;
+    lastCameraX: number;
+    lastCameraY: number;
+    lastCameraDx: number;
+    lastCameraDy: number;
+    lastPredictionError: number;
+  } | null = null;
   private readonly controllerRefsState: GameCanvasRuntimeControllerRefs = {
     worldMousePosRef: { current: { x: 0, y: 0 } },
     cameraOffsetRef: { current: { x: 0, y: 0 } },
@@ -288,6 +300,7 @@ export class GameCanvasRuntimeHost {
 
     if (this.frameBindings) {
       this.refreshLiveFramePose(this.frameBindings);
+      this.recordCameraProfilerSample(this.frameBindings);
     }
 
     renderGameCanvasFrame({
@@ -313,5 +326,62 @@ export class GameCanvasRuntimeHost {
         y: (bindings.canvasHeight / 2) - bindings.localPlayer.positionY,
       };
     }
+  }
+
+  private recordCameraProfilerSample(bindings: GameCanvasRuntimeFrameBindings): void {
+    const predictedPosition = bindings.predictedPositionRef.current;
+    const localPlayer = bindings.localPlayer;
+    if (!predictedPosition || !localPlayer) {
+      this.cameraProfilerState = null;
+      return;
+    }
+
+    const now = performance.now();
+    const camera = bindings.cameraOffsetRef.current;
+    const previous = this.cameraProfilerState;
+    const playerDx = previous ? predictedPosition.x - previous.lastPlayerX : 0;
+    const playerDy = previous ? predictedPosition.y - previous.lastPlayerY : 0;
+    const cameraDx = previous ? camera.x - previous.lastCameraX : 0;
+    const cameraDy = previous ? camera.y - previous.lastCameraY : 0;
+    const predictionErrorX = predictedPosition.x - localPlayer.positionX;
+    const predictionErrorY = predictedPosition.y - localPlayer.positionY;
+    const predictionError = Math.hypot(predictionErrorX, predictionErrorY);
+
+    addCameraSample({
+      sampleIndex: previous ? previous.sampleIndex + 1 : 0,
+      dtMs: bindings.deltaTimeRef.current,
+      frameGapMs: previous ? now - previous.lastSampleTime : 0,
+      playerX: predictedPosition.x,
+      playerY: predictedPosition.y,
+      playerDx,
+      playerDy,
+      playerDist: Math.hypot(playerDx, playerDy),
+      cameraX: camera.x,
+      cameraY: camera.y,
+      cameraDx,
+      cameraDy,
+      cameraDist: Math.hypot(cameraDx, cameraDy),
+      cameraJerk: previous ? Math.hypot(cameraDx - previous.lastCameraDx, cameraDy - previous.lastCameraDy) : 0,
+      serverX: localPlayer.positionX,
+      serverY: localPlayer.positionY,
+      predictedMinusServerX: predictionErrorX,
+      predictedMinusServerY: predictionErrorY,
+      predictedMinusServerDist: predictionError,
+      correctionDelta: previous ? Math.abs(predictionError - previous.lastPredictionError) : 0,
+      tileX: Math.floor(predictedPosition.x / gameConfig.tileSize),
+      tileY: Math.floor(predictedPosition.y / gameConfig.tileSize),
+    });
+
+    this.cameraProfilerState = {
+      sampleIndex: previous ? previous.sampleIndex + 1 : 0,
+      lastSampleTime: now,
+      lastPlayerX: predictedPosition.x,
+      lastPlayerY: predictedPosition.y,
+      lastCameraX: camera.x,
+      lastCameraY: camera.y,
+      lastCameraDx: cameraDx,
+      lastCameraDy: cameraDy,
+      lastPredictionError: predictionError,
+    };
   }
 }

@@ -456,9 +456,13 @@ export class RuntimeEngine {
     }
 
     this.frameCount += 1;
+    const maxFrameTime = Math.max(
+      DELTA_TIME_MIN_MS,
+      Math.min(this.config.maxFrameTime, DELTA_TIME_MAX_MS)
+    );
     const deltaTime = Math.max(
       DELTA_TIME_MIN_MS,
-      Math.min(callbackDeltaMs, DELTA_TIME_MAX_MS)
+      Math.min(callbackDeltaMs, maxFrameTime)
     );
 
     const currentSecond = Math.floor(currentTime / 1000);

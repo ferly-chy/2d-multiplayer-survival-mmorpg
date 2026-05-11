@@ -19,6 +19,9 @@ const WATER_SPEED_PENALTY = gameConfig.waterSpeedPenalty;
 const MAX_WATER_SPEED_BONUS = 2.0;
 const PERFORMANCE_LOG_INTERVAL = 10000;
 const LAG_SPIKE_THRESHOLD = 20;
+// Large RAF gaps should not become equally large camera jumps. The runtime
+// already clamps frame deltas, and this keeps direct movement callers honest.
+const MAX_CLIENT_MOVEMENT_DT_MS = 33;
 
 export interface MovementInputState {
   direction: { x: number; y: number };
@@ -181,7 +184,7 @@ class MovementPredictionEngine {
 
   stepPredictedMovement(dtMs: number): void {
     const updateStartTime = performance.now();
-    const dtSec = Math.min(dtMs / 1000, 0.1);
+    const dtSec = Math.min(dtMs, MAX_CLIENT_MOVEMENT_DT_MS) / 1000;
     this.applyMovementStep(dtSec, updateStartTime);
     this.publishSnapshot();
   }
@@ -257,7 +260,8 @@ class MovementPredictionEngine {
     }
 
     const now = performance.now();
-    const deltaTime = (now - this.lastUpdateTime) / 1000;
+    const elapsedSinceSimulationMs = Math.max(0, now - this.lastUpdateTime);
+    const deltaTime = Math.min(elapsedSinceSimulationMs, MAX_CLIENT_MOVEMENT_DT_MS) / 1000;
     const playerId = localPlayer.identity.toHexString();
     const optimisticElapsedMs = Date.now() - this.optimisticDodgeRollStartMs;
     const isOptimisticDodgeRolling =
@@ -269,7 +273,7 @@ class MovementPredictionEngine {
     const currentInput = this.getCurrentInputState();
     const { direction, sprinting } = currentInput;
     const isActuallyMoving = direction.x !== 0 || direction.y !== 0;
-    if (!isActuallyMoving || deltaTime <= 0 || deltaTime > 0.1) {
+    if (!isActuallyMoving || deltaTime <= 0) {
       return this.clientPosition;
     }
 
