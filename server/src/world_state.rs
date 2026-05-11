@@ -1,5 +1,6 @@
 use spacetimedb::{ReducerContext, Table, Timestamp, TimeDuration, ScheduleAt};
 use log;
+use std::collections::HashSet;
 use std::f32::consts::PI;
 use rand::Rng;
 use crate::campfire::Campfire;
@@ -74,6 +75,12 @@ const MIN_TIME_BETWEEN_RAIN_CYCLES: f32 = 600.0; // 10 minutes minimum between r
 // - Symmetry: Clear weather is a first-class type, forms large fronts just like rain
 
 const CHUNKS_PER_UPDATE: usize = 40; // Process more chunks per tick for responsive weather evolution
+
+/// Process `1/N` rain collectors per weather tick; elapsed time is scaled so average fill rate matches a full scan.
+const RAIN_COLLECTOR_TICK_PHASES: u32 = 5;
+
+/// Wall-clock buckets for rain phases (microseconds). Must match `global_tick::GLOBAL_TICK_INTERVAL_SECS`.
+const RAIN_COLLECTOR_PHASE_BUCKET_MICROS: i64 = 15_000_000;
 
 // --- Neighbor Consensus Parameters ---
 // Chunks conform to the dominant weather type in their neighborhood
@@ -1245,13 +1252,20 @@ fn calculate_season(day_of_year: u32) -> Season {
 fn update_all_rain_collectors(
     ctx: &ReducerContext,
     elapsed_seconds: f32,
+    cycle_phase: u32,
 ) -> Result<(), String> {
     let chunk_weather_table = ctx.db.chunk_weather();
     let mut updated_count = 0;
     let mut total_water_added = 0.0;
-    
-    // Update all active rain collectors
+
+    let effective_elapsed = elapsed_seconds * RAIN_COLLECTOR_TICK_PHASES as f32;
+
+    // Stagger work across ticks: each collector runs once every RAIN_COLLECTOR_TICK_PHASES ticks.
     for mut collector in ctx.db.rain_collector().iter() {
+        if collector.id % RAIN_COLLECTOR_TICK_PHASES != cycle_phase {
+            continue;
+        }
+
         if collector.is_destroyed {
             continue;
         }
@@ -1289,8 +1303,8 @@ fn update_all_rain_collectors(
             WeatherType::Clear => continue, // Already handled above
         };
         
-        // Calculate water to add this tick
-        let water_to_add = collection_rate * elapsed_seconds;
+        // Calculate water to add this tick (elapsed scaled for staggered phases)
+        let water_to_add = collection_rate * effective_elapsed;
         
         if water_to_add <= 0.0 {
             continue;
@@ -1338,17 +1352,18 @@ fn update_chunk_weather_system(ctx: &ReducerContext, world_state: &WorldState, e
     // This creates natural variation while keeping updates manageable
     
     let chunk_weather_table = ctx.db.chunk_weather();
-    let all_chunk_weather: Vec<ChunkWeather> = chunk_weather_table.iter().collect();
+    let mut chunks_initialized = 0usize;
+    let mut rainy_chunk_count = 0usize;
+    for cw in chunk_weather_table.iter() {
+        chunks_initialized += 1;
+        if !matches!(cw.current_weather, WeatherType::Clear) {
+            rainy_chunk_count += 1;
+        }
+    }
     let total_possible_chunks = WORLD_WIDTH_CHUNKS * WORLD_HEIGHT_CHUNKS;
-    
-    // Count how many chunks have rainy weather
-    let rainy_chunk_count = all_chunk_weather.iter()
-        .filter(|cw| !matches!(cw.current_weather, WeatherType::Clear))
-        .count();
-    
+
     // AGGRESSIVE INITIALIZATION: If we don't have enough chunks initialized OR not enough rain
     // Initialize the ENTIRE map with weather!
-    let chunks_initialized = all_chunk_weather.len();
     let needs_full_init = chunks_initialized < (total_possible_chunks as usize / 2); // Less than 50% of map has weather chunks
     let needs_rain_init = rainy_chunk_count < 10; // Less than 10 rainy chunks
     
@@ -1455,7 +1470,7 @@ fn update_chunk_weather_system(ctx: &ReducerContext, world_state: &WorldState, e
     }
     
     // Ensure chunks with players in them are initialized (so players always see weather)
-    let mut player_chunks_set = std::collections::HashSet::new();
+    let mut player_chunks_set = HashSet::new();
     for player in ctx.db.player().iter() {
         let chunk_index = calculate_chunk_index(player.position_x, player.position_y);
         player_chunks_set.insert(chunk_index);
@@ -1466,48 +1481,69 @@ fn update_chunk_weather_system(ctx: &ReducerContext, world_state: &WorldState, e
         }
     }
     
-    // Refresh all_chunk_weather after initializing player chunks
-    let all_chunk_weather: Vec<ChunkWeather> = chunk_weather_table.iter().collect();
-    
-    // Calculate global storm coverage for emergent balancing
-    // If coverage is high, we increase decay rates to prevent map-wide lockups
-    let stormy_chunks_count = all_chunk_weather.iter()
-        .filter(|cw| matches!(cw.current_weather, WeatherType::HeavyStorm | WeatherType::HeavyRain | WeatherType::ModerateRain))
-        .count();
-    let total_known_chunks = all_chunk_weather.len().max(1);
-    let storm_coverage = stormy_chunks_count as f32 / total_known_chunks as f32;
-    
-    // Select chunks to update this tick (random sampling)
-    // Prioritize chunks with players in them, then randomly sample others
-    let mut chunks_to_update: Vec<u32> = Vec::new();
-    
-    // First, add player chunks (up to half of CHUNKS_PER_UPDATE)
+    // Storm coverage + chunk batch selection without cloning every ChunkWeather row.
+    let mut selected: HashSet<u32> = HashSet::new();
     let player_chunks_vec: Vec<u32> = player_chunks_set.into_iter().collect();
-    let player_chunks_to_update = player_chunks_vec.len().min(CHUNKS_PER_UPDATE / 2);
-    chunks_to_update.extend(player_chunks_vec.into_iter().take(player_chunks_to_update));
-    
-    // Then add random chunks to fill the rest
-    if all_chunk_weather.len() <= CHUNKS_PER_UPDATE - chunks_to_update.len() {
-        // Add all remaining chunks
-        let existing_indices: Vec<u32> = all_chunk_weather.iter()
-            .map(|cw| cw.chunk_index)
-            .filter(|idx| !chunks_to_update.contains(idx))
-            .collect();
-        chunks_to_update.extend(existing_indices);
-    } else {
-        // Randomly sample remaining chunks
-        use rand::seq::SliceRandom;
-        let mut indices: Vec<u32> = all_chunk_weather.iter()
-            .map(|cw| cw.chunk_index)
-            .filter(|idx| !chunks_to_update.contains(idx))
-            .collect();
-        indices.shuffle(&mut rng);
-        let remaining_slots = CHUNKS_PER_UPDATE - chunks_to_update.len();
-        chunks_to_update.extend(indices.into_iter().take(remaining_slots));
+    let player_take = player_chunks_vec.len().min(CHUNKS_PER_UPDATE / 2);
+    for idx in player_chunks_vec.into_iter().take(player_take) {
+        selected.insert(idx);
     }
-    
+
+    let budget = CHUNKS_PER_UPDATE.saturating_sub(selected.len());
+
+    let mut stormy_chunks_count = 0usize;
+    let mut total_known_chunks = 0usize;
+    let mut non_selected_count = 0usize;
+
+    for cw in chunk_weather_table.iter() {
+        total_known_chunks += 1;
+        if matches!(
+            cw.current_weather,
+            WeatherType::HeavyStorm | WeatherType::HeavyRain | WeatherType::ModerateRain
+        ) {
+            stormy_chunks_count += 1;
+        }
+        if budget > 0 && !selected.contains(&cw.chunk_index) {
+            non_selected_count += 1;
+        }
+    }
+
+    let storm_coverage = stormy_chunks_count as f32 / total_known_chunks.max(1) as f32;
+
+    if budget > 0 && non_selected_count > 0 {
+        if non_selected_count <= budget {
+            for cw in chunk_weather_table.iter() {
+                if !selected.contains(&cw.chunk_index) {
+                    selected.insert(cw.chunk_index);
+                }
+            }
+        } else {
+            // Reservoir sample (Algorithm R): avoid Vec of every chunk_index on large maps.
+            let mut reservoir: Vec<u32> = Vec::with_capacity(budget);
+            let mut eligible_seen = 0usize;
+            for cw in chunk_weather_table.iter() {
+                if selected.contains(&cw.chunk_index) {
+                    continue;
+                }
+                let idx = cw.chunk_index;
+                eligible_seen += 1;
+                if reservoir.len() < budget {
+                    reservoir.push(idx);
+                } else {
+                    let j = rng.gen_range(0..eligible_seen);
+                    if j < budget {
+                        reservoir[j] = idx;
+                    }
+                }
+            }
+            for idx in reservoir {
+                selected.insert(idx);
+            }
+        }
+    }
+
     // Update each selected chunk
-    for chunk_index in chunks_to_update {
+    for chunk_index in selected {
         if let Some(mut chunk_weather) = chunk_weather_table.chunk_index().find(&chunk_index) {
             update_single_chunk_weather(ctx, &mut chunk_weather, world_state, elapsed_seconds, &mut rng, storm_coverage)?;
             
@@ -1537,9 +1573,10 @@ fn update_chunk_weather_system(ctx: &ReducerContext, world_state: &WorldState, e
         }
     }
     
-    // Update ALL rain collectors every tick (not just in selected chunks)
-    // This ensures real-time updates like broth pots/campfires
-    update_all_rain_collectors(ctx, elapsed_seconds)?;
+    // Phase advances each global tick (~15s buckets); `cycle_count` is per in-game day and is unsuitable here.
+    let rain_phase = (now.to_micros_since_unix_epoch().max(0) / RAIN_COLLECTOR_PHASE_BUCKET_MICROS) as u32
+        % RAIN_COLLECTOR_TICK_PHASES;
+    update_all_rain_collectors(ctx, elapsed_seconds, rain_phase)?;
     
     Ok(())
 }

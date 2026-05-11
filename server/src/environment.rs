@@ -5332,7 +5332,22 @@ pub fn seed_environment(ctx: &ReducerContext) -> Result<(), String> {
 
 #[spacetimedb::reducer]
 pub fn check_resource_respawns(ctx: &ReducerContext) -> Result<(), String> {
-    
+    // One snapshot per reducer — avoids ctx.db.large_quarry().iter() inside each stone update closure.
+    let stone_respawn_quarry_circles: Vec<(f32, f32, f32, crate::LargeQuarryType)> = ctx
+        .db
+        .large_quarry()
+        .iter()
+        .map(|q| {
+            let radius_px = q.radius_tiles as f32 * crate::TILE_SIZE_PX as f32;
+            (
+                q.world_x,
+                q.world_y,
+                radius_px * radius_px,
+                q.quarry_type.clone(),
+            )
+        })
+        .collect();
+
     // Respawn Stones
     check_and_respawn_resource!(
         ctx,
@@ -5349,13 +5364,11 @@ pub fn check_resource_respawns(ctx: &ReducerContext) -> Result<(), String> {
             
             // Check if this stone is within a TYPED large quarry
             let mut found_quarry_type: Option<crate::LargeQuarryType> = None;
-            for large_quarry in ctx.db.large_quarry().iter() {
-                let radius_px = large_quarry.radius_tiles as f32 * crate::TILE_SIZE_PX as f32;
-                let dx = s.pos_x - large_quarry.world_x;
-                let dy = s.pos_y - large_quarry.world_y;
-                let dist_sq = dx * dx + dy * dy;
-                if dist_sq < radius_px * radius_px {
-                    found_quarry_type = Some(large_quarry.quarry_type.clone());
+            for &(qx, qy, radius_sq, ref quarry_ty) in &stone_respawn_quarry_circles {
+                let dx = s.pos_x - qx;
+                let dy = s.pos_y - qy;
+                if dx * dx + dy * dy < radius_sq {
+                    found_quarry_type = Some(quarry_ty.clone());
                     break;
                 }
             }

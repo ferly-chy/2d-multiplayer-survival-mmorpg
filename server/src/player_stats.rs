@@ -2,6 +2,7 @@ use spacetimedb::{Identity, ReducerContext, Table, Timestamp, TimeDuration};
 use spacetimedb::spacetimedb_lib::ScheduleAt;
 use spacetimedb::table;
 use log;
+use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::inventory_management::ItemContainer;
@@ -293,6 +294,34 @@ pub fn process_player_stats(ctx: &ReducerContext, _schedule: PlayerStatSchedule)
 
     let world_state = world_states.iter().next()
         .ok_or_else(|| "WorldState not found during stat processing".to_string())?;
+
+    // Single inventory pass for Memory Shard totals (was O(players × items)).
+    let memory_shard_def_id = ctx
+        .db
+        .item_definition()
+        .iter()
+        .find(|def| def.name == "Memory Shard")
+        .map(|def| def.id);
+    let memory_shard_counts: HashMap<Identity, u32> = if let Some(def_id) = memory_shard_def_id {
+        let mut counts = HashMap::new();
+        for inventory_item in ctx.db.inventory_item().iter() {
+            if inventory_item.item_def_id != def_id {
+                continue;
+            }
+            match &inventory_item.location {
+                crate::models::ItemLocation::Inventory(data) => {
+                    *counts.entry(data.owner_id).or_insert(0) += inventory_item.quantity;
+                }
+                crate::models::ItemLocation::Hotbar(data) => {
+                    *counts.entry(data.owner_id).or_insert(0) += inventory_item.quantity;
+                }
+                _ => {}
+            }
+        }
+        counts
+    } else {
+        HashMap::new()
+    };
 
     for player_ref in players.iter() {
         let player_id = player_ref.identity;
@@ -586,14 +615,14 @@ pub fn process_player_stats(ctx: &ReducerContext, _schedule: PlayerStatSchedule)
         if is_in_hot_spring {
             // Neutralize ALL negative warmth changes - hot springs provide complete cold immunity
             if total_warmth_change_per_sec < 0.0 {
-                log::info!("Player {:?} in hot spring - negating {:.2} warmth drain (COLD IMMUNE)", 
+                log::trace!("Player {:?} in hot spring - negating {:.2} warmth drain (COLD IMMUNE)", 
                     player_id, total_warmth_change_per_sec);
                 total_warmth_change_per_sec = 0.0; // No warmth loss in hot springs!
             }
             // Add rapid warmth recovery (8.0 warmth/sec - same as fumaroles)
             const HOT_SPRING_WARMTH_PER_SECOND: f32 = 8.0;
             total_warmth_change_per_sec += HOT_SPRING_WARMTH_PER_SECOND;
-            log::info!("Player {:?} gaining {:.2} warmth/sec from hot spring (total warmth change: {:.2})", 
+            log::trace!("Player {:?} gaining {:.2} warmth/sec from hot spring (total warmth change: {:.2})", 
                 player_id, HOT_SPRING_WARMTH_PER_SECOND, total_warmth_change_per_sec);
         }
         // <<< END HOT SPRING COLD IMMUNITY & WARMTH RECOVERY >>>
@@ -604,14 +633,14 @@ pub fn process_player_stats(ctx: &ReducerContext, _schedule: PlayerStatSchedule)
         if is_near_fumarole {
             // Neutralize ALL negative warmth changes - fumaroles provide complete warmth protection
             if total_warmth_change_per_sec < 0.0 {
-                log::info!("Player {:?} near fumarole - negating {:.2} warmth drain (WARMTH PROTECTED)", 
+                log::trace!("Player {:?} near fumarole - negating {:.2} warmth drain (WARMTH PROTECTED)", 
                     player_id, total_warmth_change_per_sec);
                 total_warmth_change_per_sec = 0.0; // No warmth loss near fumaroles!
             }
             // Add rapid warmth recovery (8.0 warmth/sec - 60% faster than campfires, similar feel to hot springs)
             const FUMAROLE_WARMTH_PER_SECOND: f32 = 8.0;
             total_warmth_change_per_sec += FUMAROLE_WARMTH_PER_SECOND;
-            log::info!("Player {:?} gaining {:.2} warmth/sec from fumarole (total warmth change: {:.2})", 
+            log::trace!("Player {:?} gaining {:.2} warmth/sec from fumarole (total warmth change: {:.2})", 
                 player_id, FUMAROLE_WARMTH_PER_SECOND, total_warmth_change_per_sec);
         }
         // <<< END FUMAROLE WARMTH PROTECTION & RECOVERY >>>
@@ -625,15 +654,15 @@ pub fn process_player_stats(ctx: &ReducerContext, _schedule: PlayerStatSchedule)
         // Only apply if NOT in hot spring (hot springs provide immunity)
         if !is_in_hot_spring {
             let rain_warmth_drain = world_state::get_rain_warmth_drain_modifier(ctx, player.position_x, player.position_y);
-            log::info!("Rain warmth drain check: player at ({:.1}, {:.1}), drain = {:.2}", player.position_x, player.position_y, rain_warmth_drain);
+            log::trace!("Rain warmth drain check: player at ({:.1}, {:.1}), drain = {:.2}", player.position_x, player.position_y, rain_warmth_drain);
             if rain_warmth_drain > 0.0 {
                 total_warmth_change_per_sec -= rain_warmth_drain; // Subtract rain drain
-                log::info!(
+                log::trace!(
                     "Player {:?} losing {:.2} warmth/sec from rain (total warmth change now: {:.2})", 
                     player_id, rain_warmth_drain, total_warmth_change_per_sec
                 );
             } else {
-                log::info!("Player {:?} protected from rain or no rain active", player_id);
+                log::trace!("Player {:?} protected from rain or no rain active", player_id);
             }
         }
         // <<< END RAIN WARMTH DRAIN >>>
@@ -654,31 +683,7 @@ pub fn process_player_stats(ctx: &ReducerContext, _schedule: PlayerStatSchedule)
         // Design: Quick in-and-out shard runs are safe, long hauls are dangerous
         // Dropping shards quickly = rapid recovery (if under 50%), but getting greedy = slow recovery
         
-        // Count memory shards in player's inventory/hotbar (not in chests)
-        let memory_shard_name = "Memory Shard";
-        let memory_shard_def_id = ctx.db.item_definition().iter()
-            .find(|def| def.name == memory_shard_name)
-            .map(|def| def.id);
-        
-        let mut memory_shard_count = 0u32;
-        if let Some(def_id) = memory_shard_def_id {
-            for inventory_item in ctx.db.inventory_item().iter() {
-                // Only count items in inventory or hotbar (not chests, equipment, etc.)
-                match &inventory_item.location {
-                    crate::models::ItemLocation::Inventory(data) if data.owner_id == player_id => {
-                        if inventory_item.item_def_id == def_id {
-                            memory_shard_count += inventory_item.quantity;
-                        }
-                    }
-                    crate::models::ItemLocation::Hotbar(data) if data.owner_id == player_id => {
-                        if inventory_item.item_def_id == def_id {
-                            memory_shard_count += inventory_item.quantity;
-                        }
-                    }
-                    _ => {} // Ignore items in chests, equipment, etc.
-                }
-            }
-        }
+        let memory_shard_count = memory_shard_counts.get(&player_id).copied().unwrap_or(0);
         
         // SOVA 200 Memory Shards Tutorial: First time player holds 200+ shards
         // Warns about mind instability, purple vision, dropping/storing, and Memory Grid (G key)
@@ -705,11 +710,11 @@ pub fn process_player_stats(ctx: &ReducerContext, _schedule: PlayerStatSchedule)
         if memory_shard_count >= INSANITY_MINIMUM_SHARD_THRESHOLD && player.shard_carry_start_time.is_none() {
             // Started carrying enough shards for insanity - record the time
             shard_carry_start_time_to_update = Some(current_time);
-            log::info!("Player {:?} started carrying {} memory shards (>= {} threshold)", player_id, memory_shard_count, INSANITY_MINIMUM_SHARD_THRESHOLD);
+            log::trace!("Player {:?} started carrying {} memory shards (>= {} threshold)", player_id, memory_shard_count, INSANITY_MINIMUM_SHARD_THRESHOLD);
         } else if memory_shard_count < INSANITY_MINIMUM_SHARD_THRESHOLD && player.shard_carry_start_time.is_some() {
             // Dropped below threshold - clear the time
             shard_carry_start_time_to_update = None;
-            log::info!("Player {:?} dropped below {} memory shard threshold (now has {})", player_id, INSANITY_MINIMUM_SHARD_THRESHOLD, memory_shard_count);
+            log::trace!("Player {:?} dropped below {} memory shard threshold (now has {})", player_id, INSANITY_MINIMUM_SHARD_THRESHOLD, memory_shard_count);
         }
         
         // Calculate insanity change: increases when holding ENOUGH shards (100+) with TIME-BASED SCALING
@@ -811,7 +816,7 @@ pub fn process_player_stats(ctx: &ReducerContext, _schedule: PlayerStatSchedule)
         let new_insanity = if is_in_memory_beacon_zone {
             // Memory Beacon zone: immediately nuke insanity to 0
             if player.insanity > 0.0 {
-                log::info!("Player {:?} is in Memory Beacon zone - insanity cleared ({:.1}% -> 0%)", 
+                log::trace!("Player {:?} is in Memory Beacon zone - insanity cleared ({:.1}% -> 0%)", 
                     player_id, player.insanity);
             }
             0.0

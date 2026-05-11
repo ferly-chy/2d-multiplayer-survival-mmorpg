@@ -522,7 +522,15 @@ pub fn process_all_fumaroles_scheduled(ctx: &ReducerContext, _schedule: Fumarole
         return Ok(());
     }
 
-    let has_online_players = ctx.db.player().iter().any(|p| p.is_online && !p.is_dead);
+    // Snapshot once per tick — avoids O(fumaroles × full player table scans).
+    let online_players_for_burn: Vec<(Identity, f32, f32)> = ctx
+        .db
+        .player()
+        .iter()
+        .filter(|p| p.is_online && !p.is_dead)
+        .map(|p| (p.identity, p.position_x, p.position_y))
+        .collect();
+
     let mut fumaroles_table = ctx.db.fumarole();
     let mut inventory_items_table = ctx.db.inventory_item();
     let charcoal_def = get_item_def_by_name(ctx, "Charcoal");
@@ -544,18 +552,20 @@ pub fn process_all_fumaroles_scheduled(ctx: &ReducerContext, _schedule: Fumarole
 
         let mut made_changes = false;
 
-        // Burn damage to players on fumarole (skip when no players online - saves O(fumaroles * players) iterations)
-        if has_online_players {
-            for player_entity in ctx.db.player().iter() {
-                if player_entity.is_dead || !player_entity.is_online { continue; }
-                let dx = player_entity.position_x - fumarole.pos_x;
-                let dy = player_entity.position_y - (fumarole.pos_y - VISUAL_CENTER_Y_OFFSET);
+        // Burn damage to players on fumarole (uses pre-filtered snapshot only)
+        if !online_players_for_burn.is_empty() {
+            for &(identity, px, py) in &online_players_for_burn {
+                let dx = px - fumarole.pos_x;
+                let dy = py - (fumarole.pos_y - VISUAL_CENTER_Y_OFFSET);
                 if dx * dx + dy * dy < FUMAROLE_DAMAGE_RADIUS_SQUARED {
                     let _ = crate::active_effects::apply_burn_effect(
-                        ctx, player_entity.identity,
+                        ctx,
+                        identity,
                         FUMAROLE_DAMAGE_PER_TICK,
                         FUMAROLE_DAMAGE_EFFECT_DURATION_SECONDS as f32,
-                        FUMAROLE_BURN_TICK_INTERVAL_SECONDS, 0);
+                        FUMAROLE_BURN_TICK_INTERVAL_SECONDS,
+                        0,
+                    );
                 }
             }
         }
