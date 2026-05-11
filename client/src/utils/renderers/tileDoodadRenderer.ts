@@ -20,6 +20,8 @@ interface DoodadConfig {
     isUnderwaterOnly?: boolean;
 }
 
+type TransitionInfoLookup = (logicalX: number, logicalY: number) => unknown[];
+
 // ============================================================================
 // Tile Type to Doodad Configuration Mapping
 // ============================================================================
@@ -217,7 +219,12 @@ export class TileDoodadRenderer {
      * Check if the tile is on a transition (boundary between terrains).
      * Doodads should never spawn on transition tiles - they would overlap transition textures.
      */
-    private isTransitionTile(tileX: number, tileY: number, tileCache: Map<string, WorldTile>): boolean {
+    private isTransitionTile(
+        tileX: number,
+        tileY: number,
+        tileCache: Map<string, WorldTile>,
+        transitionInfoLookup?: TransitionInfoLookup
+    ): boolean {
         // Tile (x,y) is a corner of 4 dual grid cells: (x,y), (x-1,y), (x,y-1), (x-1,y-1)
         const cells = [
             [tileX, tileY],
@@ -226,7 +233,10 @@ export class TileDoodadRenderer {
             [tileX - 1, tileY - 1],
         ];
         for (const [cx, cy] of cells) {
-            if (getDualGridTileInfoMultiLayer(cx, cy, tileCache).length > 0) {
+            const transitions = transitionInfoLookup
+                ? transitionInfoLookup(cx, cy)
+                : getDualGridTileInfoMultiLayer(cx, cy, tileCache);
+            if (transitions.length > 0) {
                 return true;
             }
         }
@@ -270,7 +280,8 @@ export class TileDoodadRenderer {
         endTileX: number,
         startTileY: number,
         endTileY: number,
-        isSnorkeling: boolean = false
+        isSnorkeling: boolean = false,
+        transitionInfoLookup?: TransitionInfoLookup
     ): void {
         if (!this.isInitialized) {
             return;
@@ -290,7 +301,7 @@ export class TileDoodadRenderer {
                 if (!tileTypeName) continue;
                 
                 // Never spawn doodads on transition tiles (boundaries between terrains)
-                if (this.isTransitionTile(x, y, tileCache)) continue;
+                if (this.isTransitionTile(x, y, tileCache, transitionInfoLookup)) continue;
 
                 // Get doodad config for this tile type
                 const config = TILE_DOODAD_CONFIG[tileTypeName];

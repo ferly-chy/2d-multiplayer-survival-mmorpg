@@ -270,7 +270,7 @@ export class ProceduralWorldRenderer {
         const endTileX = Math.min(gameConfig.worldWidth, Math.ceil(viewMaxX / tileSize));
         const startTileY = Math.max(0, Math.floor(viewMinY / tileSize));
         const endTileY = Math.min(gameConfig.worldHeight, Math.ceil(viewMaxY / tileSize));
-        
+
         // PASS 1: Render base textures at exact tile positions
         for (let y = startTileY; y < endTileY; y++) {
             for (let x = startTileX; x < endTileX; x++) {
@@ -313,7 +313,8 @@ export class ProceduralWorldRenderer {
             endTileX,
             startTileY,
             endTileY,
-            isSnorkeling
+            isSnorkeling,
+            (logicalX, logicalY) => this.getTransitionInfo(logicalX, logicalY)
         );
     }
 
