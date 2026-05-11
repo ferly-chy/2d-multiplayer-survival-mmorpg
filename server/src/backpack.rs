@@ -17,7 +17,7 @@ use crate::wooden_storage_box::{WoodenStorageBox, BOX_TYPE_BACKPACK, NUM_BACKPAC
 use crate::dropped_item::{DroppedItem, dropped_item as DroppedItemTableTrait};
 use crate::wooden_storage_box::wooden_storage_box as WoodenStorageBoxTableTrait;
 use crate::items::{InventoryItem, item_definition as ItemDefinitionTableTrait, inventory_item as InventoryItemTableTrait};
-use crate::environment::calculate_chunk_index;
+use crate::environment::{calculate_chunk_index, CHUNK_SIZE_PX, WORLD_HEIGHT_CHUNKS, WORLD_WIDTH_CHUNKS};
 use crate::models::{ItemLocation, ContainerLocationData, ContainerType};
 use crate::inventory_management::ItemContainer; // Trait for get_slot_instance_id
 
@@ -301,42 +301,111 @@ fn build_backpack_transfer_items(
 }
 
 fn find_dropped_item_clusters(ctx: &ReducerContext) -> Vec<(f32, f32, Vec<DroppedItem>)> {
-    let mut clusters = Vec::new();
-    let mut processed_items = std::collections::HashSet::new();
-    
-    for item in ctx.db.dropped_item().iter() {
-        if processed_items.contains(&item.id) {
-            continue;
-        }
-        
-        let mut cluster_items = vec![item.clone()];
-        let mut center_x = item.pos_x;
-        let mut center_y = item.pos_y;
-        
-        // Find nearby items
-        for other in ctx.db.dropped_item().iter() {
-            if other.id == item.id || processed_items.contains(&other.id) {
-                continue;
-            }
-            
-            let dx = other.pos_x - center_x;
-            let dy = other.pos_y - center_y;
-            if dx * dx + dy * dy <= BACKPACK_PROXIMITY_RADIUS_SQUARED {
-                cluster_items.push(other.clone());
-                // Update centroid
-                center_x = cluster_items.iter().map(|i| i.pos_x).sum::<f32>() / cluster_items.len() as f32;
-                center_y = cluster_items.iter().map(|i| i.pos_y).sum::<f32>() / cluster_items.len() as f32;
+    // Bucket by chunk + union-find for pairs within proximity — avoids O(n²) over all dropped items.
+    let items: Vec<DroppedItem> = ctx.db.dropped_item().iter().collect();
+    let n = items.len();
+    if n < MIN_ITEMS_FOR_BACKPACK {
+        return Vec::new();
+    }
+
+    let mut buckets: std::collections::HashMap<u32, Vec<usize>> = std::collections::HashMap::new();
+    for (idx, item) in items.iter().enumerate() {
+        buckets.entry(item.chunk_index).or_default().push(idx);
+    }
+
+    let chunk_r = ((BACKPACK_PROXIMITY_RADIUS / CHUNK_SIZE_PX).ceil() as i32 + 1)
+        .max(1)
+        .min(32);
+
+    struct Dsu {
+        parent: Vec<usize>,
+    }
+    impl Dsu {
+        fn new(n: usize) -> Self {
+            Self {
+                parent: (0..n).collect(),
             }
         }
-        
-        if cluster_items.len() >= MIN_ITEMS_FOR_BACKPACK {
-            for ci in &cluster_items {
-                processed_items.insert(ci.id);
+        fn find(&mut self, mut x: usize) -> usize {
+            while self.parent[x] != x {
+                self.parent[x] = self.parent[self.parent[x]];
+                x = self.parent[x];
             }
-            clusters.push((center_x, center_y, cluster_items));
+            x
+        }
+        fn union(&mut self, a: usize, b: usize) {
+            let ra = self.find(a);
+            let rb = self.find(b);
+            if ra != rb {
+                self.parent[rb] = ra;
+            }
         }
     }
-    
+
+    let mut dsu = Dsu::new(n);
+
+    #[inline]
+    fn chunk_xy(chunk_index: u32) -> (i32, i32) {
+        (
+            (chunk_index % WORLD_WIDTH_CHUNKS) as i32,
+            (chunk_index / WORLD_WIDTH_CHUNKS) as i32,
+        )
+    }
+
+    for idx in 0..n {
+        let item = &items[idx];
+        let (pcx, pcy) = chunk_xy(item.chunk_index);
+        for dy in -chunk_r..=chunk_r {
+            for dx in -chunk_r..=chunk_r {
+                let ncx = pcx + dx;
+                let ncy = pcy + dy;
+                if ncx < 0 || ncy < 0 {
+                    continue;
+                }
+                let ncx = ncx as u32;
+                let ncy = ncy as u32;
+                if ncx >= WORLD_WIDTH_CHUNKS || ncy >= WORLD_HEIGHT_CHUNKS {
+                    continue;
+                }
+                let chunk_idx = ncy * WORLD_WIDTH_CHUNKS + ncx;
+                let Some(neighbors) = buckets.get(&chunk_idx) else { continue };
+                for &j in neighbors {
+                    if j <= idx {
+                        continue;
+                    }
+                    let other = &items[j];
+                    let dx = item.pos_x - other.pos_x;
+                    let dy = item.pos_y - other.pos_y;
+                    if dx * dx + dy * dy <= BACKPACK_PROXIMITY_RADIUS_SQUARED {
+                        dsu.union(idx, j);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut components: std::collections::HashMap<usize, Vec<DroppedItem>> =
+        std::collections::HashMap::new();
+    for idx in 0..n {
+        let root = dsu.find(idx);
+        components
+            .entry(root)
+            .or_default()
+            .push(items[idx].clone());
+    }
+
+    let mut clusters = Vec::new();
+    for (_, cluster_items) in components {
+        if cluster_items.len() < MIN_ITEMS_FOR_BACKPACK {
+            continue;
+        }
+        let center_x =
+            cluster_items.iter().map(|i| i.pos_x).sum::<f32>() / cluster_items.len() as f32;
+        let center_y =
+            cluster_items.iter().map(|i| i.pos_y).sum::<f32>() / cluster_items.len() as f32;
+        clusters.push((center_x, center_y, cluster_items));
+    }
+
     clusters
 }
 

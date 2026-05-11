@@ -8,6 +8,7 @@ use crate::active_equipment::active_equipment as ActiveEquipmentTableTrait;
 use crate::consumables::{MAX_HEALTH_VALUE, MAX_THIRST_VALUE, MIN_STAT_VALUE}; // Import constants from consumables
 use rand::Rng; // For random number generation
 use log;
+use std::collections::HashMap;
 
 // Import table traits for burn extinguishing functionality
 use crate::world_state::world_state as WorldStateTableTrait;
@@ -239,23 +240,71 @@ fn process_hot_combat_ladle_self_burn(ctx: &ReducerContext) {
 /// This runs every tick regardless of active effects to ensure the is_inside_building flag
 /// is properly set/cleared when entering/leaving shelters, buildings, and shipwreck zones
 fn update_all_players_indoor_status(ctx: &ReducerContext) {
+    use crate::environment::{
+        calculate_chunk_index, CHUNK_SIZE_PX, WORLD_HEIGHT_CHUNKS, WORLD_WIDTH_CHUNKS,
+    };
     use crate::player as PlayerTableTrait;
-    
+    use crate::shelter::{Shelter, SHELTER_AABB_HALF_WIDTH};
+
+    // Single shelter scan + chunk buckets — avoids O(players × shelters) every tick.
+    let mut shelters_by_chunk: HashMap<u32, Vec<Shelter>> = HashMap::new();
+    for shelter in ctx.db.shelter().iter() {
+        if shelter.is_destroyed {
+            continue;
+        }
+        shelters_by_chunk
+            .entry(shelter.chunk_index)
+            .or_default()
+            .push(shelter);
+    }
+
+    let chunk_neighbor_radius = ((SHELTER_AABB_HALF_WIDTH / CHUNK_SIZE_PX).ceil() as i32 + 1)
+        .max(1)
+        .min(12);
+
+    #[inline]
+    fn chunk_xy(chunk_index: u32) -> (i32, i32) {
+        (
+            (chunk_index % WORLD_WIDTH_CHUNKS) as i32,
+            (chunk_index / WORLD_WIDTH_CHUNKS) as i32,
+        )
+    }
+
     for player in ctx.db.player().iter() {
         // Skip offline or dead players
         if !player.is_online || player.is_dead {
             continue;
         }
-        
-        // Check if inside a shelter (fast AABB check)
+
+        // Shelters only need checking in chunks within horizontal reach of the shelter AABB.
         let mut is_inside_shelter = false;
-        for shelter in ctx.db.shelter().iter() {
-            if shelter.is_destroyed {
-                continue;
-            }
-            if crate::shelter::is_player_inside_shelter(player.position_x, player.position_y, &shelter) {
-                is_inside_shelter = true;
-                break;
+        let player_chunk = calculate_chunk_index(player.position_x, player.position_y);
+        let (pcx, pcy) = chunk_xy(player_chunk);
+        'shelter_scan: for dy in -chunk_neighbor_radius..=chunk_neighbor_radius {
+            for dx in -chunk_neighbor_radius..=chunk_neighbor_radius {
+                let ncx = pcx + dx;
+                let ncy = pcy + dy;
+                if ncx < 0 || ncy < 0 {
+                    continue;
+                }
+                let ncx = ncx as u32;
+                let ncy = ncy as u32;
+                if ncx >= WORLD_WIDTH_CHUNKS || ncy >= WORLD_HEIGHT_CHUNKS {
+                    continue;
+                }
+                let idx = ncy * WORLD_WIDTH_CHUNKS + ncx;
+                if let Some(list) = shelters_by_chunk.get(&idx) {
+                    for shelter in list {
+                        if crate::shelter::is_player_inside_shelter(
+                            player.position_x,
+                            player.position_y,
+                            shelter,
+                        ) {
+                            is_inside_shelter = true;
+                            break 'shelter_scan;
+                        }
+                    }
+                }
             }
         }
         
