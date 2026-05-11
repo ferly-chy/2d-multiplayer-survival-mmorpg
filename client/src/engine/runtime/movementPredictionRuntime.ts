@@ -12,6 +12,7 @@ import {
 } from '../../config/combatConstants';
 
 const POSITION_UPDATE_INTERVAL_MS = 50;
+const REACT_MOVEMENT_PUBLISH_INTERVAL_MS = 100;
 const PLAYER_SPEED = gameConfig.playerSpeed;
 const SPRINT_MULTIPLIER = gameConfig.sprintMultiplier;
 const WATER_SPEED_PENALTY = gameConfig.waterSpeedPenalty;
@@ -151,6 +152,9 @@ class MovementPredictionEngine {
   private visualRollProgress = 0;
   private clientSequence = 0n;
   private lastAckedSequence = 0n;
+  private lastReactPublishTime = 0;
+  private lastReactPublishTileKey: string | null = null;
+  private lastReactSnapshot: MovementPredictionSnapshot | null = null;
 
   configure(config: MovementPredictionRuntimeProps): void {
     this.config = config;
@@ -167,7 +171,7 @@ class MovementPredictionEngine {
       this.pendingPosition = serverPos;
       this.lastFacingDirection = config.localPlayer.direction || 'down';
       this.wasDead = config.localPlayer.isDead;
-      this.publishSnapshot();
+      this.publishSnapshot(true);
       return;
     }
 
@@ -241,7 +245,7 @@ class MovementPredictionEngine {
     };
     this.optimisticDodgeRollStartMs = nowMs;
     this.lastOptimisticDodgeRollStartMs = nowMs;
-    this.publishSnapshot();
+    this.publishSnapshot(true);
     return true;
   };
 
@@ -384,8 +388,10 @@ class MovementPredictionEngine {
     this.visualRollProgress = 0;
     this.clientSequence = 0n;
     this.lastAckedSequence = 0n;
-    runtimeEngine.setPredictedPosition(null);
-    runtimeEngine.updateWorldState('movementPrediction', () => this.getSnapshot());
+    this.lastReactPublishTime = 0;
+    this.lastReactPublishTileKey = null;
+    this.lastReactSnapshot = null;
+    this.publishSnapshot(true);
   }
 
   private syncServerPlayerState(): void {
@@ -694,9 +700,55 @@ class MovementPredictionEngine {
     return this.config.inputStateRef?.current ?? this.config.inputState;
   }
 
-  private publishSnapshot(): void {
-    runtimeEngine.setPredictedPosition(this.clientPosition);
-    runtimeEngine.updateWorldState('movementPrediction', () => this.getSnapshot());
+  private publishSnapshot(force = false): void {
+    const snapshot = this.getSnapshot();
+    if (!force && !this.shouldPublishReactSnapshot(snapshot)) {
+      return;
+    }
+
+    this.lastReactPublishTime = performance.now();
+    this.lastReactPublishTileKey = this.getReactPublishTileKey(snapshot.predictedPosition);
+    this.lastReactSnapshot = snapshot;
+
+    runtimeEngine.setPredictedPosition(snapshot.predictedPosition);
+    runtimeEngine.updateWorldState('movementPrediction', snapshot);
+  }
+
+  private shouldPublishReactSnapshot(snapshot: MovementPredictionSnapshot): boolean {
+    const previous = this.lastReactSnapshot;
+    if (!previous) {
+      return true;
+    }
+
+    if (Boolean(previous.predictedPosition) !== Boolean(snapshot.predictedPosition)) {
+      return true;
+    }
+
+    if (
+      previous.facingDirection !== snapshot.facingDirection ||
+      previous.isAutoWalking !== snapshot.isAutoWalking ||
+      previous.isAutoAttacking !== snapshot.isAutoAttacking ||
+      previous.dodgeRollVisual.isDodgeRolling !== snapshot.dodgeRollVisual.isDodgeRolling
+    ) {
+      return true;
+    }
+
+    const nextTileKey = this.getReactPublishTileKey(snapshot.predictedPosition);
+    if (nextTileKey !== this.lastReactPublishTileKey) {
+      return true;
+    }
+
+    return performance.now() - this.lastReactPublishTime >= REACT_MOVEMENT_PUBLISH_INTERVAL_MS;
+  }
+
+  private getReactPublishTileKey(position: { x: number; y: number } | null): string | null {
+    if (!position) {
+      return null;
+    }
+
+    const tileX = Math.floor(position.x / gameConfig.tileSize);
+    const tileY = Math.floor(position.y / gameConfig.tileSize);
+    return `${tileX},${tileY}`;
   }
 }
 

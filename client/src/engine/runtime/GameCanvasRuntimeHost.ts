@@ -200,7 +200,6 @@ export class GameCanvasRuntimeHost {
       const livePredictedPosition = bindings.getCurrentPositionNow?.() ?? bindings.predictedPositionRef.current;
       const liveFacingDirection = bindings.getCurrentFacingDirectionNow?.() ?? bindings.localFacingDirectionRef.current;
 
-      runtimeEngine.setPredictedPosition(livePredictedPosition ?? null);
       runtimeEngine.updateInputState('isAutoWalking', bindings.isAutoWalking);
 
       if (livePredictedPosition) {

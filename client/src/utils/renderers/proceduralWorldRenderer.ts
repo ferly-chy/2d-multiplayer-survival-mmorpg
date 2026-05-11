@@ -80,6 +80,7 @@ export class ProceduralWorldRenderer {
 
     /** Skip redundant updateTileCache when same map reference passed (e.g. standing still). */
     private lastWorldTilesRef: Map<string, WorldTile> | null = null;
+    private tileSignatureCache = new Map<string, string>();
     private transitionInfoCache = new Map<string, DualGridTileInfo[]>();
     
     private animationTime = 0;
@@ -152,13 +153,62 @@ export class ProceduralWorldRenderer {
         if (this.lastWorldTilesRef === worldTiles) return;
         this.lastWorldTilesRef = worldTiles;
 
-        this.tileCache.tiles.clear();
-        this.transitionInfoCache.clear();
+        const nextTileKeys = new Set<string>();
+        let hasChanges = false;
+
         worldTiles.forEach((tile) => {
             const tileKey = `${tile.worldX}_${tile.worldY}`;
+            nextTileKeys.add(tileKey);
+
+            const nextSignature = this.getTileCacheSignature(tile);
+            if (this.tileSignatureCache.get(tileKey) === nextSignature) {
+                return;
+            }
+
             this.tileCache.tiles.set(tileKey, tile);
+            this.tileSignatureCache.set(tileKey, nextSignature);
+            this.invalidateTransitionsAroundTile(tile.worldX, tile.worldY);
+            hasChanges = true;
         });
-        this.tileCache.lastUpdate = Date.now();
+
+        for (const tileKey of this.tileSignatureCache.keys()) {
+            if (nextTileKeys.has(tileKey)) {
+                continue;
+            }
+
+            const removedTile = this.tileCache.tiles.get(tileKey);
+            this.tileCache.tiles.delete(tileKey);
+            this.tileSignatureCache.delete(tileKey);
+
+            if (removedTile) {
+                this.invalidateTransitionsAroundTile(removedTile.worldX, removedTile.worldY);
+            } else {
+                const separatorIndex = tileKey.indexOf('_');
+                const tileX = Number(tileKey.slice(0, separatorIndex));
+                const tileY = Number(tileKey.slice(separatorIndex + 1));
+                if (Number.isFinite(tileX) && Number.isFinite(tileY)) {
+                    this.invalidateTransitionsAroundTile(tileX, tileY);
+                }
+            }
+
+            hasChanges = true;
+        }
+
+        if (hasChanges) {
+            this.tileCache.lastUpdate = Date.now();
+        }
+    }
+
+    private getTileCacheSignature(tile: WorldTile): string {
+        return `${tile.tileType?.tag ?? ''}|${tile.variant ?? 0}`;
+    }
+
+    private invalidateTransitionsAroundTile(tileX: number, tileY: number): void {
+        // A logical tile participates in the four dual-grid cells touching its corners.
+        this.transitionInfoCache.delete(`${tileX - 1}_${tileY - 1}`);
+        this.transitionInfoCache.delete(`${tileX}_${tileY - 1}`);
+        this.transitionInfoCache.delete(`${tileX - 1}_${tileY}`);
+        this.transitionInfoCache.delete(`${tileX}_${tileY}`);
     }
 
     private getTransitionInfo(logicalX: number, logicalY: number): DualGridTileInfo[] {
