@@ -2,11 +2,6 @@
 
 # 2D Multiplayer Survival MMORPG
 
-License: Apache 2.0
-React
-Vite
-SpacetimeDB
-
 🎮 **[Watch gameplay demo](https://x.com/SeloSlav/status/2023523837724221851?s=20)**
 
 What started as an open source project for a generic 2D survival game is now a full-fledged game called **Broth & Bullets**. You can read more about it at [https://www.brothandbullets.com/blog](https://www.brothandbullets.com/blog).
