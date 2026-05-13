@@ -1,4 +1,4 @@
-Broth & Bullets - Alpha Launch
+![Broth & Bullets - Alpha Launch](https://www.brothandbullets.com/images/blog/systems.png)
 
 # 2D Multiplayer Survival MMORPG
 
