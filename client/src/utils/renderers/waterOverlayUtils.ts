@@ -35,6 +35,32 @@ const PX = 4; // shader texel size — bilinear-scaled up
 const FEATH = 14;
 const INV_F = 1.0 / FEATH;
 
+export interface WaterOverlayProfilerTimings {
+  grid: number;
+  shader: number;
+  mask: number;
+  composite: number;
+  draw: number;
+}
+
+function createEmptyWaterOverlayTimings(): WaterOverlayProfilerTimings {
+  return {
+    grid: 0,
+    shader: 0,
+    mask: 0,
+    composite: 0,
+    draw: 0,
+  };
+}
+
+function markProfiler(enabled: boolean): number {
+  return enabled ? performance.now() : 0;
+}
+
+function elapsedProfiler(start: number, end: number): number {
+  return start > 0 && end >= start ? end - start : 0;
+}
+
 // ============================================================================
 // WATER TILE SET
 // ============================================================================
@@ -192,8 +218,10 @@ function renderShader(
   cw: number, ch: number,
   tMs: number,
   wt: Map<string, any>,
-): void {
-  if (cw <= 0 || ch <= 0) return;
+  profilingEnabled: boolean,
+): WaterOverlayProfilerTimings {
+  const timings = createEmptyWaterOverlayTimings();
+  if (cw <= 0 || ch <= 0) return timings;
 
   // --- WebGL (GPU) path ---
   if (_webglCtx === undefined) {
@@ -204,25 +232,31 @@ function renderShader(
     } else {
       console.log('[WaterOverlay] WebGL unavailable, skipping overlay');
       setWaterOverlayContextLostCallback(null);
-      return;
+      return timings;
     }
   }
 
   if (_webglCtx) {
+    const gridStart = markProfiler(profilingEnabled);
     buildGrid(wt, camX, camY, cw, ch);
+    const gridEnd = markProfiler(profilingEnabled);
+    timings.grid = elapsedProfiler(gridStart, gridEnd);
     const grid = _tg!;
-    if (grid.length === 0) return;
+    if (grid.length === 0) return timings;
 
     // 1. GPU: render voronoi + caustics + ripple for entire viewport
+    const shaderStart = markProfiler(profilingEnabled);
     const ok = renderWaterOverlayWebGL(
       _webglCtx,
       camX, camY, cw, ch,
       tMs, _int,
     );
+    const shaderEnd = markProfiler(profilingEnabled);
+    timings.shader = elapsedProfiler(shaderStart, shaderEnd);
     if (!ok) {
       _webglCtx = undefined;
       clearWaterOverlayWebGL();
-      return;
+      return timings;
     }
     {
       // 2. CPU: build water alpha mask (cheap — grid lookup + feathering only)
@@ -230,14 +264,18 @@ function renderShader(
       const bh = Math.ceil(ch / PX);
       ensureGlComp(bw, bh);
 
+      const maskStart = markProfiler(profilingEnabled);
       const hasWater = buildWaterMask(
         _glMaskData!.data, bw, bh,
         camX, camY,
         grid, _tC, _tMx, _tMy,
       );
-      if (!hasWater) return;
+      const maskEnd = markProfiler(profilingEnabled);
+      timings.mask = elapsedProfiler(maskStart, maskEnd);
+      if (!hasWater) return timings;
 
       // 3. Composite: put mask on comp canvas, then draw voronoi through it
+      const compositeStart = markProfiler(profilingEnabled);
       const cctx = _glCompCtx!;
       cctx.globalCompositeOperation = 'source-over';
       cctx.clearRect(0, 0, bw, bh);
@@ -247,17 +285,24 @@ function renderShader(
       cctx.globalCompositeOperation = 'source-in';
       cctx.drawImage(_webglCtx.canvas, 0, 0, _webglCtx.canvas.width, _webglCtx.canvas.height, 0, 0, bw, bh);
       cctx.globalCompositeOperation = 'source-over';
+      const compositeEnd = markProfiler(profilingEnabled);
+      timings.composite = elapsedProfiler(compositeStart, compositeEnd);
 
       // 4. Draw composited result onto main canvas (scale up from PX resolution)
+      const drawStart = markProfiler(profilingEnabled);
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'low';
       ctx.drawImage(_glCompCanvas!, 0, 0, bw, bh, 0, 0, cw, ch);
       ctx.restore();
-      return;
+      const drawEnd = markProfiler(profilingEnabled);
+      timings.draw = elapsedProfiler(drawStart, drawEnd);
+      return timings;
     }
   }
+
+  return timings;
 }
 
 // ============================================================================
@@ -271,10 +316,11 @@ export function renderWaterOverlay(
   _deltaTime: number,
   worldTiles?: Map<string, any>,
   currentTime?: number,
-): void {
-  if (!worldTiles || worldTiles.size === 0) return;
-  renderShader(ctx, cameraX, cameraY, canvasWidth, canvasHeight,
-    currentTime ?? performance.now(), worldTiles);
+  profilingEnabled: boolean = false,
+): WaterOverlayProfilerTimings {
+  if (!worldTiles || worldTiles.size === 0) return createEmptyWaterOverlayTimings();
+  return renderShader(ctx, cameraX, cameraY, canvasWidth, canvasHeight,
+    currentTime ?? performance.now(), worldTiles, profilingEnabled);
 }
 
 export function clearWaterOverlay(): void {

@@ -26,6 +26,8 @@ interface TimingMarks {
   t1d?: number;
   t2: number;
   t2a?: number;
+  t2b?: number;
+  t2c?: number;
   t3: number;
   t3a: number;
   t3b?: number;
@@ -34,6 +36,19 @@ interface TimingMarks {
   t3e?: number;
   t3f?: number;
   t3g?: number;
+  worldCacheUpdateMs?: number;
+  worldBaseTilesMs?: number;
+  worldTransitionsMs?: number;
+  worldDoodadsMs?: number;
+  worldDoodadsTransitionChecksMs?: number;
+  worldDoodadsSpawnEvaluationMs?: number;
+  worldDoodadsBlurredDrawsMs?: number;
+  worldDoodadsOpaqueDrawsMs?: number;
+  waterOverlayGridMs?: number;
+  waterOverlayShaderMs?: number;
+  waterOverlayMaskMs?: number;
+  waterOverlayCompositeMs?: number;
+  waterOverlayDrawMs?: number;
 }
 
 interface RenderLateFramePassesOptions {

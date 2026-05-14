@@ -137,6 +137,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   const {
     predictedPosition,
     getCurrentPositionNow,
+    getReconciliationProfilerSnapshot,
     getCurrentFacingDirectionNow,
     getCurrentDodgeRollVisualNow,
     onDodgeRollStart,
@@ -413,6 +414,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     stepPredictedMovement,
     fixedSimulationEnabled,
     getCurrentPositionNow,
+    getReconciliationProfilerSnapshot,
     getCurrentFacingDirectionNow,
     localPlayer,
     isAutoWalking,

@@ -102,7 +102,7 @@ interface RenderEntityWorldPassesOptions {
   hasRepairHammer: boolean;
 }
 
-export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions): { t3: number; t3a: number } {
+export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions): { t2b: number; t2c: number; t3: number; t3a: number } {
   const {
     ctx,
     showFpsProfiler,
@@ -192,6 +192,8 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
     lastProjectileCollisionEntitiesRef = ySortedEntities;
     lastProjectileCollisionCircles = projectileCollisionCircles;
   }
+  const t2b = mark(showFpsProfiler);
+
   const flushBatch = (batch: any[]) => {
     if (batch.length > 0) {
       const localOptimisticJumpPressMsSnapshot = localOptimisticJumpPressMsRef.current;
@@ -408,6 +410,7 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
   }
   flushBatch(currentBatch);
   currentBatch.length = 0;
+  const t2c = mark(showFpsProfiler);
 
   for (const swimPlayer of swimmingPlayersForBottomHalf) {
     const swimPlayerId = swimPlayer.identity.toHexString();
@@ -476,5 +479,5 @@ export function renderEntityWorldPasses(options: RenderEntityWorldPassesOptions)
     });
   }
 
-  return { t3, t3a };
+  return { t2b, t2c, t3, t3a };
 }

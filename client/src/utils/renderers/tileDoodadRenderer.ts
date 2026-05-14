@@ -22,6 +22,43 @@ interface DoodadConfig {
 
 type TransitionInfoLookup = (logicalX: number, logicalY: number) => unknown[];
 
+export interface TileDoodadProfilerTimings {
+    transitionChecks: number;
+    spawnEvaluation: number;
+    blurredDraws: number;
+    opaqueDraws: number;
+}
+
+interface DoodadViewportCache {
+    canvas: HTMLCanvasElement;
+    startTileX: number;
+    endTileX: number;
+    startTileY: number;
+    endTileY: number;
+    isSnorkeling: boolean;
+    tileCacheVersion: number;
+    tileSize: number;
+}
+
+const DOODAD_CACHE_PADDING_TILES = 4;
+
+function createEmptyTileDoodadProfilerTimings(): TileDoodadProfilerTimings {
+    return {
+        transitionChecks: 0,
+        spawnEvaluation: 0,
+        blurredDraws: 0,
+        opaqueDraws: 0,
+    };
+}
+
+function markProfiler(enabled: boolean): number {
+    return enabled ? performance.now() : 0;
+}
+
+function elapsedProfiler(start: number, end: number): number {
+    return start > 0 && end >= start ? end - start : 0;
+}
+
 // ============================================================================
 // Tile Type to Doodad Configuration Mapping
 // ============================================================================
@@ -142,6 +179,10 @@ export class TileDoodadRenderer {
     
     // Track which folders have no images (to avoid repeated warnings)
     private emptyFolders: Set<string> = new Set();
+
+    // Static terrain doodads are ideal for a padded viewport cache: rebuild only
+    // when the visible tile window, snorkel mode, or tile data changes.
+    private viewportCache: DoodadViewportCache | null = null;
     
     constructor() {
         this.preloadAllImages();
@@ -261,6 +302,192 @@ export class TileDoodadRenderer {
         const hash = hashPosition(tileX, tileY, 67890);
         return hash % imageCount;
     }
+
+    private renderVisibleDoodads(
+        ctx: CanvasRenderingContext2D,
+        tileCache: Map<string, WorldTile>,
+        startTileX: number,
+        endTileX: number,
+        startTileY: number,
+        endTileY: number,
+        isSnorkeling: boolean,
+        transitionInfoLookup: TransitionInfoLookup | undefined,
+        profilingEnabled: boolean
+    ): TileDoodadProfilerTimings {
+        const timings = createEmptyTileDoodadProfilerTimings();
+        const { tileSize } = gameConfig;
+
+        for (let y = startTileY; y < endTileY; y++) {
+            for (let x = startTileX; x < endTileX; x++) {
+                const tileKey = `${x}_${y}`;
+                const tile = tileCache.get(tileKey);
+
+                if (!tile) continue;
+
+                const tileTypeName = tile.tileType?.tag;
+                if (!tileTypeName) continue;
+
+                const transitionStart = markProfiler(profilingEnabled);
+                const isTransition = this.isTransitionTile(x, y, tileCache, transitionInfoLookup);
+                const transitionEnd = markProfiler(profilingEnabled);
+                timings.transitionChecks += elapsedProfiler(transitionStart, transitionEnd);
+                if (isTransition) continue;
+
+                const evaluationStart = markProfiler(profilingEnabled);
+                const finishEvaluation = () => {
+                    const evaluationEnd = markProfiler(profilingEnabled);
+                    timings.spawnEvaluation += elapsedProfiler(evaluationStart, evaluationEnd);
+                };
+
+                const config = TILE_DOODAD_CONFIG[tileTypeName];
+                if (!config) {
+                    finishEvaluation();
+                    continue;
+                }
+
+                if (isSnorkeling && !config.isUnderwaterOnly) {
+                    finishEvaluation();
+                    continue;
+                }
+
+                const images = this.imageCache.get(config.folder);
+                if (!images || images.length === 0) {
+                    finishEvaluation();
+                    continue;
+                }
+
+                if (!this.shouldSpawnDoodad(x, y, config.spawnRate)) {
+                    finishEvaluation();
+                    continue;
+                }
+
+                const imageIndex = this.getDoodadIndex(x, y, images.length);
+                const image = images[imageIndex];
+
+                finishEvaluation();
+                if (!image || !image.complete || image.naturalHeight === 0) continue;
+
+                const pixelX = Math.floor(x * tileSize);
+                const pixelY = Math.floor(y * tileSize);
+                const doodadSize = tileSize;
+                const drawX = pixelX + (tileSize - doodadSize) / 2;
+                const drawY = pixelY + (tileSize - doodadSize) / 2;
+                const isUnderwaterDoodad = config.isUnderwaterOnly;
+
+                if (isUnderwaterDoodad && !isSnorkeling) {
+                    const blurredDrawStart = markProfiler(profilingEnabled);
+                    const savedFilter = ctx.filter;
+                    const savedAlpha = ctx.globalAlpha;
+                    ctx.filter = 'blur(2px)';
+                    ctx.globalAlpha = 0.65;
+                    ctx.drawImage(image, drawX, drawY, doodadSize, doodadSize);
+                    ctx.filter = savedFilter;
+                    ctx.globalAlpha = savedAlpha;
+                    const blurredDrawEnd = markProfiler(profilingEnabled);
+                    timings.blurredDraws += elapsedProfiler(blurredDrawStart, blurredDrawEnd);
+                } else {
+                    const opaqueDrawStart = markProfiler(profilingEnabled);
+                    ctx.drawImage(image, drawX, drawY, doodadSize, doodadSize);
+                    const opaqueDrawEnd = markProfiler(profilingEnabled);
+                    timings.opaqueDraws += elapsedProfiler(opaqueDrawStart, opaqueDrawEnd);
+                }
+            }
+        }
+
+        return timings;
+    }
+
+    private canReuseViewportCache(
+        startTileX: number,
+        endTileX: number,
+        startTileY: number,
+        endTileY: number,
+        isSnorkeling: boolean,
+        tileCacheVersion: number,
+        tileSize: number
+    ): boolean {
+        const cache = this.viewportCache;
+        if (!cache) {
+            return false;
+        }
+
+        return cache.tileCacheVersion === tileCacheVersion
+            && cache.isSnorkeling === isSnorkeling
+            && cache.tileSize === tileSize
+            && cache.startTileX <= startTileX
+            && cache.endTileX >= endTileX
+            && cache.startTileY <= startTileY
+            && cache.endTileY >= endTileY;
+    }
+
+    private buildViewportCache(
+        tileCache: Map<string, WorldTile>,
+        startTileX: number,
+        endTileX: number,
+        startTileY: number,
+        endTileY: number,
+        isSnorkeling: boolean,
+        transitionInfoLookup: TransitionInfoLookup | undefined,
+        profilingEnabled: boolean,
+        tileCacheVersion: number
+    ): TileDoodadProfilerTimings {
+        const timings = createEmptyTileDoodadProfilerTimings();
+        if (typeof document === 'undefined') {
+            return timings;
+        }
+
+        const { tileSize, worldWidth, worldHeight } = gameConfig;
+        const paddedStartTileX = Math.max(0, startTileX - DOODAD_CACHE_PADDING_TILES);
+        const paddedEndTileX = Math.min(worldWidth, endTileX + DOODAD_CACHE_PADDING_TILES);
+        const paddedStartTileY = Math.max(0, startTileY - DOODAD_CACHE_PADDING_TILES);
+        const paddedEndTileY = Math.min(worldHeight, endTileY + DOODAD_CACHE_PADDING_TILES);
+        const cacheWidth = Math.max(1, (paddedEndTileX - paddedStartTileX) * tileSize);
+        const cacheHeight = Math.max(1, (paddedEndTileY - paddedStartTileY) * tileSize);
+        const canvas = this.viewportCache?.canvas ?? document.createElement('canvas');
+        if (canvas.width !== cacheWidth) {
+            canvas.width = cacheWidth;
+        }
+        if (canvas.height !== cacheHeight) {
+            canvas.height = cacheHeight;
+        }
+
+        const cacheCtx = canvas.getContext('2d');
+        if (!cacheCtx) {
+            this.viewportCache = null;
+            return timings;
+        }
+
+        cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
+        cacheCtx.clearRect(0, 0, canvas.width, canvas.height);
+        cacheCtx.imageSmoothingEnabled = false;
+        cacheCtx.save();
+        cacheCtx.translate(-paddedStartTileX * tileSize, -paddedStartTileY * tileSize);
+        const rebuildTimings = this.renderVisibleDoodads(
+            cacheCtx,
+            tileCache,
+            paddedStartTileX,
+            paddedEndTileX,
+            paddedStartTileY,
+            paddedEndTileY,
+            isSnorkeling,
+            transitionInfoLookup,
+            profilingEnabled
+        );
+        cacheCtx.restore();
+
+        this.viewportCache = {
+            canvas,
+            startTileX: paddedStartTileX,
+            endTileX: paddedEndTileX,
+            startTileY: paddedStartTileY,
+            endTileY: paddedEndTileY,
+            isSnorkeling,
+            tileCacheVersion,
+            tileSize,
+        };
+
+        return rebuildTimings;
+    }
     
     /**
      * Render doodads for all visible tiles
@@ -281,73 +508,60 @@ export class TileDoodadRenderer {
         startTileY: number,
         endTileY: number,
         isSnorkeling: boolean = false,
-        transitionInfoLookup?: TransitionInfoLookup
-    ): void {
+        transitionInfoLookup?: TransitionInfoLookup,
+        profilingEnabled: boolean = false,
+        tileCacheVersion: number = 0
+    ): TileDoodadProfilerTimings {
         if (!this.isInitialized) {
-            return;
+            return createEmptyTileDoodadProfilerTimings();
         }
-        
         const { tileSize } = gameConfig;
-        
-        // Iterate through visible tiles
-        for (let y = startTileY; y < endTileY; y++) {
-            for (let x = startTileX; x < endTileX; x++) {
-                const tileKey = `${x}_${y}`;
-                const tile = tileCache.get(tileKey);
-                
-                if (!tile) continue;
-                
-                const tileTypeName = tile.tileType?.tag;
-                if (!tileTypeName) continue;
-                
-                // Never spawn doodads on transition tiles (boundaries between terrains)
-                if (this.isTransitionTile(x, y, tileCache, transitionInfoLookup)) continue;
+        const timings = this.canReuseViewportCache(
+            startTileX,
+            endTileX,
+            startTileY,
+            endTileY,
+            isSnorkeling,
+            tileCacheVersion,
+            tileSize
+        )
+            ? createEmptyTileDoodadProfilerTimings()
+            : this.buildViewportCache(
+                tileCache,
+                startTileX,
+                endTileX,
+                startTileY,
+                endTileY,
+                isSnorkeling,
+                transitionInfoLookup,
+                profilingEnabled,
+                tileCacheVersion
+            );
 
-                // Get doodad config for this tile type
-                const config = TILE_DOODAD_CONFIG[tileTypeName];
-                if (!config) continue;
-                
-                // When snorkeling: only show underwater doodads (land tiles appear as dark underwater view)
-                if (isSnorkeling && !config.isUnderwaterOnly) continue;
-                
-                // Get images for this folder
-                const images = this.imageCache.get(config.folder);
-                if (!images || images.length === 0) continue;
-                
-                // Check if doodad should spawn at this tile
-                if (!this.shouldSpawnDoodad(x, y, config.spawnRate)) continue;
-                
-                // Get which doodad image to use
-                const imageIndex = this.getDoodadIndex(x, y, images.length);
-                const image = images[imageIndex];
-                
-                if (!image || !image.complete || image.naturalHeight === 0) continue;
-                
-                // Calculate pixel position (center of tile)
-                const pixelX = Math.floor(x * tileSize);
-                const pixelY = Math.floor(y * tileSize);
-                
-                // Draw doodad centered on tile
-                const doodadSize = tileSize;
-                const drawX = pixelX + (tileSize - doodadSize) / 2;
-                const drawY = pixelY + (tileSize - doodadSize) / 2;
-                
-                const isUnderwaterDoodad = config.isUnderwaterOnly;
-                
-                if (isUnderwaterDoodad && !isSnorkeling) {
-                    // Viewing through water surface - subtle blur and transparency (like submerged fumaroles, living coral)
-                    const savedFilter = ctx.filter;
-                    const savedAlpha = ctx.globalAlpha;
-                    ctx.filter = 'blur(2px)';
-                    ctx.globalAlpha = 0.65;
-                    ctx.drawImage(image, drawX, drawY, doodadSize, doodadSize);
-                    ctx.filter = savedFilter;
-                    ctx.globalAlpha = savedAlpha;
-                } else {
-                    ctx.drawImage(image, drawX, drawY, doodadSize, doodadSize);
-                }
-            }
+        const cache = this.viewportCache;
+        if (!cache) {
+            return this.renderVisibleDoodads(
+                ctx,
+                tileCache,
+                startTileX,
+                endTileX,
+                startTileY,
+                endTileY,
+                isSnorkeling,
+                transitionInfoLookup,
+                profilingEnabled
+            );
         }
+
+        const cacheDrawStart = markProfiler(profilingEnabled);
+        ctx.drawImage(
+            cache.canvas,
+            cache.startTileX * tileSize,
+            cache.startTileY * tileSize
+        );
+        const cacheDrawEnd = markProfiler(profilingEnabled);
+        timings.opaqueDraws += elapsedProfiler(cacheDrawStart, cacheDrawEnd);
+        return timings;
     }
     
     /**

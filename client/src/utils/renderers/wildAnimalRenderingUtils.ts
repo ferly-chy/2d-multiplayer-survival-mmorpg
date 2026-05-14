@@ -674,10 +674,6 @@ function drawWildAnimalPlayerStyleUnderfootOval(
 const offscreenCanvas = document.createElement('canvas');
 const offscreenCtx = offscreenCanvas.getContext('2d');
 
-// --- Reusable Offscreen Canvas for Shadow Sprite Extraction (separate from tinting to avoid clobbering) ---
-const _animalShadowCanvas = document.createElement('canvas');
-const _animalShadowCtx = _animalShadowCanvas.getContext('2d');
-
 // Re-export for convenience
 export type { WildAnimal, AnimalSpecies, AnimalState };
 
@@ -1150,19 +1146,6 @@ export function renderWildAnimal({
             rows: 1,
         };
     }
-    let currentFrameWidth: number;
-    let currentFrameHeight: number;
-    if (useAnimated && animatedConfig) {
-        currentFrameWidth = animatedConfig.frameWidth;
-        currentFrameHeight = animatedConfig.frameHeight;
-    } else if (useFlying) {
-        currentFrameWidth = FLYING_FRAME_WIDTH;
-        currentFrameHeight = FLYING_FRAME_HEIGHT;
-    } else {
-        currentFrameWidth = FRAME_WIDTH;
-        currentFrameHeight = FRAME_HEIGHT;
-    }
-
     const props = getSpeciesRenderingProps(animal.species);
 
     let ageBasedSizeMultiplier = 1.0;
@@ -1329,57 +1312,18 @@ export function renderWildAnimal({
             ctx.filter = 'none';
 
         } else if (useSpriteSheet && animalImage) {
-            // GROUNDED SHADOW - Use sprite silhouette for dynamic shadow
-            // Reuse dedicated module-level canvas to avoid per-frame allocation (memory leak fix)
-            _animalShadowCanvas.width = currentFrameWidth;
-            _animalShadowCanvas.height = currentFrameHeight;
-
-            if (_animalShadowCtx) {
-                _animalShadowCtx.clearRect(0, 0, currentFrameWidth, currentFrameHeight);
-                // Use animated sprite rect for animated species, standard for others
-                const spriteRect = useAnimated
-                    ? getWildAnimalAnimatedSpriteSourceRect(
-                        animal.species,
-                        animal.facingDirection,
-                        calculatedAnimFrame,
-                        useDirectionalSplitSheet,
-                    )
-                    : getSpriteSourceRect(animal.facingDirection, useFlying);
-                _animalShadowCtx.drawImage(
-                    animalImage,
-                    spriteRect.sx, spriteRect.sy, spriteRect.sw, spriteRect.sh,
-                    0, 0, currentFrameWidth, currentFrameHeight
-                );
-
-                // Use the extracted frame for dynamic shadow
-                drawDynamicGroundShadow({
-                    ctx,
-                    entityImage: _animalShadowCanvas as unknown as HTMLImageElement,
-                    entityCenterX: renderPosX,
-                    entityBaseY: renderPosY + renderHeight / 2,
-                    imageDrawWidth: renderWidth,
-                    imageDrawHeight: renderHeight,
-                    cycleProgress: cycleProgress,
-                    baseShadowColor: '0,0,0',
-                    maxShadowAlpha: 0.6,
-                    maxStretchFactor: 3.0,
-                    minStretchFactor: 0.25,
-                    shadowBlur: 2,
-                    pivotYOffset: noonGroundShadowPivotYOffset,
-                    shakeOffsetX: shakeX,
-                    shakeOffsetY: shakeY,
-                });
-                drawWildAnimalPlayerStyleUnderfootOval(
-                    ctx,
-                    renderPosX,
-                    renderPosY,
-                    renderWidth,
-                    renderHeight,
-                    shakeX,
-                    shakeY,
-                    animal.facingDirection,
-                );
-            }
+            // Animated animals are common in herds. Avoid regenerating a per-frame silhouette
+            // shadow; the player-style oval is stable, cheap, and still grounds the sprite.
+            drawWildAnimalPlayerStyleUnderfootOval(
+                ctx,
+                renderPosX,
+                renderPosY,
+                renderWidth,
+                renderHeight,
+                shakeX,
+                shakeY,
+                animal.facingDirection,
+            );
         } else if (animalImage) {
             // Static image - use directly for shadow
             drawDynamicGroundShadow({
@@ -1497,7 +1441,7 @@ export function renderWildAnimal({
             });
         }
     } else {
-        // --- Prepare sprite on offscreen canvas (for white flash tinting and sprite sheet extraction) ---
+        // --- Prepare sprite on offscreen canvas only when white flash tinting is needed ---
         if (offscreenCtx && animalImage) {
             // Get sprite frame info for sprite sheets
             // Use animated sprite rect for animated species, standard for others
@@ -1513,29 +1457,7 @@ export function renderWildAnimal({
                 : null;
 
             if (useSpriteSheet && spriteRect) {
-                // Sprite sheet mode - extract and render specific frame
                 const { sx, sy, sw, sh } = spriteRect;
-
-                // Size offscreen canvas to single frame
-                offscreenCanvas.width = sw;
-                offscreenCanvas.height = sh;
-                offscreenCtx.clearRect(0, 0, sw, sh);
-
-                // Draw the specific frame from sprite sheet
-                offscreenCtx.drawImage(
-                    animalImage,
-                    sx, sy, sw, sh,  // Source rectangle (frame from sheet)
-                    0, 0, sw, sh      // Destination on offscreen canvas
-                );
-
-                // Apply white flash if needed
-                if (isFlashing) {
-                    const flashAlpha = getAnimalFlashAlpha(animal);
-                    offscreenCtx.globalCompositeOperation = 'source-in';
-                    offscreenCtx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
-                    offscreenCtx.fillRect(0, 0, sw, sh);
-                    offscreenCtx.globalCompositeOperation = 'source-over';
-                }
 
                 if (isCrabOnWater) {
                     drawUnderwaterShadowOnly(
@@ -1550,40 +1472,68 @@ export function renderWildAnimal({
                     );
                 }
 
-                // Draw the frame to main canvas (scaled to animal size)
-                ctx.drawImage(
-                    offscreenCanvas,
-                    renderX,
-                    renderY,
-                    renderWidth,
-                    renderHeight
-                );
-            } else {
-                // Static image mode (original behavior)
-                offscreenCanvas.width = animalImage.width;
-                offscreenCanvas.height = animalImage.height;
-                offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
-
-                // Draw the original image to the offscreen canvas
-                offscreenCtx.drawImage(animalImage, 0, 0);
-
-                // Apply white flash if needed
                 if (isFlashing) {
+                    offscreenCanvas.width = sw;
+                    offscreenCanvas.height = sh;
+                    offscreenCtx.clearRect(0, 0, sw, sh);
+                    offscreenCtx.drawImage(
+                        animalImage,
+                        sx, sy, sw, sh,
+                        0, 0, sw, sh,
+                    );
+
+                    const flashAlpha = getAnimalFlashAlpha(animal);
+                    offscreenCtx.globalCompositeOperation = 'source-in';
+                    offscreenCtx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+                    offscreenCtx.fillRect(0, 0, sw, sh);
+                    offscreenCtx.globalCompositeOperation = 'source-over';
+
+                    ctx.drawImage(
+                        offscreenCanvas,
+                        renderX,
+                        renderY,
+                        renderWidth,
+                        renderHeight
+                    );
+                } else {
+                    ctx.drawImage(
+                        animalImage,
+                        sx, sy, sw, sh,
+                        renderX,
+                        renderY,
+                        renderWidth,
+                        renderHeight
+                    );
+                }
+            } else {
+                if (isFlashing) {
+                    offscreenCanvas.width = animalImage.width;
+                    offscreenCanvas.height = animalImage.height;
+                    offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+                    offscreenCtx.drawImage(animalImage, 0, 0);
+
                     const flashAlpha = getAnimalFlashAlpha(animal);
                     offscreenCtx.globalCompositeOperation = 'source-in';
                     offscreenCtx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
                     offscreenCtx.fillRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
                     offscreenCtx.globalCompositeOperation = 'source-over';
-                }
 
-                // Draw the (possibly tinted) offscreen canvas to the main canvas
-                ctx.drawImage(
-                    offscreenCanvas,
-                    renderX,
-                    renderY,
-                    renderWidth,
-                    renderHeight
-                );
+                    ctx.drawImage(
+                        offscreenCanvas,
+                        renderX,
+                        renderY,
+                        renderWidth,
+                        renderHeight
+                    );
+                } else {
+                    ctx.drawImage(
+                        animalImage,
+                        renderX,
+                        renderY,
+                        renderWidth,
+                        renderHeight
+                    );
+                }
             }
         } else {
             // Fallback: draw image directly without flash effect

@@ -154,7 +154,7 @@ export function renderWorldPreparationPasses({
   setShelterClippingData(shelterClippingData);
   const isSnorkeling = localPlayer?.isSnorkeling ?? false;
 
-  renderWorldBackground(
+  const worldBackgroundTimings = renderWorldBackground(
     ctx,
     cameraOffsetX,
     cameraOffsetY,
@@ -163,6 +163,7 @@ export function renderWorldPreparationPasses({
     visibleWorldTiles,
     showAutotileDebug,
     isSnorkeling,
+    showFpsProfiler,
   );
   const t0a = mark(showFpsProfiler);
 
@@ -444,7 +445,7 @@ export function renderWorldPreparationPasses({
   const t1c = mark(showFpsProfiler);
 
   if (!isSnorkeling && waterSurfaceEffectsEnabled) {
-    renderWaterOverlay(
+    const waterOverlayTimings = renderWaterOverlay(
       ctx,
       -cameraOffsetX,
       -cameraOffsetY,
@@ -452,13 +453,63 @@ export function renderWorldPreparationPasses({
       canvasHeight,
       deltaTimeMs / 1000,
       visibleWorldTiles,
+      undefined,
+      showFpsProfiler,
     );
     const t1d = mark(showFpsProfiler);
     renderShorelineOverlay(ctx, cameraOffsetX, cameraOffsetY, canvasWidth, canvasHeight, isSnorkeling);
     const t2 = mark(showFpsProfiler);
-    return { t0, t0a, t1, t1a, t1b, t1c, t1d, t2, isPlacementTooFarValue, isSnorkeling };
+    return {
+      t0,
+      t0a,
+      t1,
+      t1a,
+      t1b,
+      t1c,
+      t1d,
+      t2,
+      worldCacheUpdateMs: worldBackgroundTimings.cacheUpdate,
+      worldBaseTilesMs: worldBackgroundTimings.baseTiles,
+      worldTransitionsMs: worldBackgroundTimings.transitions,
+      worldDoodadsMs: worldBackgroundTimings.doodads,
+      worldDoodadsTransitionChecksMs: worldBackgroundTimings.doodadsTransitionChecks,
+      worldDoodadsSpawnEvaluationMs: worldBackgroundTimings.doodadsSpawnEvaluation,
+      worldDoodadsBlurredDrawsMs: worldBackgroundTimings.doodadsBlurredDraws,
+      worldDoodadsOpaqueDrawsMs: worldBackgroundTimings.doodadsOpaqueDraws,
+      waterOverlayGridMs: waterOverlayTimings.grid,
+      waterOverlayShaderMs: waterOverlayTimings.shader,
+      waterOverlayMaskMs: waterOverlayTimings.mask,
+      waterOverlayCompositeMs: waterOverlayTimings.composite,
+      waterOverlayDrawMs: waterOverlayTimings.draw,
+      isPlacementTooFarValue,
+      isSnorkeling,
+    };
   }
   const t2 = mark(showFpsProfiler);
 
-  return { t0, t0a, t1, t1a, t1b, t1c, t1d: t1c, t2, isPlacementTooFarValue, isSnorkeling };
+  return {
+    t0,
+    t0a,
+    t1,
+    t1a,
+    t1b,
+    t1c,
+    t1d: t1c,
+    t2,
+    worldCacheUpdateMs: worldBackgroundTimings.cacheUpdate,
+    worldBaseTilesMs: worldBackgroundTimings.baseTiles,
+    worldTransitionsMs: worldBackgroundTimings.transitions,
+    worldDoodadsMs: worldBackgroundTimings.doodads,
+    worldDoodadsTransitionChecksMs: worldBackgroundTimings.doodadsTransitionChecks,
+    worldDoodadsSpawnEvaluationMs: worldBackgroundTimings.doodadsSpawnEvaluation,
+    worldDoodadsBlurredDrawsMs: worldBackgroundTimings.doodadsBlurredDraws,
+    worldDoodadsOpaqueDrawsMs: worldBackgroundTimings.doodadsOpaqueDraws,
+    waterOverlayGridMs: 0,
+    waterOverlayShaderMs: 0,
+    waterOverlayMaskMs: 0,
+    waterOverlayCompositeMs: 0,
+    waterOverlayDrawMs: 0,
+    isPlacementTooFarValue,
+    isSnorkeling,
+  };
 }

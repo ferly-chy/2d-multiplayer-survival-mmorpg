@@ -7,7 +7,8 @@ import type { GameLoopMetrics } from '../../hooks/useGameLoop';
 import type { FrameInfo } from '../../hooks/useGameLoop';
 import type { Projectile as SpacetimeDBProjectile } from '../../generated/types';
 import type { CampfireFireGpuEmitter } from '../../utils/renderers/campfireFireOverlayUtils';
-import { addCameraSample } from '../../utils/profilerRecording';
+import { addCameraSample, isProfilerRecording } from '../../utils/profilerRecording';
+import type { ReconciliationProfilerSnapshot } from './movementPredictionRuntime';
 
 export interface GameCanvasRuntimeRenderContext {
   [key: string]: unknown;
@@ -33,6 +34,7 @@ export interface GameCanvasRuntimeFrameBindings {
   stepPredictedMovement?: (dtMs: number) => void;
   fixedSimulationEnabled: boolean;
   getCurrentPositionNow?: () => { x: number; y: number } | null;
+  getReconciliationProfilerSnapshot?: () => ReconciliationProfilerSnapshot | null;
   predictedPositionRef: MutableRefObject<{ x: number; y: number } | null>;
   getCurrentFacingDirectionNow?: () => string | undefined;
   localFacingDirectionRef: MutableRefObject<string | undefined>;
@@ -147,6 +149,7 @@ export class GameCanvasRuntimeHost {
   private controllerSnapshot: GameCanvasRuntimeControllerSnapshot | null = null;
   private particleSnapshot: GameCanvasRuntimeParticleSnapshot | null = null;
   private ambientEffectsSnapshot: GameCanvasRuntimeAmbientEffectsSnapshot | null = null;
+  private wasProfilerRecording = false;
   private cameraProfilerState: {
     sampleIndex: number;
     lastSampleTime: number;
@@ -157,6 +160,7 @@ export class GameCanvasRuntimeHost {
     lastCameraDx: number;
     lastCameraDy: number;
     lastPredictionError: number;
+    lastReconciliationEventId: number;
   } | null = null;
   private readonly controllerRefsState: GameCanvasRuntimeControllerRefs = {
     worldMousePosRef: { current: { x: 0, y: 0 } },
@@ -329,6 +333,17 @@ export class GameCanvasRuntimeHost {
   }
 
   private recordCameraProfilerSample(bindings: GameCanvasRuntimeFrameBindings): void {
+    const recording = isProfilerRecording();
+    if (!recording) {
+      this.wasProfilerRecording = false;
+      this.cameraProfilerState = null;
+      return;
+    }
+    if (!this.wasProfilerRecording) {
+      this.wasProfilerRecording = true;
+      this.cameraProfilerState = null;
+    }
+
     const predictedPosition = bindings.predictedPositionRef.current;
     const localPlayer = bindings.localPlayer;
     if (!predictedPosition || !localPlayer) {
@@ -346,6 +361,9 @@ export class GameCanvasRuntimeHost {
     const predictionErrorX = predictedPosition.x - localPlayer.positionX;
     const predictionErrorY = predictedPosition.y - localPlayer.positionY;
     const predictionError = Math.hypot(predictionErrorX, predictionErrorY);
+    const reconciliation = bindings.getReconciliationProfilerSnapshot?.() ?? null;
+    const reconciliationChanged = reconciliation != null
+      && reconciliation.eventId !== (previous?.lastReconciliationEventId ?? 0);
 
     addCameraSample({
       sampleIndex: previous ? previous.sampleIndex + 1 : 0,
@@ -368,6 +386,11 @@ export class GameCanvasRuntimeHost {
       predictedMinusServerY: predictionErrorY,
       predictedMinusServerDist: predictionError,
       correctionDelta: previous ? Math.abs(predictionError - previous.lastPredictionError) : 0,
+      reconciliationChanged: reconciliationChanged ? 1 : 0,
+      reconciliationEventType: reconciliation?.eventType ?? 'none',
+      reconciliationEventAgeMs: reconciliation?.eventAgeMs ?? -1,
+      reconciliationErrorDist: reconciliation?.errorDist ?? 0,
+      reconciliationSequenceAdvance: reconciliation?.sequenceAdvance ?? 0,
       tileX: Math.floor(predictedPosition.x / gameConfig.tileSize),
       tileY: Math.floor(predictedPosition.y / gameConfig.tileSize),
     });
@@ -382,6 +405,7 @@ export class GameCanvasRuntimeHost {
       lastCameraDx: cameraDx,
       lastCameraDy: cameraDy,
       lastPredictionError: predictionError,
+      lastReconciliationEventId: reconciliation?.eventId ?? 0,
     };
   }
 }

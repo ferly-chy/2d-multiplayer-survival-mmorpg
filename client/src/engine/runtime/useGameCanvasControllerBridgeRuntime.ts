@@ -11,6 +11,7 @@ interface UseGameCanvasControllerBridgeRuntimeOptions {
   stepPredictedMovement?: (dtMs: number) => void;
   fixedSimulationEnabled: boolean;
   getCurrentPositionNow?: () => { x: number; y: number } | null;
+  getReconciliationProfilerSnapshot?: () => any;
   getCurrentFacingDirectionNow?: () => string | undefined;
   localPlayer: { positionX: number; positionY: number } | null | undefined;
   isAutoWalking: boolean;
@@ -29,6 +30,7 @@ export function useGameCanvasControllerBridgeRuntime({
   stepPredictedMovement,
   fixedSimulationEnabled,
   getCurrentPositionNow,
+  getReconciliationProfilerSnapshot,
   getCurrentFacingDirectionNow,
   localPlayer,
   isAutoWalking,
@@ -42,6 +44,7 @@ export function useGameCanvasControllerBridgeRuntime({
     stepPredictedMovement,
     fixedSimulationEnabled,
     getCurrentPositionNow,
+    getReconciliationProfilerSnapshot,
     predictedPositionRef: controllerRuntime.predictedPositionRef,
     getCurrentFacingDirectionNow,
     localFacingDirectionRef: controllerRuntime.localFacingDirectionRef,
@@ -59,6 +62,7 @@ export function useGameCanvasControllerBridgeRuntime({
     stepPredictedMovement,
     fixedSimulationEnabled,
     getCurrentPositionNow,
+    getReconciliationProfilerSnapshot,
     getCurrentFacingDirectionNow,
     localPlayer,
     isAutoWalking,

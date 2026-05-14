@@ -58,6 +58,7 @@ const GameplayRuntimeBridge: React.FC<GameplayRuntimeBridgeProps> = (props) => {
                     value={{
                         predictedPosition: predictedMovement.predictedPosition,
                         getCurrentPositionNow: predictedMovement.getCurrentPositionNow,
+                        getReconciliationProfilerSnapshot: predictedMovement.getReconciliationProfilerSnapshot,
                         getCurrentFacingDirectionNow: predictedMovement.getCurrentFacingDirectionNow,
                         getCurrentDodgeRollVisualNow: predictedMovement.getCurrentDodgeRollVisualNow,
                         onDodgeRollStart: predictedMovement.triggerOptimisticDodgeRoll,

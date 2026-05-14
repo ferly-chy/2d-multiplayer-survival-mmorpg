@@ -68,7 +68,7 @@ export function resolveTileAsset(fileName: string): string {
 
 // Import all existing autotile images (reusing the 4x5 format)
 const grassBeachAutotile = resolveTileAsset('tileset_grass_beach_autotile.png');
-const beachSeaAutotile = resolveTileAsset('tileset_beach_sea_autotile.png');
+const beachSeaAutotile = '__procedural_beach_sea__';
 const seaDeepseaAutotile = resolveTileAsset('tileset_sea_deepsea_autotile.png');
 const grassDirtAutotile = resolveTileAsset('tileset_grass_dirt_autotile.png');
 const dirtBeachAutotile = resolveTileAsset('tileset_dirt_beach_autotile.png');
@@ -668,7 +668,6 @@ export function getDualGridTileInfoMultiLayer(
         const lowerTerrain = uniqueTerrains[i];      // Lower priority = underneath
         const higherTerrain = uniqueTerrains[i + 1]; // Higher priority = on top
         const lowerPriority = getTerrainPriority(lowerTerrain);
-        const higherPriority = getTerrainPriority(higherTerrain);
         
         // Check if any corner has terrain LOWER than this layer's lowerTerrain
         // If so, we need corner clipping for this layer

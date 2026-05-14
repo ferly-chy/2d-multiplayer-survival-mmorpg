@@ -16,10 +16,35 @@
  *    grid remains visible while chunk data streams in.
  */
 
-import { ProceduralWorldRenderer } from './proceduralWorldRenderer';
+import { ProceduralWorldRenderer, type ProceduralWorldProfilerTimings } from './proceduralWorldRenderer';
 
 // Global instance - cached for performance
 let globalProceduralRenderer: ProceduralWorldRenderer | null = null;
+
+export interface WorldBackgroundProfilerTimings extends ProceduralWorldProfilerTimings {
+    cacheUpdate: number;
+}
+
+function createEmptyWorldBackgroundTimings(): WorldBackgroundProfilerTimings {
+    return {
+        cacheUpdate: 0,
+        baseTiles: 0,
+        transitions: 0,
+        doodads: 0,
+        doodadsTransitionChecks: 0,
+        doodadsSpawnEvaluation: 0,
+        doodadsBlurredDraws: 0,
+        doodadsOpaqueDraws: 0,
+    };
+}
+
+function markProfiler(enabled: boolean): number {
+    return enabled ? performance.now() : 0;
+}
+
+function elapsedProfiler(start: number, end: number): number {
+    return start > 0 && end >= start ? end - start : 0;
+}
 
 /**
  * Renders the tiled world background onto the canvas.
@@ -35,8 +60,10 @@ export function renderWorldBackground(
     canvasHeight: number,
     worldTiles?: Map<string, any>,
     showDebugOverlay: boolean = false,
-    isSnorkeling: boolean = false
-): void {
+    isSnorkeling: boolean = false,
+    profilingEnabled: boolean = false
+): WorldBackgroundProfilerTimings {
+    const timings = createEmptyWorldBackgroundTimings();
     // Enable pixel-perfect rendering
     ctx.imageSmoothingEnabled = false;
     if ('webkitImageSmoothingEnabled' in ctx) {
@@ -53,7 +80,7 @@ export function renderWorldBackground(
     if (!worldTiles || worldTiles.size === 0) {
         // Keep previously drawn background (cyberpunk grid) visible while waiting
         // for chunk/tile data instead of painting default grass.
-        return;
+        return timings;
     }
 
     // Initialize renderer if needed
@@ -62,10 +89,13 @@ export function renderWorldBackground(
     }
     
     // Update the tile cache
+    const cacheStart = markProfiler(profilingEnabled);
     globalProceduralRenderer.updateTileCache(worldTiles);
+    const cacheEnd = markProfiler(profilingEnabled);
+    timings.cacheUpdate = elapsedProfiler(cacheStart, cacheEnd);
     
     // Render the procedural world (with underwater mode when snorkeling)
-    globalProceduralRenderer.renderProceduralWorld(
+    const proceduralTimings = globalProceduralRenderer.renderProceduralWorld(
         ctx, 
         cameraOffsetX, 
         cameraOffsetY, 
@@ -73,8 +103,18 @@ export function renderWorldBackground(
         canvasHeight, 
         16.67,
         showDebugOverlay,
-        isSnorkeling
+        isSnorkeling,
+        profilingEnabled
     );
+    timings.baseTiles = proceduralTimings.baseTiles;
+    timings.transitions = proceduralTimings.transitions;
+    timings.doodads = proceduralTimings.doodads;
+    timings.doodadsTransitionChecks = proceduralTimings.doodadsTransitionChecks;
+    timings.doodadsSpawnEvaluation = proceduralTimings.doodadsSpawnEvaluation;
+    timings.doodadsBlurredDraws = proceduralTimings.doodadsBlurredDraws;
+    timings.doodadsOpaqueDraws = proceduralTimings.doodadsOpaqueDraws;
+
+    return timings;
 }
 
 /**

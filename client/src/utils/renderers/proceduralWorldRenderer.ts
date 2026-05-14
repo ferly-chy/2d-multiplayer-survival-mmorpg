@@ -24,23 +24,30 @@ import {
     getDualGridTileInfoMultiLayer, 
     getAllTransitionTilesets, 
     resolveTileAsset,
-    TILE_SIZE as AUTOTILE_SIZE,
-    describeDualGridIndex,
     DualGridTileInfo,
     DUAL_GRID_LOOKUP
 } from '../dualGridAutotile';
 import { tileDoodadRenderer } from './tileDoodadRenderer';
 import {
-    initShorelineMask,
     initHotSpringShorelineMask,
     initGrassHotSpringShorelineMask,
-    isShorelineMaskReady,
     isHotSpringShorelineMaskReady,
     isGrassHotSpringShorelineMaskReady,
     renderShorelineOverlay,
     type ShorelineMaskVariant,
 } from './shorelineOverlayUtils.ts';
 import { isWaterTileTag } from '../tileTypeGuards';
+import { getProceduralBlendCornerWeights } from './dualGridCornerBlend';
+import {
+    getProceduralBlendConfig,
+    getProceduralTransitionKeys,
+} from './dualGridProceduralBlendRegistry';
+import {
+    initProceduralDualGridBlendWebGL,
+    renderProceduralBeachSeaShorelineOverlay,
+    renderProceduralDualGridLayer,
+    renderProceduralDualGridLayerFallback,
+} from './dualGridProceduralBlendWebGL';
 
 // Helper to get tile base texture path from tile type name
 function getTileBaseTexturePath(tileTypeName: string): string {
@@ -69,6 +76,42 @@ interface TileCache {
     tiles: Map<string, WorldTile>;
     images: Map<string, HTMLImageElement>;
     lastUpdate: number;
+}
+
+type VendorImageSmoothingContext = CanvasRenderingContext2D & {
+    webkitImageSmoothingEnabled?: boolean;
+    mozImageSmoothingEnabled?: boolean;
+    msImageSmoothingEnabled?: boolean;
+};
+
+export interface ProceduralWorldProfilerTimings {
+    baseTiles: number;
+    transitions: number;
+    doodads: number;
+    doodadsTransitionChecks: number;
+    doodadsSpawnEvaluation: number;
+    doodadsBlurredDraws: number;
+    doodadsOpaqueDraws: number;
+}
+
+function createEmptyProceduralWorldTimings(): ProceduralWorldProfilerTimings {
+    return {
+        baseTiles: 0,
+        transitions: 0,
+        doodads: 0,
+        doodadsTransitionChecks: 0,
+        doodadsSpawnEvaluation: 0,
+        doodadsBlurredDraws: 0,
+        doodadsOpaqueDraws: 0,
+    };
+}
+
+function markProfiler(enabled: boolean): number {
+    return enabled ? performance.now() : 0;
+}
+
+function elapsedProfiler(start: number, end: number): number {
+    return start > 0 && end >= start ? end - start : 0;
 }
 
 export class ProceduralWorldRenderer {
@@ -109,7 +152,11 @@ export class ProceduralWorldRenderer {
 
         // Load all transition tilesets from Dual Grid config
         const transitionTilesets = getAllTransitionTilesets();
+        const proceduralTransitionKeys = getProceduralTransitionKeys();
         transitionTilesets.forEach((tilesetPath, transitionKey) => {
+            if (proceduralTransitionKeys.has(transitionKey)) {
+                return;
+            }
             const cacheKey = `transition_${transitionKey}`;
             promises.push(this.loadImage(tilesetPath, cacheKey).catch(() => {
                 // Silently ignore missing autotile files - they'll be added later
@@ -119,13 +166,11 @@ export class ProceduralWorldRenderer {
         try {
             await Promise.all(promises);
             this.isInitialized = true;
-            const beachSeaImg = this.tileCache.images.get('transition_Beach_Sea');
             const beachHotSpringWaterImg = this.tileCache.images.get('transition_Beach_HotSpringWater');
             const grassBeachImg = this.tileCache.images.get('transition_Grass_Beach');
-            initShorelineMask(beachSeaImg).catch(() => {});
             initHotSpringShorelineMask(beachHotSpringWaterImg).catch(() => {});
             initGrassHotSpringShorelineMask(grassBeachImg).catch(() => {});
-        } catch (error) {
+        } catch {
             // Silently handle errors - missing assets will show fallback colors
         }
     }
@@ -235,25 +280,28 @@ export class ProceduralWorldRenderer {
         canvasHeight: number,
         deltaTime: number,
         showDebugOverlay: boolean = false,
-        isSnorkeling: boolean = false
-    ) {
+        isSnorkeling: boolean = false,
+        profilingEnabled: boolean = false
+    ): ProceduralWorldProfilerTimings {
+        const timings = createEmptyProceduralWorldTimings();
         if (!this.isInitialized) {
             // Fallback color - use underwater dark blue if snorkeling
             ctx.fillStyle = isSnorkeling ? '#0a3d4f' : '#8FBC8F';
             ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-            return;
+            return timings;
         }
         
         // Enable pixel-perfect rendering for crisp autotiles
         ctx.imageSmoothingEnabled = false;
-        if ('webkitImageSmoothingEnabled' in ctx) {
-            (ctx as any).webkitImageSmoothingEnabled = false;
+        const smoothingCtx = ctx as VendorImageSmoothingContext;
+        if ('webkitImageSmoothingEnabled' in smoothingCtx) {
+            smoothingCtx.webkitImageSmoothingEnabled = false;
         }
-        if ('mozImageSmoothingEnabled' in ctx) {
-            (ctx as any).mozImageSmoothingEnabled = false;
+        if ('mozImageSmoothingEnabled' in smoothingCtx) {
+            smoothingCtx.mozImageSmoothingEnabled = false;
         }
-        if ('msImageSmoothingEnabled' in ctx) {
-            (ctx as any).msImageSmoothingEnabled = false;
+        if ('msImageSmoothingEnabled' in smoothingCtx) {
+            smoothingCtx.msImageSmoothingEnabled = false;
         }
         
         this.animationTime += deltaTime;
@@ -272,11 +320,14 @@ export class ProceduralWorldRenderer {
         const endTileY = Math.min(gameConfig.worldHeight, Math.ceil(viewMaxY / tileSize));
 
         // PASS 1: Render base textures at exact tile positions
+        const baseStart = markProfiler(profilingEnabled);
         for (let y = startTileY; y < endTileY; y++) {
             for (let x = startTileX; x < endTileX; x++) {
                 this.renderBaseTile(ctx, x, y, tileSize, showDebugOverlay, isSnorkeling);
             }
         }
+        const baseEnd = markProfiler(profilingEnabled);
+        timings.baseTiles = elapsedProfiler(baseStart, baseEnd);
         
         // PASS 2: Render Dual Grid transitions at half-tile offset positions
         // Start one tile earlier to catch transitions that overlap visible area
@@ -285,6 +336,7 @@ export class ProceduralWorldRenderer {
         const dualEndX = Math.min(gameConfig.worldWidth - 1, endTileX);
         const dualEndY = Math.min(gameConfig.worldHeight - 1, endTileY);
         
+        const transitionsStart = markProfiler(profilingEnabled);
         if (isSnorkeling) {
             // When snorkeling, render:
             // 1) Underwater darkness ↔ sea transitions
@@ -303,10 +355,13 @@ export class ProceduralWorldRenderer {
                 }
             }
         }
+        const transitionsEnd = markProfiler(profilingEnabled);
+        timings.transitions = elapsedProfiler(transitionsStart, transitionsEnd);
         
         // PASS 3: Render tile doodads (decorative objects on tile centers)
         // Doodads are deterministically placed based on tile position and type
-        tileDoodadRenderer.renderDoodads(
+        const doodadsStart = markProfiler(profilingEnabled);
+        const doodadTimings = tileDoodadRenderer.renderDoodads(
             ctx,
             this.tileCache.tiles,
             startTileX,
@@ -314,8 +369,18 @@ export class ProceduralWorldRenderer {
             startTileY,
             endTileY,
             isSnorkeling,
-            (logicalX, logicalY) => this.getTransitionInfo(logicalX, logicalY)
+            (logicalX, logicalY) => this.getTransitionInfo(logicalX, logicalY),
+            profilingEnabled,
+            this.tileCache.lastUpdate
         );
+        const doodadsEnd = markProfiler(profilingEnabled);
+        timings.doodads = elapsedProfiler(doodadsStart, doodadsEnd);
+        timings.doodadsTransitionChecks = doodadTimings.transitionChecks;
+        timings.doodadsSpawnEvaluation = doodadTimings.spawnEvaluation;
+        timings.doodadsBlurredDraws = doodadTimings.blurredDraws;
+        timings.doodadsOpaqueDraws = doodadTimings.opaqueDraws;
+
+        return timings;
     }
 
     /**
@@ -331,13 +396,6 @@ export class ProceduralWorldRenderer {
         isSnorkeling: boolean = false
     ): void {
         if (isSnorkeling) return;
-        if (
-            !isShorelineMaskReady() &&
-            !isHotSpringShorelineMaskReady() &&
-            !isGrassHotSpringShorelineMaskReady()
-        ) {
-            return;
-        }
 
         const { tileSize } = gameConfig;
         const currentTimeMs = performance.now();
@@ -389,7 +447,6 @@ export class ProceduralWorldRenderer {
             else if (isGrassHotSpring) maskVariant = 'hotSpringGrass';
             if (!maskVariant) continue;
 
-            if (maskVariant === 'beachSea' && !isShorelineMaskReady()) continue;
             if (maskVariant === 'hotSpringBeach' && !isHotSpringShorelineMaskReady()) continue;
             if (maskVariant === 'hotSpringGrass' && !isGrassHotSpringShorelineMaskReady()) continue;
 
@@ -416,6 +473,46 @@ export class ProceduralWorldRenderer {
                     }
                 }
                 ctx.clip();
+            }
+
+            if (maskVariant === 'beachSea') {
+                const proceduralConfig = getProceduralBlendConfig(tileInfo);
+                const cornerWeightsB =
+                    proceduralConfig ? getProceduralBlendCornerWeights(tileInfo, proceduralConfig) : null;
+                const imageA =
+                    proceduralConfig ? this.tileCache.images.get(proceduralConfig.textureKeyA) ?? null : null;
+                const imageB =
+                    proceduralConfig ? this.tileCache.images.get(proceduralConfig.textureKeyB) ?? null : null;
+
+                if (
+                    proceduralConfig &&
+                    cornerWeightsB &&
+                    imageA &&
+                    imageB &&
+                    imageA.complete &&
+                    imageB.complete &&
+                    imageA.naturalHeight !== 0 &&
+                    imageB.naturalHeight !== 0
+                ) {
+                    renderProceduralBeachSeaShorelineOverlay({
+                        ctx,
+                        imageA,
+                        imageB,
+                        cornerWeightsB,
+                        worldOriginX: destX,
+                        worldOriginY: destY,
+                        destX,
+                        destY,
+                        destSize: pixelSize,
+                        tileSize,
+                        currentTimeMs,
+                    });
+                    ctx.restore();
+                    continue;
+                }
+
+                ctx.restore();
+                continue;
             }
 
             renderShorelineOverlay(
@@ -634,9 +731,111 @@ export class ProceduralWorldRenderer {
         const pixelX = Math.floor((logicalX + 0.5) * tileSize);
         const pixelY = Math.floor((logicalY + 0.5) * tileSize);
         const pixelSize = Math.floor(tileSize) + 1;
+        const destX = Math.floor(pixelX - pixelSize / 2);
+        const destY = Math.floor(pixelY - pixelSize / 2);
+        const halfSize = Math.floor(pixelSize / 2);
         
         // Render each transition layer from bottom to top
         for (const tileInfo of transitions) {
+            const proceduralConfig = getProceduralBlendConfig(tileInfo);
+            if (proceduralConfig) {
+                const imageA = this.tileCache.images.get(proceduralConfig.textureKeyA);
+                const imageB = this.tileCache.images.get(proceduralConfig.textureKeyB);
+                const cornerWeightsB = getProceduralBlendCornerWeights(tileInfo, proceduralConfig);
+                const webglCtx = initProceduralDualGridBlendWebGL();
+
+                if (
+                    imageA &&
+                    imageB &&
+                    imageA.complete &&
+                    imageB.complete &&
+                    imageA.naturalHeight !== 0 &&
+                    imageB.naturalHeight !== 0 &&
+                    cornerWeightsB
+                ) {
+                    const proceduralCanvas =
+                        (webglCtx
+                            ? renderProceduralDualGridLayer(webglCtx, {
+                                imageA,
+                                imageB,
+                                cornerWeightsB,
+                                worldOriginX: destX,
+                                worldOriginY: destY,
+                                pixelSize,
+                                tileSize,
+                            })
+                            : null) ??
+                        renderProceduralDualGridLayerFallback({
+                            imageA,
+                            imageB,
+                            cornerWeightsB,
+                            worldOriginX: destX,
+                            worldOriginY: destY,
+                            pixelSize,
+                            tileSize,
+                        });
+
+                    if (proceduralCanvas) {
+                        const { clipCorners, flipHorizontal, flipVertical } = tileInfo;
+                        const needsTransform = flipHorizontal || flipVertical;
+
+                        ctx.save();
+
+                        if (needsTransform) {
+                            const centerX = destX + pixelSize / 2;
+                            const centerY = destY + pixelSize / 2;
+
+                            ctx.translate(centerX, centerY);
+                            if (flipHorizontal) {
+                                ctx.scale(-1, 1);
+                            }
+                            if (flipVertical) {
+                                ctx.scale(1, -1);
+                            }
+                            ctx.translate(-centerX, -centerY);
+                        }
+
+                        if (clipCorners && clipCorners.length > 0) {
+                            ctx.beginPath();
+                            for (const corner of clipCorners) {
+                                switch (corner) {
+                                    case 'TL':
+                                        ctx.rect(destX, destY, halfSize, halfSize);
+                                        break;
+                                    case 'TR':
+                                        ctx.rect(destX + halfSize, destY, halfSize, halfSize);
+                                        break;
+                                    case 'BL':
+                                        ctx.rect(destX, destY + halfSize, halfSize, halfSize);
+                                        break;
+                                    case 'BR':
+                                        ctx.rect(destX + halfSize, destY + halfSize, halfSize, halfSize);
+                                        break;
+                                }
+                            }
+                            ctx.clip();
+                        }
+
+                        ctx.drawImage(
+                            proceduralCanvas,
+                            0,
+                            0,
+                            proceduralCanvas.width,
+                            proceduralCanvas.height,
+                            destX,
+                            destY,
+                            pixelSize,
+                            pixelSize
+                        );
+
+                        ctx.restore();
+                        continue;
+                    }
+                }
+
+                continue;
+            }
+
             // Get the tileset image for this transition
             const transitionKey = `${tileInfo.primaryTerrain}_${tileInfo.secondaryTerrain}`;
             let tilesetImg = this.tileCache.images.get(`transition_${transitionKey}`);
@@ -654,10 +853,6 @@ export class ProceduralWorldRenderer {
             
             // Get sprite coordinates from Dual Grid lookup
             const { spriteCoords, clipCorners, flipHorizontal, flipVertical } = tileInfo;
-            
-            const destX = Math.floor(pixelX - pixelSize / 2);
-            const destY = Math.floor(pixelY - pixelSize / 2);
-            const halfSize = Math.floor(pixelSize / 2);
             
             // Apply transformations if flipping is needed
             const needsTransform = flipHorizontal || flipVertical;

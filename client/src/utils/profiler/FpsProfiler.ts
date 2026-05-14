@@ -15,6 +15,8 @@ export interface ProfilerTimings {
   t1d?: number;
   t2: number;
   t2a?: number;
+  t2b?: number;
+  t2c?: number;
   t3: number;
   t3a: number;
   t3b?: number;
@@ -23,6 +25,19 @@ export interface ProfilerTimings {
   t3e?: number;
   t3f?: number;
   t3g?: number;
+  worldCacheUpdateMs?: number;
+  worldBaseTilesMs?: number;
+  worldTransitionsMs?: number;
+  worldDoodadsMs?: number;
+  worldDoodadsTransitionChecksMs?: number;
+  worldDoodadsSpawnEvaluationMs?: number;
+  worldDoodadsBlurredDrawsMs?: number;
+  worldDoodadsOpaqueDrawsMs?: number;
+  waterOverlayGridMs?: number;
+  waterOverlayShaderMs?: number;
+  waterOverlayMaskMs?: number;
+  waterOverlayCompositeMs?: number;
+  waterOverlayDrawMs?: number;
   t4: number;
   t5: number;
 }
@@ -30,7 +45,7 @@ export interface ProfilerTimings {
 const DISPLAY_UPDATE_INTERVAL_MS = 200;
 const MAX_FRAME_TIMES = 50;
 const PANEL_W = 320;
-const PANEL_H = 330;
+const PANEL_H = 402;
 const HEADER_H = 28;
 const TRACKER_RIGHT = 15;
 const TRACKER_WIDTH = 250;
@@ -76,7 +91,23 @@ export class FpsProfiler {
   private phaseWaterShoreline = 0;
   private phaseWorldBackground = 0;
   private phaseWorldPatches = 0;
+  private phaseWorldCacheUpdate = 0;
+  private phaseWorldBaseTiles = 0;
+  private phaseWorldTransitions = 0;
+  private phaseWorldDoodads = 0;
+  private phaseWorldDoodadsTransitionChecks = 0;
+  private phaseWorldDoodadsSpawnEvaluation = 0;
+  private phaseWorldDoodadsBlurredDraws = 0;
+  private phaseWorldDoodadsOpaqueDraws = 0;
+  private phaseWaterOverlayGrid = 0;
+  private phaseWaterOverlayShader = 0;
+  private phaseWaterOverlayMask = 0;
+  private phaseWaterOverlayComposite = 0;
+  private phaseWaterOverlayDraw = 0;
   private phaseEntitiesFootprints = 0;
+  private phaseEntitiesProjectileCollision = 0;
+  private phaseEntitiesMainRender = 0;
+  private phaseEntitiesSwimTop = 0;
   private phaseEntitiesYSorted = 0;
   private phaseEntitiesShadows = 0;
   private phaseEntitiesEffects = 0;
@@ -88,7 +119,29 @@ export class FpsProfiler {
   private phaseEntitiesOverlays = 0;
 
   update(timings: ProfilerTimings, frameTime: number, entityCount: number): void {
-    const { t0, t0a, t1, t1a, t1b, t1c, t1d, t2, t2a, t3, t3a, t3b, t3c, t3d, t3e, t3f, t3g, t4, t5 } = timings;
+    const {
+      t0,
+      t0a,
+      t1,
+      t1a,
+      t1b,
+      t1c,
+      t1d,
+      t2,
+      t2a,
+      t2b,
+      t2c,
+      t3,
+      t3a,
+      t3b,
+      t3c,
+      t3d,
+      t3e,
+      t3f,
+      t3g,
+      t4,
+      t5,
+    } = timings;
 
     this.frameTimes.push(frameTime);
     if (this.frameTimes.length > MAX_FRAME_TIMES) this.frameTimes.shift();
@@ -112,12 +165,28 @@ export class FpsProfiler {
         if (t1a > 0 && t3a > 0) {
           this.phaseWorldBackground = elapsed(t0, t0a);
           this.phaseWorldPatches = elapsed(t0a, t1);
+          this.phaseWorldCacheUpdate = timings.worldCacheUpdateMs ?? 0;
+          this.phaseWorldBaseTiles = timings.worldBaseTilesMs ?? 0;
+          this.phaseWorldTransitions = timings.worldTransitionsMs ?? 0;
+          this.phaseWorldDoodads = timings.worldDoodadsMs ?? 0;
+          this.phaseWorldDoodadsTransitionChecks = timings.worldDoodadsTransitionChecksMs ?? 0;
+          this.phaseWorldDoodadsSpawnEvaluation = timings.worldDoodadsSpawnEvaluationMs ?? 0;
+          this.phaseWorldDoodadsBlurredDraws = timings.worldDoodadsBlurredDrawsMs ?? 0;
+          this.phaseWorldDoodadsOpaqueDraws = timings.worldDoodadsOpaqueDrawsMs ?? 0;
           this.phaseWaterSeaStacks = t1a - t1;
           this.phaseWaterCaustics = t1b - t1a;
           this.phaseWaterSwimming = t1c - t1b;
           this.phaseWaterOverlay = elapsed(t1c, t1d);
           this.phaseWaterShoreline = elapsed(t1d, t2);
+          this.phaseWaterOverlayGrid = timings.waterOverlayGridMs ?? 0;
+          this.phaseWaterOverlayShader = timings.waterOverlayShaderMs ?? 0;
+          this.phaseWaterOverlayMask = timings.waterOverlayMaskMs ?? 0;
+          this.phaseWaterOverlayComposite = timings.waterOverlayCompositeMs ?? 0;
+          this.phaseWaterOverlayDraw = timings.waterOverlayDrawMs ?? 0;
           this.phaseEntitiesFootprints = elapsed(t2, t2a);
+          this.phaseEntitiesProjectileCollision = elapsed(t2a, t2b);
+          this.phaseEntitiesMainRender = elapsed(t2b, t2c);
+          this.phaseEntitiesSwimTop = elapsed(t2c, t3);
           this.phaseEntitiesYSorted = t3 - (t2a ?? t2);
           this.phaseEntitiesShadows = t3a - t3;
           this.phaseEntitiesEffects = elapsed(t3b, t3c);
@@ -133,7 +202,7 @@ export class FpsProfiler {
   }
 
   recordIfActive(timings: ProfilerTimings, frameTime: number, entityCount: number): void {
-    const { t0, t0a, t1, t1a, t1b, t1c, t1d, t2, t2a, t3, t3a, t3b, t3c, t3d, t3e, t3f, t3g, t4, t5 } = timings;
+    const { t0, t0a, t1, t1a, t1b, t1c, t1d, t2, t2a, t2b, t2c, t3, t3a, t3b, t3c, t3d, t3e, t3f, t3g, t4, t5 } = timings;
     if (!profilerRecording.isProfilerRecording() || t0 <= 0 || t5 <= 0) return;
 
     profilerRecording.addSample({
@@ -141,15 +210,31 @@ export class FpsProfiler {
       entityCount,
       phaseWorld: t1 - t0,
       phaseWorldBackground: elapsed(t0, t0a),
+      phaseWorldCacheUpdate: timings.worldCacheUpdateMs ?? 0,
+      phaseWorldBaseTiles: timings.worldBaseTilesMs ?? 0,
+      phaseWorldTransitions: timings.worldTransitionsMs ?? 0,
+      phaseWorldDoodads: timings.worldDoodadsMs ?? 0,
+      phaseWorldDoodadsTransitionChecks: timings.worldDoodadsTransitionChecksMs ?? 0,
+      phaseWorldDoodadsSpawnEvaluation: timings.worldDoodadsSpawnEvaluationMs ?? 0,
+      phaseWorldDoodadsBlurredDraws: timings.worldDoodadsBlurredDrawsMs ?? 0,
+      phaseWorldDoodadsOpaqueDraws: timings.worldDoodadsOpaqueDrawsMs ?? 0,
       phaseWorldPatches: elapsed(t0a, t1),
       phaseWater: t2 - t1,
       phaseWaterSeaStacks: t1a > 0 ? t1a - t1 : 0,
       phaseWaterCaustics: t1b > 0 ? t1b - t1a : 0,
       phaseWaterSwimming: t1c > 0 ? t1c - t1b : 0,
       phaseWaterOverlay: elapsed(t1c, t1d),
+      phaseWaterOverlayGrid: timings.waterOverlayGridMs ?? 0,
+      phaseWaterOverlayShader: timings.waterOverlayShaderMs ?? 0,
+      phaseWaterOverlayMask: timings.waterOverlayMaskMs ?? 0,
+      phaseWaterOverlayComposite: timings.waterOverlayCompositeMs ?? 0,
+      phaseWaterOverlayDraw: timings.waterOverlayDrawMs ?? 0,
       phaseWaterShoreline: elapsed(t1d, t2),
       phaseEntities: t4 - t2,
       phaseEntitiesFootprints: elapsed(t2, t2a),
+      phaseEntitiesProjectileCollision: elapsed(t2a, t2b),
+      phaseEntitiesMainRender: elapsed(t2b, t2c),
+      phaseEntitiesSwimTop: elapsed(t2c, t3),
       phaseEntitiesYSorted: t3 > 0 ? t3 - (t2a ?? t2) : 0,
       phaseEntitiesShadows: t3a > 0 ? t3a - t3 : 0,
       phaseEntitiesEffects: elapsed(t3b, t3c),
@@ -240,16 +325,21 @@ export class FpsProfiler {
     ctx.font = '10px "Press Start 2P", monospace';
     ctx.fillStyle = 'rgba(0, 255, 255, 0.95)';
     ctx.fillText(`World: ${this.phaseWorld.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 98);
-    ctx.fillText(`  BG: ${this.phaseWorldBackground.toFixed(1)} Patches: ${this.phaseWorldPatches.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 116);
-    ctx.fillText(`Water: ${this.phaseWater.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 134);
-    ctx.fillText(`  Sea: ${this.phaseWaterSeaStacks.toFixed(1)} Caust: ${this.phaseWaterCaustics.toFixed(1)} Swim: ${this.phaseWaterSwimming.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 150);
-    ctx.fillText(`  Surf: ${this.phaseWaterOverlay.toFixed(1)} Shore: ${this.phaseWaterShoreline.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 166);
-    ctx.fillText(`Entities: ${this.phaseEntities.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 184);
-    ctx.fillText(`  Foot: ${this.phaseEntitiesFootprints.toFixed(1)} YSort: ${this.phaseEntitiesYSorted.toFixed(1)} Shad: ${this.phaseEntitiesShadows.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 200);
-    ctx.fillText(`  FX: ${this.phaseEntitiesEffects.toFixed(1)} Under: ${this.phaseEntitiesTranslatedUnder.toFixed(1)} Fire: ${this.phaseEntitiesCampfireFire.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 216);
-    ctx.fillText(`  Over: ${this.phaseEntitiesTranslatedOver.toFixed(1)} Screen: ${this.phaseEntitiesScreenFx.toFixed(1)} UI: ${this.phaseEntitiesInteraction.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 232);
-    ctx.fillText(`  TotalOverlays: ${this.phaseEntitiesOverlays.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 248);
-    ctx.fillText(`Lights: ${this.phaseLights.toFixed(1)}ms  Other: ${this.phaseOther.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 270);
+    ctx.fillText(`  Cache:${this.phaseWorldCacheUpdate.toFixed(1)} Base:${this.phaseWorldBaseTiles.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 116);
+    ctx.fillText(`  Trans:${this.phaseWorldTransitions.toFixed(1)} Dood:${this.phaseWorldDoodads.toFixed(1)} Patch:${this.phaseWorldPatches.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 132);
+    ctx.fillText(`  Chk:${this.phaseWorldDoodadsTransitionChecks.toFixed(1)} Eval:${this.phaseWorldDoodadsSpawnEvaluation.toFixed(1)} Blur:${this.phaseWorldDoodadsBlurredDraws.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 148);
+    ctx.fillText(`  Opaq:${this.phaseWorldDoodadsOpaqueDraws.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 164);
+    ctx.fillText(`Water: ${this.phaseWater.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 182);
+    ctx.fillText(`  Sea:${this.phaseWaterSeaStacks.toFixed(1)} Caust:${this.phaseWaterCaustics.toFixed(1)} Swim:${this.phaseWaterSwimming.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 198);
+    ctx.fillText(`  Surf:${this.phaseWaterOverlay.toFixed(1)} G:${this.phaseWaterOverlayGrid.toFixed(1)} GPU:${this.phaseWaterOverlayShader.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 214);
+    ctx.fillText(`  M:${this.phaseWaterOverlayMask.toFixed(1)} Comp:${this.phaseWaterOverlayComposite.toFixed(1)} Draw:${this.phaseWaterOverlayDraw.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 230);
+    ctx.fillText(`Entities: ${this.phaseEntities.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 248);
+    ctx.fillText(`  Foot:${this.phaseEntitiesFootprints.toFixed(1)} Coll:${this.phaseEntitiesProjectileCollision.toFixed(1)} Main:${this.phaseEntitiesMainRender.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 264);
+    ctx.fillText(`  Swim:${this.phaseEntitiesSwimTop.toFixed(1)} YSort:${this.phaseEntitiesYSorted.toFixed(1)} Shad:${this.phaseEntitiesShadows.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 280);
+    ctx.fillText(`  FX:${this.phaseEntitiesEffects.toFixed(1)} Under:${this.phaseEntitiesTranslatedUnder.toFixed(1)} Fire:${this.phaseEntitiesCampfireFire.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 296);
+    ctx.fillText(`  Over:${this.phaseEntitiesTranslatedOver.toFixed(1)} Screen:${this.phaseEntitiesScreenFx.toFixed(1)} UI:${this.phaseEntitiesInteraction.toFixed(1)}`, panelX + 14, panelY + HEADER_H + 312);
+    ctx.fillText(`  TotalOverlays: ${this.phaseEntitiesOverlays.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 328);
+    ctx.fillText(`Lights: ${this.phaseLights.toFixed(1)}ms  Other: ${this.phaseOther.toFixed(1)}ms`, panelX + 14, panelY + HEADER_H + 350);
 
     ctx.restore();
   }

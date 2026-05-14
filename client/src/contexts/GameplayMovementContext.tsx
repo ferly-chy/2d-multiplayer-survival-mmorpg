@@ -3,6 +3,7 @@ import React, { createContext, useContext } from 'react';
 export interface GameplayMovementContextValue {
   predictedPosition: { x: number; y: number } | null;
   getCurrentPositionNow: () => { x: number; y: number } | null;
+  getReconciliationProfilerSnapshot?: () => any;
   getCurrentFacingDirectionNow?: () => string;
   getCurrentDodgeRollVisualNow?: () => { isDodgeRolling: boolean; progress: number; direction: string };
   onDodgeRollStart?: (moveX: number, moveY: number) => boolean;

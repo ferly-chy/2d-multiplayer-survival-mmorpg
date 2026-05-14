@@ -22,6 +22,7 @@ const LAG_SPIKE_THRESHOLD = 20;
 // Large RAF gaps should not become equally large camera jumps. The runtime
 // already clamps frame deltas, and this keeps direct movement callers honest.
 const MAX_CLIENT_MOVEMENT_DT_MS = 33;
+const RECONCILIATION_PROFILER_VISIBLE_WINDOW_MS = 250;
 
 export interface MovementInputState {
   direction: { x: number; y: number };
@@ -58,6 +59,19 @@ export interface MovementPredictionSnapshot {
   dodgeRollVisual: DodgeRollVisualState;
   isAutoWalking: boolean;
   isAutoAttacking: boolean;
+}
+
+export interface ReconciliationProfilerSnapshot {
+  eventId: number;
+  eventType: 'none' | 'ack' | 'respawn' | 'sequence_reset';
+  eventAgeMs: number;
+  eventTimeMs: number;
+  receivedSequence: number;
+  previousAckSequence: number;
+  sequenceAdvance: number;
+  errorX: number;
+  errorY: number;
+  errorDist: number;
 }
 
 const hasExhaustedEffect = (connection: DbConnection | null, playerId: string): boolean => {
@@ -158,6 +172,17 @@ class MovementPredictionEngine {
   private lastReactPublishTime = 0;
   private lastReactPublishTileKey: string | null = null;
   private lastReactSnapshot: MovementPredictionSnapshot | null = null;
+  private reconciliationProfilerState: Omit<ReconciliationProfilerSnapshot, 'eventAgeMs'> = {
+    eventId: 0,
+    eventType: 'none',
+    eventTimeMs: 0,
+    receivedSequence: 0,
+    previousAckSequence: 0,
+    sequenceAdvance: 0,
+    errorX: 0,
+    errorY: 0,
+    errorDist: 0,
+  };
 
   configure(config: MovementPredictionRuntimeProps): void {
     this.config = config;
@@ -376,6 +401,22 @@ class MovementPredictionEngine {
     };
   }
 
+  getReconciliationProfilerSnapshot(): ReconciliationProfilerSnapshot | null {
+    if (this.reconciliationProfilerState.eventType === 'none' || this.reconciliationProfilerState.eventTimeMs <= 0) {
+      return null;
+    }
+
+    const eventAgeMs = Math.max(0, performance.now() - this.reconciliationProfilerState.eventTimeMs);
+    if (eventAgeMs > RECONCILIATION_PROFILER_VISIBLE_WINDOW_MS) {
+      return null;
+    }
+
+    return {
+      ...this.reconciliationProfilerState,
+      eventAgeMs,
+    };
+  }
+
   reset(): void {
     this.clientPosition = null;
     this.serverPosition = null;
@@ -395,6 +436,17 @@ class MovementPredictionEngine {
     this.lastReactPublishTime = 0;
     this.lastReactPublishTileKey = null;
     this.lastReactSnapshot = null;
+    this.reconciliationProfilerState = {
+      eventId: 0,
+      eventType: 'none',
+      eventTimeMs: 0,
+      receivedSequence: 0,
+      previousAckSequence: 0,
+      sequenceAdvance: 0,
+      errorX: 0,
+      errorY: 0,
+      errorDist: 0,
+    };
     this.publishSnapshot(true);
   }
 
@@ -414,18 +466,35 @@ class MovementPredictionEngine {
     const hasRespawned = this.wasDead && !localPlayer.isDead;
     const receivedSequence = localPlayer.clientMovementSequence ?? 0n;
     const sequenceReset = receivedSequence === 0n && this.lastAckedSequence > 0n;
+    const previousAckedSequence = this.lastAckedSequence;
 
     if (hasRespawned || sequenceReset) {
       const newServerPos = { x: localPlayer.positionX, y: localPlayer.positionY };
+      const clientPositionBeforeReset = { ...this.clientPosition };
       this.clientPosition = { ...newServerPos };
       this.serverPosition = { ...newServerPos };
       this.pendingPosition = { ...newServerPos };
       this.lastFacingDirection = localPlayer.direction || 'down';
       this.clientSequence = 0n;
       this.lastAckedSequence = 0n;
+      this.recordReconciliationEvent(
+        hasRespawned ? 'respawn' : 'sequence_reset',
+        clientPositionBeforeReset,
+        newServerPos,
+        receivedSequence,
+        previousAckedSequence,
+      );
     } else if (receivedSequence > this.lastAckedSequence) {
+      const nextServerPosition = { x: localPlayer.positionX, y: localPlayer.positionY };
+      this.recordReconciliationEvent(
+        'ack',
+        this.clientPosition,
+        nextServerPosition,
+        receivedSequence,
+        previousAckedSequence,
+      );
       this.lastAckedSequence = receivedSequence;
-      this.serverPosition = { x: localPlayer.positionX, y: localPlayer.positionY };
+      this.serverPosition = nextServerPosition;
     }
 
     this.wasDead = localPlayer.isDead;
@@ -702,6 +771,32 @@ class MovementPredictionEngine {
       return { direction: { x: 0, y: 0 }, sprinting: false };
     }
     return this.config.inputStateRef?.current ?? this.config.inputState;
+  }
+
+  private recordReconciliationEvent(
+    eventType: ReconciliationProfilerSnapshot['eventType'],
+    clientPosition: { x: number; y: number } | null,
+    serverPosition: { x: number; y: number },
+    receivedSequence: bigint,
+    previousAckSequence: bigint,
+  ): void {
+    const errorX = clientPosition ? clientPosition.x - serverPosition.x : 0;
+    const errorY = clientPosition ? clientPosition.y - serverPosition.y : 0;
+    const sequenceAdvance = receivedSequence > previousAckSequence
+      ? Number(receivedSequence - previousAckSequence)
+      : 0;
+
+    this.reconciliationProfilerState = {
+      eventId: this.reconciliationProfilerState.eventId + 1,
+      eventType,
+      eventTimeMs: performance.now(),
+      receivedSequence: Number(receivedSequence),
+      previousAckSequence: Number(previousAckSequence),
+      sequenceAdvance,
+      errorX,
+      errorY,
+      errorDist: Math.hypot(errorX, errorY),
+    };
   }
 
   private publishSnapshot(force = false): void {

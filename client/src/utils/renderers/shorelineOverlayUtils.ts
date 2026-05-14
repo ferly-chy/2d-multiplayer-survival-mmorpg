@@ -11,7 +11,6 @@
 import { TILE_SIZE as AUTOTILE_TILE_SIZE, TILESET_COLS, TILESET_ROWS } from '../dualGridAutotile';
 
 // Import tilesets for mask generation
-import beachSeaAutotileUrl from '../../assets/tiles/new/tileset_beach_sea_autotile.png';
 import beachHotSpringWaterAutotileUrl from '../../assets/tiles/new/tileset_beach_hotspringwater_autotile.png';
 import grassBeachAutotileUrl from '../../assets/tiles/new/tileset_grass_beach_autotile.png';
 
@@ -55,9 +54,6 @@ interface ShorelineMaskCache {
   ctx: CanvasRenderingContext2D;
   ready: boolean;
 }
-
-let maskCache: ShorelineMaskCache | null = null;
-let maskLoadPromise: Promise<ShorelineMaskCache | null> | null = null;
 
 let hotSpringMaskCache: ShorelineMaskCache | null = null;
 let hotSpringMaskLoadPromise: Promise<ShorelineMaskCache | null> | null = null;
@@ -287,46 +283,6 @@ async function generateShorelineMasks(
 }
 
 /**
- * Load and initialize the shoreline mask.
- * Pass preloaded Beach_Sea image from tile cache to avoid delay.
- */
-export async function initShorelineMask(beachSeaImage?: HTMLImageElement | null): Promise<ShorelineMaskCache | null> {
-  if (maskCache?.ready) return maskCache;
-  if (maskLoadPromise) return maskLoadPromise;
-
-  maskLoadPromise = (async () => {
-    try {
-      let img: HTMLImageElement;
-      if (beachSeaImage?.complete && beachSeaImage.naturalWidth > 0) {
-        img = beachSeaImage;
-      } else {
-        img = new Image();
-        img.crossOrigin = 'anonymous';
-        await new Promise<void>((resolve, reject) => {
-          img.onload = () => resolve();
-          img.onerror = () => reject(new Error('Failed to load beach_sea tileset'));
-          img.src = beachSeaAutotileUrl;
-        });
-      }
-
-      const { shoreCanvas, waveCanvas } = await generateShorelineMasks(img);
-      maskCache = {
-        canvas: shoreCanvas,
-        waveCanvas,
-        ctx: shoreCanvas.getContext('2d')!,
-        ready: true,
-      };
-      return maskCache;
-    } catch (e) {
-      console.warn('[ShorelineOverlay] Failed to generate mask:', e);
-      return null;
-    }
-  })();
-
-  return maskLoadPromise;
-}
-
-/**
  * Load shoreline mask from Grass_Beach tileset (same sheet as Grass_HotSpringWater).
  */
 export async function initGrassHotSpringShorelineMask(grassBeachImage?: HTMLImageElement | null): Promise<ShorelineMaskCache | null> {
@@ -416,7 +372,7 @@ export async function initHotSpringShorelineMask(beachHotSpringWaterImage?: HTML
 }
 
 /**
- * Render the animated shoreline overlay for Beach_Sea or Beach_HotSpringWater tiles.
+ * Render the animated shoreline overlay for hot spring shoreline masks.
  * Call from ProceduralWorldRenderer when drawing beach/water transitions.
  *
  * @param ctx - Canvas context (already translated and clipped if needed)
@@ -427,7 +383,7 @@ export async function initHotSpringShorelineMask(beachHotSpringWaterImage?: HTML
  * @param flipHorizontal - Whether tile was flipped
  * @param flipVertical - Whether tile was flipped
  * @param currentTimeMs - Current time for animation
- * @param maskVariant - beachSea (default), hotSpringBeach (Beach_HotSpringWater tileset), hotSpringGrass (Grass_HotSpringWater / grass_beach sheet)
+ * @param maskVariant - hotSpringBeach (Beach_HotSpringWater tileset) or hotSpringGrass (Grass_HotSpringWater / grass_beach sheet)
  */
 export function renderShorelineOverlay(
   ctx: CanvasRenderingContext2D,
@@ -438,14 +394,12 @@ export function renderShorelineOverlay(
   flipHorizontal: boolean,
   flipVertical: boolean,
   currentTimeMs: number,
-  maskVariant: ShorelineMaskVariant = 'beachSea'
+  maskVariant: ShorelineMaskVariant = 'hotSpringBeach'
 ): void {
   const cache =
-    maskVariant === 'hotSpringBeach'
-      ? hotSpringMaskCache
-      : maskVariant === 'hotSpringGrass'
-        ? grassHotSpringMaskCache
-        : maskCache;
+    maskVariant === 'hotSpringGrass'
+      ? grassHotSpringMaskCache
+      : hotSpringMaskCache;
   const t = currentTimeMs * 0.001;
 
   ctx.save();
@@ -463,9 +417,6 @@ export function renderShorelineOverlay(
     ctx.restore();
     return;
   }
-
-  const centerX = destX + destSize / 2;
-  const centerY = destY + destSize / 2;
 
   // Layer 1: Shoreline - thin static blue edge
   ctx.globalCompositeOperation = 'source-over';
@@ -513,13 +464,6 @@ export function renderShorelineOverlay(
   ctx.globalAlpha = 1.0;
   ctx.globalCompositeOperation = 'source-over';
   ctx.restore();
-}
-
-/**
- * Check if shoreline overlay is ready to render (Beach_Sea).
- */
-export function isShorelineMaskReady(): boolean {
-  return maskCache?.ready ?? false;
 }
 
 /**

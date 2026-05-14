@@ -59,6 +59,7 @@ export function usePredictedMovement(props: UsePredictedMovementProps) {
   return {
     predictedPosition: movementSnapshot.predictedPosition,
     getCurrentPositionNow: movementPredictionRuntime.getCurrentPositionNow,
+    getReconciliationProfilerSnapshot: movementPredictionRuntime.getReconciliationProfilerSnapshot.bind(movementPredictionRuntime),
     getCurrentFacingDirectionNow: movementPredictionRuntime.getCurrentFacingDirectionNow,
     getCurrentDodgeRollVisualNow: movementPredictionRuntime.getCurrentDodgeRollVisualNow,
     triggerOptimisticDodgeRoll: movementPredictionRuntime.triggerOptimisticDodgeRoll,
