@@ -118,7 +118,7 @@ export function renderWorldBackground(
 }
 
 /**
- * Renders the shoreline overlay (white foam line) on Beach_Sea transitions.
+ * Renders the shoreline overlay on terrain transitions (currently Grass_HotSpringWater only).
  * Must be called AFTER renderWaterOverlay so the shoreline appears on top.
  */
 export function renderShorelineOverlay(

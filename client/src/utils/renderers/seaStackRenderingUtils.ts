@@ -10,6 +10,7 @@ const SEA_STACK_CONFIG = {
   MAX_SCALE: 2.5,  // Maximum 2.5x taller than tallest trees  
   BASE_WIDTH: 400, // pixels - base sea stack size (towering over trees)
 };
+const SEA_STACK_BASE_PORTION = 0.12;
 
 // Water line config – barrel-style: wavy clip + underwater tinting via offscreen compositing
 const WATER_LINE_CONFIG = {
@@ -58,21 +59,167 @@ const WATER_LINE_CONFIG = {
 // Small overlap so top+bottom passes cannot leave a transparent seam at waterline.
 const SEA_STACK_WATERLINE_OVERLAP_PX = 1.25;
 
-// Offscreen canvas for sea stack water line compositing (reused)
-let waterLineOffscreen: OffscreenCanvas | HTMLCanvasElement | null = null;
-let waterLineOffCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null;
+type SeaStackHalfMode = 'top' | 'bottom';
+type SeaStackRenderCacheEntry = {
+  canvas: OffscreenCanvas | HTMLCanvasElement;
+  width: number;
+  height: number;
+  lastUsed: number;
+};
+
+const SEA_STACK_RENDER_CACHE_MAX_ENTRIES = 36;
+const SEA_STACK_RENDER_CACHE_VERSION = 2;
+const SEA_STACK_STATIC_WAVE_SEGMENTS = 12;
+const seaStackRenderCache = new Map<string, SeaStackRenderCacheEntry>();
+let seaStackRenderCacheClock = 0;
 const seaStackWaveScratch: number[] = [];
 
-function getWaterLineOffscreen(w: number, h: number): { canvas: OffscreenCanvas | HTMLCanvasElement; ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D } | null {
-  if (!waterLineOffscreen || waterLineOffscreen.width < w || waterLineOffscreen.height < h) {
-    const cw = Math.max(w, waterLineOffscreen?.width ?? 0);
-    const ch = Math.max(h, waterLineOffscreen?.height ?? 0);
-    try { waterLineOffscreen = new OffscreenCanvas(cw, ch); }
-    catch { waterLineOffscreen = document.createElement('canvas'); waterLineOffscreen.width = cw; waterLineOffscreen.height = ch; }
-    waterLineOffCtx = waterLineOffscreen.getContext('2d') as any;
+function createSeaStackCacheCanvas(width: number, height: number): OffscreenCanvas | HTMLCanvasElement {
+  try {
+    return new OffscreenCanvas(width, height);
+  } catch {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    return canvas;
   }
-  if (!waterLineOffCtx) return null;
-  return { canvas: waterLineOffscreen, ctx: waterLineOffCtx };
+}
+
+function pruneSeaStackRenderCache(): void {
+  if (seaStackRenderCache.size <= SEA_STACK_RENDER_CACHE_MAX_ENTRIES) return;
+
+  let oldestKey: string | null = null;
+  let oldestUse = Number.POSITIVE_INFINITY;
+  for (const [key, entry] of seaStackRenderCache) {
+    if (entry.lastUsed < oldestUse) {
+      oldestUse = entry.lastUsed;
+      oldestKey = key;
+    }
+  }
+  if (oldestKey) seaStackRenderCache.delete(oldestKey);
+}
+
+function buildSeaStackStaticWave(width: number, waterLineY: number): void {
+  const halfW = width / 2;
+  const segW = width / SEA_STACK_STATIC_WAVE_SEGMENTS;
+  seaStackWaveScratch.length = SEA_STACK_STATIC_WAVE_SEGMENTS + 1;
+
+  for (let i = 0; i <= SEA_STACK_STATIC_WAVE_SEGMENTS; i++) {
+    const localX = -halfW + i * segW;
+    seaStackWaveScratch[i] = waterLineY
+      + Math.sin(localX * WATER_LINE_CONFIG.WAVE_SPATIAL_FREQ) * WATER_LINE_CONFIG.WAVE_AMPLITUDE
+      + Math.sin(localX * WATER_LINE_CONFIG.WAVE_SPATIAL_FREQ * 1.6 + Math.PI * 0.3)
+        * WATER_LINE_CONFIG.WAVE_SECONDARY_AMPLITUDE;
+  }
+}
+
+function getCachedSeaStackHalf(
+  image: HTMLImageElement,
+  imageIndex: number,
+  scale: number,
+  halfMode: SeaStackHalfMode,
+): SeaStackRenderCacheEntry | null {
+  const width = Math.ceil(SEA_STACK_CONFIG.BASE_WIDTH * scale);
+  const height = Math.ceil((image.naturalHeight / image.naturalWidth) * width);
+  if (width <= 0 || height <= 0) return null;
+
+  const quantizedScale = Math.round(scale * 1000);
+  const cacheKey = `${SEA_STACK_RENDER_CACHE_VERSION}:${imageIndex}:${quantizedScale}:${width}x${height}:${halfMode}`;
+  const cached = seaStackRenderCache.get(cacheKey);
+  if (cached) {
+    cached.lastUsed = ++seaStackRenderCacheClock;
+    return cached;
+  }
+
+  const canvas = createSeaStackCacheCanvas(width, height);
+  const cacheCtx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+  if (!cacheCtx) return null;
+
+  const baseHeight = height * SEA_STACK_BASE_PORTION;
+  const waterLineY = height - baseHeight;
+  const segW = width / SEA_STACK_STATIC_WAVE_SEGMENTS;
+  buildSeaStackStaticWave(width, waterLineY);
+
+  cacheCtx.save();
+  cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
+  cacheCtx.clearRect(0, 0, width, height);
+  cacheCtx.beginPath();
+
+  if (halfMode === 'top') {
+    cacheCtx.moveTo(0, 0);
+    cacheCtx.lineTo(width, 0);
+    cacheCtx.lineTo(width, waterLineY + SEA_STACK_WATERLINE_OVERLAP_PX);
+    for (let i = SEA_STACK_STATIC_WAVE_SEGMENTS; i >= 0; i--) {
+      cacheCtx.lineTo(i * segW, seaStackWaveScratch[i] + SEA_STACK_WATERLINE_OVERLAP_PX);
+    }
+    cacheCtx.closePath();
+    cacheCtx.clip();
+    cacheCtx.drawImage(image, 0, 0, width, height);
+  } else {
+    for (let i = 0; i <= SEA_STACK_STATIC_WAVE_SEGMENTS; i++) {
+      const x = i * segW;
+      const y = seaStackWaveScratch[i];
+      if (i === 0) cacheCtx.moveTo(x, y);
+      else cacheCtx.lineTo(x, y);
+    }
+    cacheCtx.lineTo(width, height);
+    cacheCtx.lineTo(0, height);
+    cacheCtx.closePath();
+    cacheCtx.clip();
+    cacheCtx.drawImage(image, 0, 0, width, height);
+
+    cacheCtx.globalCompositeOperation = 'source-atop';
+    const { r, g, b } = WATER_LINE_CONFIG.TINT_COLOR;
+    cacheCtx.fillStyle = `rgba(${r}, ${g}, ${b}, ${WATER_LINE_CONFIG.TINT_INTENSITY})`;
+    cacheCtx.fillRect(0, 0, width, height);
+    cacheCtx.fillStyle = `rgba(0, 15, 30, ${WATER_LINE_CONFIG.DARKEN_INTENSITY})`;
+    cacheCtx.fillRect(0, 0, width, height);
+
+    cacheCtx.globalCompositeOperation = 'destination-in';
+    const fade = cacheCtx.createLinearGradient(0, waterLineY, 0, height);
+    fade.addColorStop(0, 'rgba(255,255,255,1)');
+    fade.addColorStop(1, 'rgba(255,255,255,0.04)');
+    cacheCtx.fillStyle = fade;
+    cacheCtx.fillRect(0, waterLineY, width, baseHeight);
+
+    cacheCtx.globalCompositeOperation = 'source-over';
+    cacheCtx.strokeStyle = WATER_LINE_CONFIG.GLOW_COLOR;
+    cacheCtx.lineWidth = WATER_LINE_CONFIG.GLOW_WIDTH;
+    cacheCtx.lineCap = 'round';
+    cacheCtx.lineJoin = 'round';
+    cacheCtx.beginPath();
+    for (let i = 0; i <= SEA_STACK_STATIC_WAVE_SEGMENTS; i++) {
+      const x = i * segW;
+      const y = seaStackWaveScratch[i];
+      if (i === 0) cacheCtx.moveTo(x, y);
+      else cacheCtx.lineTo(x, y);
+    }
+    cacheCtx.stroke();
+
+    cacheCtx.strokeStyle = WATER_LINE_CONFIG.LINE_COLOR;
+    cacheCtx.lineWidth = WATER_LINE_CONFIG.LINE_WIDTH;
+    cacheCtx.beginPath();
+    for (let i = 0; i <= SEA_STACK_STATIC_WAVE_SEGMENTS; i++) {
+      const x = i * segW;
+      const y = seaStackWaveScratch[i];
+      if (i === 0) cacheCtx.moveTo(x, y);
+      else cacheCtx.lineTo(x, y);
+    }
+    cacheCtx.stroke();
+
+    // Keep the cached waterline precise to each variant's actual rock alpha,
+    // without redoing the expensive per-frame offscreen mask.
+    cacheCtx.globalCompositeOperation = 'destination-in';
+    cacheCtx.drawImage(image, 0, 0, width, height);
+    cacheCtx.globalCompositeOperation = 'source-over';
+  }
+
+  cacheCtx.restore();
+
+  const entry = { canvas, width, height, lastUsed: ++seaStackRenderCacheClock };
+  seaStackRenderCache.set(cacheKey, entry);
+  pruneSeaStackRenderCache();
+  return entry;
 }
 
 // Sea stack images array for variation (all three variants available)
@@ -87,8 +234,16 @@ interface SeaStack {
   imageIndex: number; // 0, 1, or 2 for different sea stack images
 }
 
+type ServerSeaStack = {
+  posX: number;
+  posY: number;
+  scale?: number | null;
+  opacity?: number | null;
+  variant?: { tag?: string } | null;
+};
+
 // Pre-loaded image cache to prevent lag spikes
-let preloadedImages: HTMLImageElement[] = [];
+const preloadedImages: HTMLImageElement[] = [];
 let imagesLoaded = false;
 
 /**
@@ -181,184 +336,17 @@ function renderSeaStack(
   
   // The "base" is the underwater portion - needs to cover the sea stack base graphics
   // Most of the sea stack is underwater
-  const BASE_PORTION = 0.12; // Only 12% above water - 88% underwater!
   
   if (halfMode === 'bottom') {
-    // Bottom pass: tinted underwater rock fading out + water line + froth
-    // This renders at water level (behind players in Y-sort order)
-    const baseHeight = height * BASE_PORTION;
-    const halfW = width / 2;
-    const waterLineY = -baseHeight; // Local Y where rock meets water
-    const nowMs = currentTimeMs || 0;
-    const savedAlpha = ctx.globalAlpha;
-
-    // Time-animated wave offset
-    const getWaveOffset = (localX: number) => {
-      const worldX = stack.x + localX;
-      return Math.sin(nowMs * WATER_LINE_CONFIG.WAVE_FREQUENCY + worldX * WATER_LINE_CONFIG.WAVE_SPATIAL_FREQ)
-        * WATER_LINE_CONFIG.WAVE_AMPLITUDE
-        + Math.sin(nowMs * WATER_LINE_CONFIG.WAVE_SECONDARY_FREQUENCY + worldX * WATER_LINE_CONFIG.WAVE_SPATIAL_FREQ * 1.6 + Math.PI * 0.3)
-        * WATER_LINE_CONFIG.WAVE_SECONDARY_AMPLITUDE;
-    };
-
-    const waveSegments = 24;
-    const segW = width / waveSegments;
-    seaStackWaveScratch.length = waveSegments + 1;
-    for (let j = 0; j <= waveSegments; j++) {
-      const lx = -halfW + j * segW;
-      seaStackWaveScratch[j] = waterLineY + getWaveOffset(lx);
+    const cachedHalf = getCachedSeaStackHalf(image, stack.imageIndex, stack.scale, 'bottom');
+    if (cachedHalf) {
+      ctx.drawImage(cachedHalf.canvas, -cachedHalf.width / 2, -cachedHalf.height);
     }
-
-    // --- Create tinted "wet rock" on offscreen ---
-    const offPad = 4;
-    const offW = Math.ceil(width) + offPad * 2;
-    const offH = Math.ceil(height) + offPad * 2;
-    const off = getWaterLineOffscreen(offW, offH);
-
-    if (off) {
-      const { ctx: oCtx } = off;
-      oCtx.save();
-      oCtx.setTransform(1, 0, 0, 1, 0, 0);
-      oCtx.clearRect(0, 0, offW, offH);
-      oCtx.drawImage(image, offPad, offPad, width, height);
-      oCtx.globalCompositeOperation = 'source-atop';
-      const { r, g, b } = WATER_LINE_CONFIG.TINT_COLOR;
-      oCtx.fillStyle = `rgba(${r}, ${g}, ${b}, ${WATER_LINE_CONFIG.TINT_INTENSITY})`;
-      oCtx.fillRect(0, 0, offW, offH);
-      oCtx.fillStyle = `rgba(0, 15, 30, ${WATER_LINE_CONFIG.DARKEN_INTENSITY})`;
-      oCtx.fillRect(0, 0, offW, offH);
-      oCtx.globalCompositeOperation = 'source-over';
-      oCtx.restore();
-
-      // --- Draw tinted rock below waterline, fading to transparent ---
-      const numSlices = WATER_LINE_CONFIG.UNDERWATER_FADE_SLICES;
-      const underwaterHeight = baseHeight;
-      const sliceH = underwaterHeight / numSlices;
-
-      for (let i = 0; i < numSlices; i++) {
-        const t = (i + 0.5) / numSlices;
-        // Steeper fade toward bottom so base fully blends into water (was linear 1-t)
-        const sliceAlpha = Math.max(0, Math.pow(1.0 - t, 1.8));
-        if (sliceAlpha < 0.01) continue;
-
-        ctx.save();
-        ctx.globalAlpha = savedAlpha * sliceAlpha;
-
-        ctx.beginPath();
-        const sliceTop = waterLineY + i * sliceH;
-        const sliceBot = waterLineY + (i + 1) * sliceH;
-
-        if (i === 0) {
-          for (let j = 0; j <= waveSegments; j++) {
-            const lx = -halfW + j * segW;
-            const wy = seaStackWaveScratch[j];
-            if (j === 0) ctx.moveTo(lx, wy);
-            else ctx.lineTo(lx, wy);
-          }
-          ctx.lineTo(halfW, sliceBot);
-          ctx.lineTo(-halfW, sliceBot);
-        } else {
-          ctx.moveTo(-halfW, sliceTop);
-          ctx.lineTo(halfW, sliceTop);
-          ctx.lineTo(halfW, sliceBot);
-          ctx.lineTo(-halfW, sliceBot);
-        }
-        ctx.closePath();
-        ctx.clip();
-        ctx.drawImage(off.canvas, 0, 0, offW, offH, -halfW - offPad, -height - offPad, offW, offH);
-        ctx.restore();
-      }
-      ctx.globalAlpha = savedAlpha;
-
-      // --- Water line (glow + main stroke) masked to rock silhouette ---
-      // Draw stroke on offscreen, then mask with destination-in so only rock-overlapping pixels remain
-      const buildWavePathOnOff = () => {
-        oCtx.beginPath();
-        for (let i = 0; i <= waveSegments; i++) {
-          const lx = -halfW + i * segW;
-          const ox = lx + halfW + offPad;
-          const oy = seaStackWaveScratch[i] + height + offPad;
-          if (i === 0) oCtx.moveTo(ox, oy);
-          else oCtx.lineTo(ox, oy);
-        }
-      };
-
-      // Glow
-      oCtx.save();
-      oCtx.setTransform(1, 0, 0, 1, 0, 0);
-      oCtx.clearRect(0, 0, offW, offH);
-      oCtx.strokeStyle = WATER_LINE_CONFIG.GLOW_COLOR;
-      oCtx.lineWidth = WATER_LINE_CONFIG.GLOW_WIDTH;
-      oCtx.lineCap = 'round';
-      oCtx.lineJoin = 'round';
-      buildWavePathOnOff();
-      oCtx.stroke();
-      // Mask: keep only where rock has pixels
-      oCtx.globalCompositeOperation = 'destination-in';
-      oCtx.drawImage(image, offPad, offPad, width, height);
-      oCtx.globalCompositeOperation = 'source-over';
-      oCtx.restore();
-      ctx.drawImage(off.canvas, 0, 0, offW, offH, -halfW - offPad, -height - offPad, offW, offH);
-
-      // Main line
-      oCtx.save();
-      oCtx.setTransform(1, 0, 0, 1, 0, 0);
-      oCtx.clearRect(0, 0, offW, offH);
-      oCtx.strokeStyle = WATER_LINE_CONFIG.LINE_COLOR;
-      oCtx.lineWidth = WATER_LINE_CONFIG.LINE_WIDTH;
-      oCtx.lineCap = 'round';
-      oCtx.lineJoin = 'round';
-      buildWavePathOnOff();
-      oCtx.stroke();
-      oCtx.globalCompositeOperation = 'destination-in';
-      oCtx.drawImage(image, offPad, offPad, width, height);
-      oCtx.globalCompositeOperation = 'source-over';
-      oCtx.restore();
-      ctx.drawImage(off.canvas, 0, 0, offW, offH, -halfW - offPad, -height - offPad, offW, offH);
-
-      // Foam at bottom removed - water line is enough; base fades fully into water
-    }
-
-    ctx.globalAlpha = savedAlpha;
   } else if (halfMode === 'top') {
-    // Top pass: only the above-water rock, clipped at the wavy waterline boundary.
-    // All underwater effects (tint, fade, water line, froth) are in the 'bottom' pass
-    // so they render at water level (behind players in Y-sort order).
-    const baseHeight = height * BASE_PORTION;
-    const halfW = width / 2;
-    const waterLineY = -baseHeight;
-    const nowMs = currentTimeMs || 0;
-
-    const getWaveOffset = (localX: number) => {
-      const worldX = stack.x + localX;
-      return Math.sin(nowMs * WATER_LINE_CONFIG.WAVE_FREQUENCY + worldX * WATER_LINE_CONFIG.WAVE_SPATIAL_FREQ)
-        * WATER_LINE_CONFIG.WAVE_AMPLITUDE
-        + Math.sin(nowMs * WATER_LINE_CONFIG.WAVE_SECONDARY_FREQUENCY + worldX * WATER_LINE_CONFIG.WAVE_SPATIAL_FREQ * 1.6 + Math.PI * 0.3)
-        * WATER_LINE_CONFIG.WAVE_SECONDARY_AMPLITUDE;
-    };
-
-    const waveSegments = 24;
-    const segW = width / waveSegments;
-    seaStackWaveScratch.length = waveSegments + 1;
-    for (let i = 0; i <= waveSegments; i++) {
-      const lx = -halfW + i * segW;
-      seaStackWaveScratch[i] = waterLineY + getWaveOffset(lx);
+    const cachedHalf = getCachedSeaStackHalf(image, stack.imageIndex, stack.scale, 'top');
+    if (cachedHalf) {
+      ctx.drawImage(cachedHalf.canvas, -cachedHalf.width / 2, -cachedHalf.height);
     }
-
-    // Clip to above-water region with wavy bottom edge, then draw normal rock
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(-halfW - 2, -height - 2);
-    ctx.lineTo(halfW + 2, -height - 2);
-    ctx.lineTo(halfW + 2, waterLineY + SEA_STACK_WATERLINE_OVERLAP_PX);
-    for (let i = waveSegments; i >= 0; i--) {
-      const lx = -halfW + i * segW;
-      ctx.lineTo(lx, seaStackWaveScratch[i] + SEA_STACK_WATERLINE_OVERLAP_PX);
-    }
-    ctx.closePath();
-    ctx.clip();
-    ctx.drawImage(image, -halfW, -height, width, height);
-    ctx.restore();
   } else {
     // Render full sea stack (shadow cutouts and fallback)
     ctx.drawImage(image, -width / 2, -height, width, height);
@@ -373,7 +361,7 @@ function renderSeaStack(
  */
 export function renderSeaStackSingle(
   ctx: CanvasRenderingContext2D,
-  seaStack: any, // Server-provided sea stack entity
+  seaStack: ServerSeaStack,
   doodadImages: Map<string, HTMLImageElement> | null,
   cycleProgress?: number, // Day/night cycle for dynamic shadows
   currentTimeMs?: number, // Current time for animations
@@ -490,7 +478,7 @@ export function renderSeaStackSingle(
  */
 export function renderSeaStackShadowOnly(
   ctx: CanvasRenderingContext2D,
-  seaStack: any, // Server-provided sea stack entity
+  seaStack: ServerSeaStack,
   doodadImages: Map<string, HTMLImageElement> | null,
   cycleProgress?: number // Day/night cycle for dynamic shadows
 ): void {
@@ -533,7 +521,7 @@ export function renderSeaStackShadowOnly(
  */
 export function renderSeaStackBottomOnly(
   ctx: CanvasRenderingContext2D,
-  seaStack: any, // Server-provided sea stack entity
+  seaStack: ServerSeaStack,
   doodadImages: Map<string, HTMLImageElement> | null,
   cycleProgress?: number, // Day/night cycle for dynamic shadows
   currentTimeMs?: number, // Current time for animations
@@ -553,7 +541,7 @@ export function renderSeaStackBottomOnly(
 let seaStackShadowCanvas: OffscreenCanvas | HTMLCanvasElement | null = null;
 let seaStackShadowCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null;
 type SeaStackShadowEntry = {
-  seaStack: any;
+  seaStack: ServerSeaStack;
   stackImage: HTMLImageElement;
   x: number;
   y: number;
@@ -578,7 +566,7 @@ function getSeaStackShadowCanvas(width: number, height: number): { canvas: Offsc
 }
 
 /** Helper to get image index from sea stack variant */
-function getSeaStackImageIndex(seaStack: any): number {
+function getSeaStackImageIndex(seaStack: ServerSeaStack): number {
   let imageIndex = 0;
   if (seaStack.variant && seaStack.variant.tag) {
     switch (seaStack.variant.tag) {
@@ -606,7 +594,7 @@ function getSeaStackImageIndex(seaStack: any): number {
  */
 export function renderSeaStackShadowsOverlay(
   ctx: CanvasRenderingContext2D,
-  seaStacks: any[],
+  seaStacks: ServerSeaStack[],
   doodadImages: Map<string, HTMLImageElement> | null,
   cycleProgress: number
 ): void {
@@ -744,7 +732,7 @@ function getSeaStackCollisionRadius(scale: number): number {
  */
 export function renderSeaStackUnderwaterSilhouette(
   ctx: CanvasRenderingContext2D,
-  seaStack: any, // Server-provided sea stack entity
+  seaStack: ServerSeaStack,
   cycleProgress: number = 0.5 // Day/night cycle (affects darkness slightly)
 ): void {
   const scale = seaStack.scale || 1.0;

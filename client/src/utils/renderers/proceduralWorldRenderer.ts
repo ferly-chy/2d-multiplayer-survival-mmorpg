@@ -29,12 +29,9 @@ import {
 } from '../dualGridAutotile';
 import { tileDoodadRenderer } from './tileDoodadRenderer';
 import {
-    initHotSpringShorelineMask,
     initGrassHotSpringShorelineMask,
-    isHotSpringShorelineMaskReady,
     isGrassHotSpringShorelineMaskReady,
     renderShorelineOverlay,
-    type ShorelineMaskVariant,
 } from './shorelineOverlayUtils.ts';
 import { isWaterTileTag } from '../tileTypeGuards';
 import { getProceduralBlendCornerWeights } from './dualGridCornerBlend';
@@ -44,7 +41,6 @@ import {
 } from './dualGridProceduralBlendRegistry';
 import {
     initProceduralDualGridBlendWebGL,
-    renderProceduralBeachSeaShorelineOverlay,
     renderProceduralDualGridLayer,
     renderProceduralDualGridLayerFallback,
 } from './dualGridProceduralBlendWebGL';
@@ -166,9 +162,7 @@ export class ProceduralWorldRenderer {
         try {
             await Promise.all(promises);
             this.isInitialized = true;
-            const beachHotSpringWaterImg = this.tileCache.images.get('transition_Beach_HotSpringWater');
             const grassBeachImg = this.tileCache.images.get('transition_Grass_Beach');
-            initHotSpringShorelineMask(beachHotSpringWaterImg).catch(() => {});
             initGrassHotSpringShorelineMask(grassBeachImg).catch(() => {});
         } catch {
             // Silently handle errors - missing assets will show fallback colors
@@ -384,7 +378,7 @@ export class ProceduralWorldRenderer {
     }
 
     /**
-     * Animated shoreline overlay: Beach_Sea, Beach_HotSpringWater, and Grass_HotSpringWater.
+     * Animated shoreline overlay: Grass_HotSpringWater only (Beach_Sea / Beach_HotSpringWater disabled pending rework).
      * Call this AFTER the water overlay so the edge reads on top of the water tint.
      */
     public renderShorelineOverlayPass(
@@ -431,24 +425,11 @@ export class ProceduralWorldRenderer {
         const halfSize = Math.floor(pixelSize / 2);
 
         for (const tileInfo of transitions) {
-            const isBeachSea =
-                (tileInfo.primaryTerrain === 'Beach' && tileInfo.secondaryTerrain === 'Sea') ||
-                (tileInfo.primaryTerrain === 'Sea' && tileInfo.secondaryTerrain === 'Beach');
-            const isBeachHotSpring =
-                (tileInfo.primaryTerrain === 'Beach' && tileInfo.secondaryTerrain === 'HotSpringWater') ||
-                (tileInfo.primaryTerrain === 'HotSpringWater' && tileInfo.secondaryTerrain === 'Beach');
             const isGrassHotSpring =
                 (tileInfo.primaryTerrain === 'Grass' && tileInfo.secondaryTerrain === 'HotSpringWater') ||
                 (tileInfo.primaryTerrain === 'HotSpringWater' && tileInfo.secondaryTerrain === 'Grass');
 
-            let maskVariant: ShorelineMaskVariant | null = null;
-            if (isBeachSea) maskVariant = 'beachSea';
-            else if (isBeachHotSpring) maskVariant = 'hotSpringBeach';
-            else if (isGrassHotSpring) maskVariant = 'hotSpringGrass';
-            if (!maskVariant) continue;
-
-            if (maskVariant === 'hotSpringBeach' && !isHotSpringShorelineMaskReady()) continue;
-            if (maskVariant === 'hotSpringGrass' && !isGrassHotSpringShorelineMaskReady()) continue;
+            if (!isGrassHotSpring || !isGrassHotSpringShorelineMaskReady()) continue;
 
             ctx.save();
 
@@ -475,46 +456,6 @@ export class ProceduralWorldRenderer {
                 ctx.clip();
             }
 
-            if (maskVariant === 'beachSea') {
-                const proceduralConfig = getProceduralBlendConfig(tileInfo);
-                const cornerWeightsB =
-                    proceduralConfig ? getProceduralBlendCornerWeights(tileInfo, proceduralConfig) : null;
-                const imageA =
-                    proceduralConfig ? this.tileCache.images.get(proceduralConfig.textureKeyA) ?? null : null;
-                const imageB =
-                    proceduralConfig ? this.tileCache.images.get(proceduralConfig.textureKeyB) ?? null : null;
-
-                if (
-                    proceduralConfig &&
-                    cornerWeightsB &&
-                    imageA &&
-                    imageB &&
-                    imageA.complete &&
-                    imageB.complete &&
-                    imageA.naturalHeight !== 0 &&
-                    imageB.naturalHeight !== 0
-                ) {
-                    renderProceduralBeachSeaShorelineOverlay({
-                        ctx,
-                        imageA,
-                        imageB,
-                        cornerWeightsB,
-                        worldOriginX: destX,
-                        worldOriginY: destY,
-                        destX,
-                        destY,
-                        destSize: pixelSize,
-                        tileSize,
-                        currentTimeMs,
-                    });
-                    ctx.restore();
-                    continue;
-                }
-
-                ctx.restore();
-                continue;
-            }
-
             renderShorelineOverlay(
                 ctx,
                 tileInfo.spriteCoords,
@@ -524,7 +465,7 @@ export class ProceduralWorldRenderer {
                 false,
                 false,
                 currentTimeMs,
-                maskVariant
+                'hotSpringGrass'
             );
 
             ctx.restore();
