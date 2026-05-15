@@ -328,8 +328,10 @@ const getEntityY = (item: YSortedEntityType, timestamp: number): number => {
       return entity.posY - 100;
     }
     case 'sleeping_bag':
-      // Sleeping bags ALWAYS render under the player - no y-sorting. Use constant so they sort first.
-      return -1e9;
+      // Sleeping bags are flat ground placeables like small boxes and stashes.
+      // Keep them under players via the explicit comparator rules below, but let them
+      // participate in normal ground-placeable depth sorting so foundations don't cover them.
+      return entity.posY - 100;
     case 'rain_collector':
     case 'animal_corpse':
     case 'player_corpse':
