@@ -32,6 +32,16 @@ import { setShelterClippingData, setGlobalShadowsEnabled } from '../../utils/ren
 
 const TOTAL_SWIMMING_FRAMES = 24;
 
+function isWorldPositionOverDeepSea(
+  connection: any | null | undefined,
+  worldX: number,
+  worldY: number
+): boolean {
+  if (!connection) return false;
+  const { tileX, tileY } = worldPosToTileCoords(worldX, worldY);
+  return getTileTypeFromChunkData(connection, tileX, tileY) === 'DeepSea';
+}
+
 interface RenderWorldPreparationPassesOptions {
   ctx: CanvasRenderingContext2D;
   canvasWidth: number;
@@ -357,6 +367,7 @@ export function renderWorldPreparationPasses({
         sy,
         waterTileLookup,
         seaTransitionTileLookup,
+        isWorldPositionOverDeepSea(connection, playerForRendering.positionX, playerForRendering.positionY),
       );
     }
   });
@@ -392,6 +403,7 @@ export function renderWorldPreparationPasses({
         sy,
         waterTileLookup,
         seaTransitionTileLookup,
+        isWorldPositionOverDeepSea(connection, currentPredictedPosition.x, currentPredictedPosition.y),
       );
     }
   }
@@ -438,6 +450,7 @@ export function renderWorldPreparationPasses({
         sy,
         waterTileLookup,
         seaTransitionTileLookup,
+        isWorldPositionOverDeepSea(connection, playerForRendering.positionX, playerForRendering.positionY),
       );
     });
   }

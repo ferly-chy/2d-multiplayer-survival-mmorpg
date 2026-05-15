@@ -525,7 +525,8 @@ function drawUnderwaterShadow(
   centerX: number,
   centerY: number,
   spriteWidth: number,
-  spriteHeight: number
+  spriteHeight: number,
+  isOverDeepSea: boolean = false
 ): void {
   // Reuse module-level canvas for sprite extraction (avoids per-frame allocation)
   _uwShadowCanvas.width = gameConfig.spriteWidth;
@@ -542,9 +543,13 @@ function drawUnderwaterShadow(
     0, 0, gameConfig.spriteWidth, gameConfig.spriteHeight    // Destination: full temporary canvas
   );
   
-  // Shadow offset: positioned close to the character for top-down underwater view
-  const shadowOffsetX = spriteWidth * 0.28; // Small shift right (~10-12 pixels)
-  const shadowOffsetY = spriteHeight * 0.9; // Small shift down (~14-18 pixels)
+  // Shadow offset: detach more over deep sea to better convey the extra depth below.
+  const shadowOffsetX = spriteWidth * (
+    isOverDeepSea ? DEEP_SEA_UNDERWATER_SHADOW_OFFSET_X : UNDERWATER_SHADOW_OFFSET_X
+  );
+  const shadowOffsetY = spriteHeight * (
+    isOverDeepSea ? DEEP_SEA_UNDERWATER_SHADOW_OFFSET_Y : UNDERWATER_SHADOW_OFFSET_Y
+  );
   
   // Shadow position
   const shadowX = centerX + shadowOffsetX;
@@ -586,6 +591,8 @@ function drawUnderwaterShadow(
 /** Shadow offset from sprite center (matches drawUnderwaterShadow). */
 const UNDERWATER_SHADOW_OFFSET_X = 0.28;
 const UNDERWATER_SHADOW_OFFSET_Y = 0.9;
+const DEEP_SEA_UNDERWATER_SHADOW_OFFSET_X = 0.34;
+const DEEP_SEA_UNDERWATER_SHADOW_OFFSET_Y = 2.18;
 
 /**
  * Renders underwater shadow for a player if their shadow position is over water.
@@ -599,19 +606,32 @@ export function renderUnderwaterShadowIfOverWater(
   spriteSx: number,
   spriteSy: number,
   waterTileLookup: Map<string, boolean>,
-  seaTransitionTileLookup?: Map<string, boolean>
+  seaTransitionTileLookup?: Map<string, boolean>,
+  isPlayerOverDeepSea: boolean = false
 ): void {
   const drawWidth = gameConfig.playerSpriteWidth;
   const drawHeight = gameConfig.playerSpriteHeight;
   const spriteBaseX = playerPosX - drawWidth / 2;
   const spriteBaseY = playerPosY - drawHeight / 2;
-  const shadowX = playerPosX + drawWidth * UNDERWATER_SHADOW_OFFSET_X;
-  const shadowY = playerPosY + drawHeight * UNDERWATER_SHADOW_OFFSET_Y;
+  const shadowOffsetX = isPlayerOverDeepSea ? DEEP_SEA_UNDERWATER_SHADOW_OFFSET_X : UNDERWATER_SHADOW_OFFSET_X;
+  const shadowOffsetY = isPlayerOverDeepSea ? DEEP_SEA_UNDERWATER_SHADOW_OFFSET_Y : UNDERWATER_SHADOW_OFFSET_Y;
+  const shadowX = playerPosX + drawWidth * shadowOffsetX;
+  const shadowY = playerPosY + drawHeight * shadowOffsetY;
   const shadowTileKey = worldPosToTileKey(shadowX, shadowY);
   const isShadowOverWater = waterTileLookup.get(shadowTileKey) ?? false;
   if (isShadowOverWater && seaTransitionTileLookup?.get(shadowTileKey)) return; // No swimming shadow on transition tiles
   if (isShadowOverWater) {
-    drawUnderwaterShadowOnly(ctx, heroImg, spriteSx, spriteSy, spriteBaseX, spriteBaseY, drawWidth, drawHeight);
+    drawUnderwaterShadowOnly(
+      ctx,
+      heroImg,
+      spriteSx,
+      spriteSy,
+      spriteBaseX,
+      spriteBaseY,
+      drawWidth,
+      drawHeight,
+      isPlayerOverDeepSea
+    );
   }
 }
 
@@ -626,11 +646,22 @@ export function drawUnderwaterShadowOnly(
   spriteDrawX: number,
   spriteDrawY: number,
   spriteWidth: number = gameConfig.playerSpriteWidth,
-  spriteHeight: number = gameConfig.playerSpriteHeight
+  spriteHeight: number = gameConfig.playerSpriteHeight,
+  isOverDeepSea: boolean = false
 ): void {
   const centerX = spriteDrawX + spriteWidth / 2;
   const centerY = spriteDrawY + spriteHeight / 2;
-  drawUnderwaterShadow(ctx, spriteImage, spriteSx, spriteSy, centerX, centerY, spriteWidth, spriteHeight);
+  drawUnderwaterShadow(
+    ctx,
+    spriteImage,
+    spriteSx,
+    spriteSy,
+    centerX,
+    centerY,
+    spriteWidth,
+    spriteHeight,
+    isOverDeepSea
+  );
 }
 
 /**

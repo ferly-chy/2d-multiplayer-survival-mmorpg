@@ -45,6 +45,11 @@ import {
     renderProceduralDualGridLayerFallback,
 } from './dualGridProceduralBlendWebGL';
 
+const UNDERWATER_LAND_TEXTURE_KEY = 'UnderwaterLand_base';
+const UNDERWATER_HOT_SPRING_TEXTURE_KEY = 'UnderwaterHotSpring_base';
+const UNDERWATER_FALLBACK_COLOR = '#0a3d4f';
+const UNDERWATER_HOT_SPRING_FALLBACK_COLOR = '#cdbd8a';
+
 // Helper to get tile base texture path from tile type name
 function getTileBaseTexturePath(tileTypeName: string): string {
     const tileNameMap: { [key: string]: string } = {
@@ -161,6 +166,7 @@ export class ProceduralWorldRenderer {
         
         try {
             await Promise.all(promises);
+            await this.registerUnderwaterSyntheticTextures();
             this.isInitialized = true;
             const grassBeachImg = this.tileCache.images.get('transition_Grass_Beach');
             initGrassHotSpringShorelineMask(grassBeachImg).catch(() => {});
@@ -188,6 +194,39 @@ export class ProceduralWorldRenderer {
             };
             img.src = src;
         });
+    }
+
+    private async createSolidColorTexture(key: string, color: string): Promise<void> {
+        if (this.tileCache.images.has(key)) {
+            return;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 8;
+        canvas.height = 8;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            throw new Error(`Failed to create synthetic texture ${key}`);
+        }
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        await this.loadImage(canvas.toDataURL('image/png'), key);
+    }
+
+    private async registerUnderwaterSyntheticTextures(): Promise<void> {
+        await this.createSolidColorTexture(UNDERWATER_LAND_TEXTURE_KEY, UNDERWATER_FALLBACK_COLOR);
+
+        const beachBase = this.tileCache.images.get('Beach_base');
+        if (beachBase?.complete && beachBase.naturalHeight !== 0) {
+            this.tileCache.images.set(UNDERWATER_HOT_SPRING_TEXTURE_KEY, beachBase);
+            return;
+        }
+
+        await this.createSolidColorTexture(
+            UNDERWATER_HOT_SPRING_TEXTURE_KEY,
+            UNDERWATER_HOT_SPRING_FALLBACK_COLOR
+        );
     }
     
     public updateTileCache(worldTiles: Map<string, WorldTile>) {
@@ -332,13 +371,11 @@ export class ProceduralWorldRenderer {
         
         const transitionsStart = markProfiler(profilingEnabled);
         if (isSnorkeling) {
-            // When snorkeling, render:
-            // 1) Underwater darkness ↔ sea transitions
-            // 2) Sea ↔ deep sea transitions
+            // Underwater mode uses the same procedural dual-grid masks as the surface,
+            // but swaps land/water textures to underwater-specific variants.
             for (let y = dualStartY; y < dualEndY; y++) {
                 for (let x = dualStartX; x < dualEndX; x++) {
-                    this.renderUnderwaterTransition(ctx, x, y, tileSize, showDebugOverlay);
-                    this.renderSeaDeepSeaTransitionUnderwater(ctx, x, y, tileSize, showDebugOverlay);
+                    this.renderSnorkelingTransition(ctx, x, y, tileSize, showDebugOverlay);
                 }
             }
         } else {
@@ -480,8 +517,8 @@ export class ProceduralWorldRenderer {
      * 
      * When isSnorkeling is true, renders in "underwater view" mode:
      * - Sea / DeepSea: surface base textures (open water)
-     * - HotSpringWater: Underwater_Sea sandy sea-floor interior (dual-grid index 15)
-     * - Land: dark underwater interior (looking up at the bottom of the surface)
+     * - HotSpringWater: sandy underwater floor texture
+     * - Land: dark synthetic underwater texture
      */
     private renderBaseTile(
         ctx: CanvasRenderingContext2D, 
@@ -499,12 +536,6 @@ export class ProceduralWorldRenderer {
         const pixelY = Math.floor(tileY * tileSize);
         const pixelSize = Math.floor(tileSize) + 1; // Add 1 pixel to eliminate gaps
         
-        // Underwater_Sea autotile: index 0 = primary interior (murky "land from below"); index 15 = secondary interior (sandy sea floor)
-        const UNDERWATER_MURKY_INTERIOR = DUAL_GRID_LOOKUP[0];
-        const UNDERWATER_SANDY_SEA_FLOOR_INTERIOR = DUAL_GRID_LOOKUP[15];
-        const AUTOTILE_TILE_SIZE = 128;
-        const UNDERWATER_FALLBACK_COLOR = '#0a3d4f';
-        
         if (!tile) {
             // Fallback when no tile data - edge zone likely deep sea (chunks may not be loaded yet)
             const isEdgeZone = tileX < DEEP_SEA_EDGE_TILES || tileX >= gameConfig.worldWidthTiles - DEEP_SEA_EDGE_TILES ||
@@ -520,17 +551,9 @@ export class ProceduralWorldRenderer {
                 return;
             }
             if (isSnorkeling) {
-                // When snorkeling with no tile data, use underwater interior tile
-                const underwaterImg = this.tileCache.images.get('transition_Underwater_Sea');
+                const underwaterImg = this.tileCache.images.get(UNDERWATER_LAND_TEXTURE_KEY);
                 if (underwaterImg && underwaterImg.complete && underwaterImg.naturalHeight !== 0) {
-                    ctx.drawImage(
-                        underwaterImg,
-                        UNDERWATER_MURKY_INTERIOR.col * AUTOTILE_TILE_SIZE,
-                        UNDERWATER_MURKY_INTERIOR.row * AUTOTILE_TILE_SIZE,
-                        AUTOTILE_TILE_SIZE,
-                        AUTOTILE_TILE_SIZE,
-                        pixelX, pixelY, pixelSize, pixelSize
-                    );
+                    ctx.drawImage(underwaterImg, pixelX, pixelY, pixelSize, pixelSize);
                 } else {
                     ctx.fillStyle = UNDERWATER_FALLBACK_COLOR;
                     ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
@@ -546,16 +569,9 @@ export class ProceduralWorldRenderer {
         const tileTypeName = tile.tileType?.tag;
         if (!tileTypeName) {
             if (isSnorkeling) {
-                const underwaterImg = this.tileCache.images.get('transition_Underwater_Sea');
+                const underwaterImg = this.tileCache.images.get(UNDERWATER_LAND_TEXTURE_KEY);
                 if (underwaterImg && underwaterImg.complete && underwaterImg.naturalHeight !== 0) {
-                    ctx.drawImage(
-                        underwaterImg,
-                        UNDERWATER_MURKY_INTERIOR.col * AUTOTILE_TILE_SIZE,
-                        UNDERWATER_MURKY_INTERIOR.row * AUTOTILE_TILE_SIZE,
-                        AUTOTILE_TILE_SIZE,
-                        AUTOTILE_TILE_SIZE,
-                        pixelX, pixelY, pixelSize, pixelSize
-                    );
+                    ctx.drawImage(underwaterImg, pixelX, pixelY, pixelSize, pixelSize);
                 } else {
                     ctx.fillStyle = UNDERWATER_FALLBACK_COLOR;
                     ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
@@ -571,17 +587,9 @@ export class ProceduralWorldRenderer {
         const isWaterTile = isWaterTileTag(tileTypeName);
         
         if (isSnorkeling && !isWaterTile) {
-            // Land (and non-water) tiles: dark underwater interior
-            const underwaterImg = this.tileCache.images.get('transition_Underwater_Sea');
+            const underwaterImg = this.tileCache.images.get(UNDERWATER_LAND_TEXTURE_KEY);
             if (underwaterImg && underwaterImg.complete && underwaterImg.naturalHeight !== 0) {
-                ctx.drawImage(
-                    underwaterImg,
-                    UNDERWATER_MURKY_INTERIOR.col * AUTOTILE_TILE_SIZE,
-                    UNDERWATER_MURKY_INTERIOR.row * AUTOTILE_TILE_SIZE,
-                    AUTOTILE_TILE_SIZE,
-                    AUTOTILE_TILE_SIZE,
-                    pixelX, pixelY, pixelSize, pixelSize
-                );
+                ctx.drawImage(underwaterImg, pixelX, pixelY, pixelSize, pixelSize);
             } else {
                 ctx.fillStyle = UNDERWATER_FALLBACK_COLOR;
                 ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
@@ -589,20 +597,13 @@ export class ProceduralWorldRenderer {
             return;
         }
 
-        // Hot spring pools: use Underwater_Sea "sea floor" interior (dual-grid 15 — sandy), not murky open-water interior
+        // Hot spring pools read better underwater as a sandy floor than open-water blue.
         if (isSnorkeling && tileTypeName === 'HotSpringWater') {
-            const underwaterImg = this.tileCache.images.get('transition_Underwater_Sea');
+            const underwaterImg = this.tileCache.images.get(UNDERWATER_HOT_SPRING_TEXTURE_KEY);
             if (underwaterImg && underwaterImg.complete && underwaterImg.naturalHeight !== 0) {
-                ctx.drawImage(
-                    underwaterImg,
-                    UNDERWATER_SANDY_SEA_FLOOR_INTERIOR.col * AUTOTILE_TILE_SIZE,
-                    UNDERWATER_SANDY_SEA_FLOOR_INTERIOR.row * AUTOTILE_TILE_SIZE,
-                    AUTOTILE_TILE_SIZE,
-                    AUTOTILE_TILE_SIZE,
-                    pixelX, pixelY, pixelSize, pixelSize
-                );
+                ctx.drawImage(underwaterImg, pixelX, pixelY, pixelSize, pixelSize);
             } else {
-                ctx.fillStyle = UNDERWATER_FALLBACK_COLOR;
+                ctx.fillStyle = UNDERWATER_HOT_SPRING_FALLBACK_COLOR;
                 ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
             }
             return;
@@ -639,6 +640,162 @@ export class ProceduralWorldRenderer {
             // Black fill
             ctx.fillStyle = 'black';
             ctx.fillText(tileTypeAbbr, textX, textY);
+        }
+    }
+
+    private getSnorkelingTextureKey(terrain: string): string {
+        switch (terrain) {
+            case 'Sea':
+                return 'Sea_base';
+            case 'DeepSea':
+                return 'DeepSea_base';
+            case 'HotSpringWater':
+                return UNDERWATER_HOT_SPRING_TEXTURE_KEY;
+            default:
+                return UNDERWATER_LAND_TEXTURE_KEY;
+        }
+    }
+
+    private renderSnorkelingTransition(
+        ctx: CanvasRenderingContext2D,
+        logicalX: number,
+        logicalY: number,
+        tileSize: number,
+        showDebugOverlay: boolean = false
+    ): void {
+        const transitions = this.getTransitionInfo(logicalX, logicalY);
+        if (transitions.length === 0) return;
+
+        const pixelX = Math.floor((logicalX + 0.5) * tileSize);
+        const pixelY = Math.floor((logicalY + 0.5) * tileSize);
+        const pixelSize = Math.floor(tileSize) + 1;
+        const destX = Math.floor(logicalX * tileSize);
+        const destY = Math.floor(logicalY * tileSize);
+        const halfSize = Math.floor(pixelSize / 2);
+        const remainderSize = pixelSize - halfSize;
+        let renderedAny = false;
+
+        for (const tileInfo of transitions) {
+            const proceduralConfig = getProceduralBlendConfig(tileInfo);
+            if (!proceduralConfig) {
+                continue;
+            }
+
+            const textureKeyA = this.getSnorkelingTextureKey(proceduralConfig.terrainA);
+            const textureKeyB = this.getSnorkelingTextureKey(proceduralConfig.terrainB);
+            if (textureKeyA === textureKeyB) {
+                continue;
+            }
+
+            const imageA = this.tileCache.images.get(textureKeyA);
+            const imageB = this.tileCache.images.get(textureKeyB);
+            const cornerWeightsB = getProceduralBlendCornerWeights(tileInfo, proceduralConfig);
+            const webglCtx = initProceduralDualGridBlendWebGL();
+
+            if (
+                !imageA ||
+                !imageB ||
+                !imageA.complete ||
+                !imageB.complete ||
+                imageA.naturalHeight === 0 ||
+                imageB.naturalHeight === 0 ||
+                !cornerWeightsB
+            ) {
+                continue;
+            }
+
+            const proceduralCanvas =
+                (webglCtx
+                    ? renderProceduralDualGridLayer(webglCtx, {
+                        imageA,
+                        imageB,
+                        cornerWeightsB,
+                        worldOriginX: destX,
+                        worldOriginY: destY,
+                        pixelSize,
+                        tileSize,
+                    })
+                    : null) ??
+                renderProceduralDualGridLayerFallback({
+                    imageA,
+                    imageB,
+                    cornerWeightsB,
+                    worldOriginX: destX,
+                    worldOriginY: destY,
+                    pixelSize,
+                    tileSize,
+                });
+
+            if (!proceduralCanvas) {
+                continue;
+            }
+
+            const { clipCorners, flipHorizontal, flipVertical } = tileInfo;
+            const needsTransform = flipHorizontal || flipVertical;
+
+            ctx.save();
+
+            if (needsTransform) {
+                const centerX = destX + pixelSize / 2;
+                const centerY = destY + pixelSize / 2;
+                ctx.translate(centerX, centerY);
+                if (flipHorizontal) {
+                    ctx.scale(-1, 1);
+                }
+                if (flipVertical) {
+                    ctx.scale(1, -1);
+                }
+                ctx.translate(-centerX, -centerY);
+            }
+
+            if (clipCorners && clipCorners.length > 0) {
+                ctx.beginPath();
+                for (const corner of clipCorners) {
+                    switch (corner) {
+                        case 'TL':
+                            ctx.rect(destX, destY, halfSize, halfSize);
+                            break;
+                        case 'TR':
+                            ctx.rect(destX + halfSize, destY, remainderSize, halfSize);
+                            break;
+                        case 'BL':
+                            ctx.rect(destX, destY + halfSize, halfSize, remainderSize);
+                            break;
+                        case 'BR':
+                            ctx.rect(destX + halfSize, destY + halfSize, remainderSize, remainderSize);
+                            break;
+                    }
+                }
+                ctx.clip();
+            }
+
+            ctx.drawImage(
+                proceduralCanvas,
+                0,
+                0,
+                proceduralCanvas.width,
+                proceduralCanvas.height,
+                destX,
+                destY,
+                pixelSize,
+                pixelSize
+            );
+
+            ctx.restore();
+            renderedAny = true;
+        }
+
+        if (showDebugOverlay && renderedAny) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(60, 200, 255, 0.85)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(destX, destY, pixelSize, pixelSize);
+            ctx.font = 'bold 14px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#aee8ff';
+            ctx.fillText('UW', pixelX, pixelY);
+            ctx.restore();
         }
     }
     
