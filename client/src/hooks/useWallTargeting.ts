@@ -17,7 +17,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { DbConnection } from '../generated';
+import { WallCell } from '../generated/types';
 import { FOUNDATION_TILE_SIZE, foundationCellToWorldCenter } from '../config/gameConfig';
+import { getBuildingCellKey, useBuildingSpatialIndex } from './useBuildingSpatialIndex';
 
 const BUILDING_PLACEMENT_MAX_DISTANCE = 128.0;
 const BUILDING_PLACEMENT_MAX_DISTANCE_SQUARED = BUILDING_PLACEMENT_MAX_DISTANCE * BUILDING_PLACEMENT_MAX_DISTANCE;
@@ -149,6 +151,7 @@ export function useWallTargeting(
   const [targetedWall, setTargetedWall] = useState<any | null>(null);
   const [targetTileX, setTargetTileX] = useState<number | null>(null);
   const [targetTileY, setTargetTileY] = useState<number | null>(null);
+  const { wallsByCell } = useBuildingSpatialIndex(connection);
 
   // Find closest wall to mouse position
   const targetingResult = useMemo(() => {
@@ -166,8 +169,17 @@ export function useWallTargeting(
     let closestTileX = mouseCellX;
     let closestTileY = mouseCellY;
 
-    for (const wall of connection.db.wall_cell.iter()) {
-      if (wall.isDestroyed) continue;
+    const candidateWalls: WallCell[] = [];
+    for (let offsetY = -2; offsetY <= 2; offsetY++) {
+      for (let offsetX = -2; offsetX <= 2; offsetX++) {
+        const cellWalls = wallsByCell.get(getBuildingCellKey(mouseCellX + offsetX, mouseCellY + offsetY));
+        if (cellWalls) {
+          candidateWalls.push(...cellWalls);
+        }
+      }
+    }
+
+    for (const wall of candidateWalls) {
 
       // Convert foundation cell to world coordinates (center of foundation cell)
       const { x: tileWorldX, y: tileWorldY } = foundationCellToWorldCenter(wall.cellX, wall.cellY);
@@ -206,7 +218,7 @@ export function useWallTargeting(
     }
 
     return { wall: null, tileX: null, tileY: null };
-  }, [connection, hasRepairHammer, worldMouseX, worldMouseY, localPlayerX, localPlayerY]);
+  }, [connection, hasRepairHammer, worldMouseX, worldMouseY, localPlayerX, localPlayerY, wallsByCell]);
 
   // Update state when targeting result changes
   useEffect(() => {

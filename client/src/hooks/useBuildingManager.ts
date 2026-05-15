@@ -26,6 +26,7 @@ import { TILE_SIZE, FOUNDATION_TILE_SIZE, worldPixelsToFoundationCell, foundatio
 import { playImmediateSound } from './useSoundSystem';
 import { getTileTypeFromChunkData } from '../utils/renderers/placementRenderingUtils';
 import { isWaterTileTag } from '../utils/tileTypeGuards';
+import { getBuildingCellKey, useBuildingSpatialIndex } from './useBuildingSpatialIndex';
 
 // Building placement modes
 export enum BuildingMode {
@@ -143,14 +144,18 @@ function isFoundationPlacementTooFar(
  * - Prioritize cardinal directions (N, E, S, W) for "continuing" patterns
  */
 function predictTriangleShape(
-  connection: DbConnection | null,
+  foundationsByCell: Map<string, { cellX: number; cellY: number; shape: number }[]>,
   cellX: number,
   cellY: number
 ): FoundationShape | null {
-  if (!connection) return null;
+  if (foundationsByCell.size === 0) return null;
   
   // Get all foundations at the same cell AND adjacent cells
-  const sameCellFoundations: { x: number; y: number; shape: FoundationShape }[] = [];
+  const sameCellFoundations = (foundationsByCell.get(getBuildingCellKey(cellX, cellY)) ?? []).map((foundation) => ({
+    x: foundation.cellX,
+    y: foundation.cellY,
+    shape: foundation.shape as FoundationShape,
+  }));
   const adjacentFoundations = new Map<string, { x: number; y: number; shape: FoundationShape }>();
   
   // Define triangle complements map
@@ -161,31 +166,20 @@ function predictTriangleShape(
     [FoundationShape.TriSW, FoundationShape.TriNE], // SW triangle -> NE triangle forms full square
   ]);
   
-  for (const foundation of connection.db.foundation_cell.iter()) {
-    if (foundation.isDestroyed) continue;
-    
-    const dx = foundation.cellX - cellX;
-    const dy = foundation.cellY - cellY;
-    
-    // Check if same cell
-    if (dx === 0 && dy === 0) {
-      sameCellFoundations.push({
-        x: foundation.cellX,
-        y: foundation.cellY,
-        shape: foundation.shape as FoundationShape
+  for (let offsetY = -1; offsetY <= 1; offsetY++) {
+    for (let offsetX = -1; offsetX <= 1; offsetX++) {
+      if (offsetX === 0 && offsetY === 0) continue;
+
+      const adjacentKey = getBuildingCellKey(cellX + offsetX, cellY + offsetY);
+      const adjacentCellFoundations = foundationsByCell.get(adjacentKey);
+      const adjacentFoundation = adjacentCellFoundations?.[0];
+      if (!adjacentFoundation) continue;
+
+      adjacentFoundations.set(adjacentKey, {
+        x: adjacentFoundation.cellX,
+        y: adjacentFoundation.cellY,
+        shape: adjacentFoundation.shape as FoundationShape,
       });
-    }
-    
-    // Check if adjacent (cardinal or diagonal, within 1 cell)
-    if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && (dx !== 0 || dy !== 0)) {
-      const key = `${foundation.cellX},${foundation.cellY}`;
-      if (!adjacentFoundations.has(key)) {
-        adjacentFoundations.set(key, {
-          x: foundation.cellX,
-          y: foundation.cellY,
-          shape: foundation.shape as FoundationShape
-        });
-      }
     }
   }
   
@@ -428,49 +422,43 @@ function predictTriangleShape(
 
 // Helper: Check if foundation position is already occupied
 function isFoundationPositionOccupied(
-  connection: DbConnection | null,
+  foundationsByCell: Map<string, { shape: number }[]>,
   cellX: number,
   cellY: number,
   shape: FoundationShape
 ): boolean {
-  if (!connection) return false;
+  const cellFoundations = foundationsByCell.get(getBuildingCellKey(cellX, cellY)) ?? [];
   
   // IMPORTANT: Check ALL foundations at this cell - there might be two complementary triangles already
-  let foundComplementary = false;
   let foundOverlap = false;
-  let foundationCount = 0;
+  const foundationCount = cellFoundations.length;
   
   // Check if there's already a foundation at this cell
-  for (const foundation of connection.db.foundation_cell.iter()) {
-    if (foundation.cellX === cellX && foundation.cellY === cellY && !foundation.isDestroyed) {
-      foundationCount++;
-      const existingShape = foundation.shape as FoundationShape;
-      
-      // Check if shapes are compatible
-      // Same shape = overlap
-      if (existingShape === shape) {
-        return true; // Occupied
-      }
-      
-      // Full foundation overlaps with anything
-      if (existingShape === FoundationShape.Full || shape === FoundationShape.Full) {
-        return true; // Occupied
-      }
-      
-      // Complementary triangles can be placed together
-      const isComplementary = (
-        (existingShape === FoundationShape.TriNW && shape === FoundationShape.TriSE) ||
-        (existingShape === FoundationShape.TriSE && shape === FoundationShape.TriNW) ||
-        (existingShape === FoundationShape.TriNE && shape === FoundationShape.TriSW) ||
-        (existingShape === FoundationShape.TriSW && shape === FoundationShape.TriNE)
-      );
-      
-      if (isComplementary) {
-        foundComplementary = true; // Mark that we found a complementary triangle
-      } else {
-        // Non-complementary triangles overlap
-        foundOverlap = true; // Mark that we found an overlap
-      }
+  for (const foundation of cellFoundations) {
+    const existingShape = foundation.shape as FoundationShape;
+    
+    // Check if shapes are compatible
+    // Same shape = overlap
+    if (existingShape === shape) {
+      return true; // Occupied
+    }
+    
+    // Full foundation overlaps with anything
+    if (existingShape === FoundationShape.Full || shape === FoundationShape.Full) {
+      return true; // Occupied
+    }
+    
+    // Complementary triangles can be placed together
+    const isComplementary = (
+      (existingShape === FoundationShape.TriNW && shape === FoundationShape.TriSE) ||
+      (existingShape === FoundationShape.TriSE && shape === FoundationShape.TriNW) ||
+      (existingShape === FoundationShape.TriNE && shape === FoundationShape.TriSW) ||
+      (existingShape === FoundationShape.TriSW && shape === FoundationShape.TriNE)
+    );
+    
+    if (!isComplementary) {
+      // Non-complementary triangles overlap
+      foundOverlap = true; // Mark that we found an overlap
     }
   }
   
@@ -501,6 +489,7 @@ export const useBuildingManager = (
   worldMouseX?: number | null, // ADDED: Current mouse position for triangle prediction
   worldMouseY?: number | null // ADDED: Current mouse position for triangle prediction
 ): [BuildingPlacementState, BuildingPlacementActions] => {
+  const { foundationsByCell, fencesByCell } = useBuildingSpatialIndex(connection);
   const [mode, setMode] = useState<BuildingMode>(BuildingMode.None);
   const [foundationShape, setFoundationShape] = useState<FoundationShape>(FoundationShape.Full);
   const [buildingEdge, setBuildingEdge] = useState<BuildingEdge>(BuildingEdge.N);
@@ -726,7 +715,7 @@ export const useBuildingManager = (
           return;
         }
 
-        if (isFoundationPositionOccupied(connection, cellX, cellY, foundationShape)) {
+        if (isFoundationPositionOccupied(foundationsByCell, cellX, cellY, foundationShape)) {
           console.log('[BuildingManager] Client-side validation: Position already occupied at', { cellX, cellY });
           setPlacementError('Position already occupied');
           playImmediateSound('construction_placement_error', 1.0);
@@ -764,13 +753,7 @@ export const useBuildingManager = (
         }
 
         // Check if there's a foundation at this cell (walls require a foundation)
-        let hasFoundation = false;
-        for (const foundation of connection.db.foundation_cell.iter()) {
-          if (foundation.cellX === cellX && foundation.cellY === cellY && !foundation.isDestroyed) {
-            hasFoundation = true;
-            break;
-          }
-        }
+        const hasFoundation = (foundationsByCell.get(getBuildingCellKey(cellX, cellY))?.length ?? 0) > 0;
 
         if (!hasFoundation) {
           setPlacementError('Walls require a foundation');
@@ -840,13 +823,8 @@ export const useBuildingManager = (
         }
         
         // Check if there's already a fence at this edge
-        let hasExistingFence = false;
-        for (const fence of connection.db.fence.iter()) {
-          if (fence.cellX === cellX && fence.cellY === cellY && fence.edge === edge && !fence.isDestroyed) {
-            hasExistingFence = true;
-            break;
-          }
-        }
+        const hasExistingFence = (fencesByCell.get(getBuildingCellKey(cellX, cellY)) ?? [])
+          .some((fence) => fence.edge === edge);
         
         if (hasExistingFence) {
           setPlacementError('A fence already exists at this edge');
@@ -878,7 +856,7 @@ export const useBuildingManager = (
       console.error('[BuildingManager] Failed to call placement reducer:', err);
       setPlacementError(err?.message || 'Failed to place building piece');
     }
-  }, [connection, isBuilding, mode, foundationShape, buildingTier, localPlayerX, localPlayerY]);
+  }, [connection, isBuilding, mode, foundationShape, buildingTier, localPlayerX, localPlayerY, foundationsByCell, fencesByCell]);
 
   // PERFORMANCE FIX: Compute foundation cell coordinates with memoization
   // The key insight: we only need to re-predict when the CELL changes, not on every pixel move
@@ -944,7 +922,7 @@ export const useBuildingManager = (
     
     // Always re-predict when foundation cell changes (foundations might have changed)
     // Predict the best triangle shape using foundation cell coordinates
-    const predictedShape = predictTriangleShape(connection, cellX, cellY);
+    const predictedShape = predictTriangleShape(foundationsByCell, cellX, cellY);
     
     if (predictedShape !== null) {
       // PERFORMANCE FIX: Removed console.log that ran on every prediction
@@ -963,7 +941,7 @@ export const useBuildingManager = (
       }
       lastPredictedTileRef.current = { tileX: cellX, tileY: cellY };
     }
-  }, [isBuilding, mode, foundationShape, worldMouseX, worldMouseY, connection]);
+  }, [isBuilding, mode, foundationShape, worldMouseX, worldMouseY, connection, foundationsByCell]);
 
   // Building state
   const buildingState: BuildingPlacementState = {

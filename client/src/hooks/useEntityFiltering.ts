@@ -2077,18 +2077,48 @@ export function useEntityFiltering(
     
     // Use cached result when no re-sort is needed - significant performance gain!
     if (!needsResort && ySortedCache.entities.length > 0) {
-      // CRITICAL: Refresh dynamic wild-animal references even when sort order is cached.
-      // Without this, cached y-sorted entries can hold stale animal objects while
-      // collision/debug reads fresh table state, causing visible sprite/collision desync.
+      // Keep cached entity references fresh even when we skip a full re-sort.
+      // This prevents visual updates that do not change counts/order (door open state,
+      // repaired structure health, etc.) from waiting on movement to become visible.
+      const refreshedCachedEntities: YSortedEntityWithKey[] = [];
+
       for (const cachedEntity of ySortedCache.entities) {
-        if (cachedEntity.type !== 'wild_animal') continue;
-        const cachedAnimal = cachedEntity.entity as SpacetimeDBWildAnimal;
-        const latestAnimal = wildAnimals?.get(cachedAnimal.id.toString());
-        if (!latestAnimal) continue;
-        cachedEntity.entity = latestAnimal;
-        // Keep key in sync so nearby depth ordering stays reasonable between full resorts.
-        cachedEntity._ySortKey = latestAnimal.posY;
+        let latestEntity = cachedEntity.entity;
+
+        if (cachedEntity.type === 'wild_animal') {
+          const cachedAnimal = cachedEntity.entity as SpacetimeDBWildAnimal;
+          latestEntity = wildAnimals?.get(cachedAnimal.id.toString()) ?? cachedEntity.entity;
+        } else if (cachedEntity.type === 'foundation_cell') {
+          const cachedFoundation = cachedEntity.entity as SpacetimeDBFoundationCell;
+          const latestFoundation = foundationCells?.get(cachedFoundation.id.toString());
+          if (!latestFoundation) continue;
+          latestEntity = latestFoundation;
+        } else if (cachedEntity.type === 'wall_cell') {
+          const cachedWall = cachedEntity.entity as SpacetimeDBWallCell;
+          const latestWall = wallCells?.get(cachedWall.id.toString());
+          if (!latestWall) continue;
+          latestEntity = latestWall;
+        } else if (cachedEntity.type === 'door') {
+          const cachedDoor = cachedEntity.entity as SpacetimeDBDoor;
+          const latestDoor = doors?.get(cachedDoor.id.toString());
+          if (!latestDoor) continue;
+          latestEntity = latestDoor;
+        } else if (cachedEntity.type === 'fence') {
+          const cachedFence = cachedEntity.entity as SpacetimeDBFence;
+          const latestFence = fences?.get(cachedFence.id.toString());
+          if (!latestFence) continue;
+          latestEntity = latestFence;
+        }
+
+        cachedEntity.entity = latestEntity;
+        cachedEntity._ySortKey = getEntityY(
+          { type: cachedEntity.type, entity: latestEntity } as YSortedEntityType,
+          stableTimestamp,
+        );
+        refreshedCachedEntities.push(cachedEntity);
       }
+
+      ySortedCache.entities = refreshedCachedEntities;
 
       // Split-render: bottom-half list must stay aligned with who is actually emitted as
       // `swimmingPlayerTopHalf` in the cached entity list. Stale `swimmingPlayersForBottomHalf`

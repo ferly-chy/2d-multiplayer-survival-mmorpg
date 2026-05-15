@@ -18,6 +18,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { DbConnection } from '../generated';
 import { Fence } from '../generated/types';
+import { FOUNDATION_TILE_SIZE } from '../config/gameConfig';
+import { getBuildingCellKey, useBuildingSpatialIndex } from './useBuildingSpatialIndex';
 
 const BUILDING_PLACEMENT_MAX_DISTANCE = 128.0;
 const BUILDING_PLACEMENT_MAX_DISTANCE_SQUARED = BUILDING_PLACEMENT_MAX_DISTANCE * BUILDING_PLACEMENT_MAX_DISTANCE;
@@ -111,6 +113,7 @@ export function useFenceTargeting(
   hasRepairHammer: boolean
 ): FenceTargetingState {
   const [targetedFence, setTargetedFence] = useState<Fence | null>(null);
+  const { fencesByCell } = useBuildingSpatialIndex(connection);
 
   // Find closest fence to mouse position
   const targetingResult = useMemo(() => {
@@ -121,9 +124,20 @@ export function useFenceTargeting(
     // Find all fences within range
     let closestFence: Fence | null = null;
     let closestDistanceSq = Infinity;
+    const mouseCellX = Math.floor(worldMouseX / FOUNDATION_TILE_SIZE);
+    const mouseCellY = Math.floor(worldMouseY / FOUNDATION_TILE_SIZE);
 
-    for (const fence of connection.db.fence.iter()) {
-      if (fence.isDestroyed) continue;
+    const candidateFences: Fence[] = [];
+    for (let offsetY = -2; offsetY <= 2; offsetY++) {
+      for (let offsetX = -2; offsetX <= 2; offsetX++) {
+        const cellFences = fencesByCell.get(getBuildingCellKey(mouseCellX + offsetX, mouseCellY + offsetY));
+        if (cellFences) {
+          candidateFences.push(...cellFences);
+        }
+      }
+    }
+
+    for (const fence of candidateFences) {
       // Monument fences (e.g. compound perimeter) cannot be targeted for destroy/upgrade
       if (fence.isMonument) continue;
 
@@ -153,7 +167,7 @@ export function useFenceTargeting(
     }
 
     return { fence: null };
-  }, [connection, hasRepairHammer, worldMouseX, worldMouseY, localPlayerX, localPlayerY]);
+  }, [connection, hasRepairHammer, worldMouseX, worldMouseY, localPlayerX, localPlayerY, fencesByCell]);
 
   // Update state when targeting result changes
   useEffect(() => {

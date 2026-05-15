@@ -18,7 +18,9 @@
 
 import { useMemo } from 'react';
 import { DbConnection } from '../generated';
+import { FoundationCell } from '../generated/types';
 import { FOUNDATION_TILE_SIZE, foundationCellToWorldCenter } from '../config/gameConfig';
+import { getBuildingCellKey, useBuildingSpatialIndex } from './useBuildingSpatialIndex';
 
 const BUILDING_PLACEMENT_MAX_DISTANCE = 128.0;
 const BUILDING_PLACEMENT_MAX_DISTANCE_SQUARED = BUILDING_PLACEMENT_MAX_DISTANCE * BUILDING_PLACEMENT_MAX_DISTANCE;
@@ -130,8 +132,32 @@ export const useFoundationTargeting = (
   worldMouseY: number | null,
   hasRepairHammer: boolean
 ) => {
+  const { foundationsByCell } = useBuildingSpatialIndex(connection);
+
   const result = useBuildingTileTargeting(
-    (conn) => conn.db.foundation_cell.iter(),
+    () => {
+      if (worldMouseX === null || worldMouseY === null) {
+        return [];
+      }
+
+      const mouseCellX = Math.floor(worldMouseX / FOUNDATION_TILE_SIZE);
+      const mouseCellY = Math.floor(worldMouseY / FOUNDATION_TILE_SIZE);
+      const nearbyFoundations: FoundationCell[] = [];
+
+      for (let offsetY = -2; offsetY <= 2; offsetY++) {
+        for (let offsetX = -2; offsetX <= 2; offsetX++) {
+          const cellFoundations = foundationsByCell.get(
+            getBuildingCellKey(mouseCellX + offsetX, mouseCellY + offsetY),
+          );
+
+          if (cellFoundations) {
+            nearbyFoundations.push(...cellFoundations);
+          }
+        }
+      }
+
+      return nearbyFoundations;
+    },
     connection,
     localPlayerX,
     localPlayerY,
