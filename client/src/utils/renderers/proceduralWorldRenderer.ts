@@ -420,9 +420,12 @@ export class ProceduralWorldRenderer {
         const pixelX = Math.floor((logicalX + 0.5) * tileSize);
         const pixelY = Math.floor((logicalY + 0.5) * tileSize);
         const pixelSize = Math.floor(tileSize) + 1;
-        const destX = Math.floor(pixelX - pixelSize / 2);
-        const destY = Math.floor(pixelY - pixelSize / 2);
+        // Anchor the overdrawn dual-grid quad to the logical tile boundary so its
+        // extra coverage expands east/south like the base tile pass, not north/west.
+        const destX = Math.floor(logicalX * tileSize);
+        const destY = Math.floor(logicalY * tileSize);
         const halfSize = Math.floor(pixelSize / 2);
+        const remainderSize = pixelSize - halfSize;
 
         for (const tileInfo of transitions) {
             const isGrassHotSpring =
@@ -448,9 +451,9 @@ export class ProceduralWorldRenderer {
                 for (const corner of tileInfo.clipCorners) {
                     switch (corner) {
                         case 'TL': ctx.rect(destX, destY, halfSize, halfSize); break;
-                        case 'TR': ctx.rect(destX + halfSize, destY, halfSize, halfSize); break;
-                        case 'BL': ctx.rect(destX, destY + halfSize, halfSize, halfSize); break;
-                        case 'BR': ctx.rect(destX + halfSize, destY + halfSize, halfSize, halfSize); break;
+                        case 'TR': ctx.rect(destX + halfSize, destY, remainderSize, halfSize); break;
+                        case 'BL': ctx.rect(destX, destY + halfSize, halfSize, remainderSize); break;
+                        case 'BR': ctx.rect(destX + halfSize, destY + halfSize, remainderSize, remainderSize); break;
                     }
                 }
                 ctx.clip();
@@ -672,9 +675,12 @@ export class ProceduralWorldRenderer {
         const pixelX = Math.floor((logicalX + 0.5) * tileSize);
         const pixelY = Math.floor((logicalY + 0.5) * tileSize);
         const pixelSize = Math.floor(tileSize) + 1;
-        const destX = Math.floor(pixelX - pixelSize / 2);
-        const destY = Math.floor(pixelY - pixelSize / 2);
+        // Anchor the overdrawn dual-grid quad to the logical tile boundary so its
+        // extra coverage expands east/south like the base tile pass, not north/west.
+        const destX = Math.floor(logicalX * tileSize);
+        const destY = Math.floor(logicalY * tileSize);
         const halfSize = Math.floor(pixelSize / 2);
+        const remainderSize = pixelSize - halfSize;
         
         // Render each transition layer from bottom to top
         for (const tileInfo of transitions) {
@@ -744,13 +750,13 @@ export class ProceduralWorldRenderer {
                                         ctx.rect(destX, destY, halfSize, halfSize);
                                         break;
                                     case 'TR':
-                                        ctx.rect(destX + halfSize, destY, halfSize, halfSize);
+                                        ctx.rect(destX + halfSize, destY, remainderSize, halfSize);
                                         break;
                                     case 'BL':
-                                        ctx.rect(destX, destY + halfSize, halfSize, halfSize);
+                                        ctx.rect(destX, destY + halfSize, halfSize, remainderSize);
                                         break;
                                     case 'BR':
-                                        ctx.rect(destX + halfSize, destY + halfSize, halfSize, halfSize);
+                                        ctx.rect(destX + halfSize, destY + halfSize, remainderSize, remainderSize);
                                         break;
                                 }
                             }
@@ -828,13 +834,13 @@ export class ProceduralWorldRenderer {
                             ctx.rect(destX, destY, halfSize, halfSize);
                             break;
                         case 'TR':
-                            ctx.rect(destX + halfSize, destY, halfSize, halfSize);
+                            ctx.rect(destX + halfSize, destY, remainderSize, halfSize);
                             break;
                         case 'BL':
-                            ctx.rect(destX, destY + halfSize, halfSize, halfSize);
+                            ctx.rect(destX, destY + halfSize, halfSize, remainderSize);
                             break;
                         case 'BR':
-                            ctx.rect(destX + halfSize, destY + halfSize, halfSize, halfSize);
+                            ctx.rect(destX + halfSize, destY + halfSize, remainderSize, remainderSize);
                             break;
                     }
                 }
@@ -978,8 +984,8 @@ export class ProceduralWorldRenderer {
         const pixelY = Math.floor((logicalY + 0.5) * tileSize);
         const pixelSize = Math.floor(tileSize) + 1;
         
-        const destX = Math.floor(pixelX - pixelSize / 2);
-        const destY = Math.floor(pixelY - pixelSize / 2);
+        const destX = Math.floor(logicalX * tileSize);
+        const destY = Math.floor(logicalY * tileSize);
         
         if (needsFlip) {
             // Flip U6/U9 horizontally (mirror on vertical axis)
@@ -1040,8 +1046,8 @@ export class ProceduralWorldRenderer {
         const pixelX = Math.floor((logicalX + 0.5) * tileSize);
         const pixelY = Math.floor((logicalY + 0.5) * tileSize);
         const pixelSize = Math.floor(tileSize) + 1;
-        const destX = Math.floor(pixelX - pixelSize / 2);
-        const destY = Math.floor(pixelY - pixelSize / 2);
+        const destX = Math.floor(logicalX * tileSize);
+        const destY = Math.floor(logicalY * tileSize);
         const halfSize = Math.floor(pixelSize / 2);
 
         for (const tileInfo of seaDeepSeaTransitions) {
