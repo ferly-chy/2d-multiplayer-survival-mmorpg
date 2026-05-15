@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/vite-dev-pick-port.mjs",
     "build": "tsc -b && vite build",
     "build:production": "npm run generate-routes && npm run update-sitemap && npm run build",
     "lint": "eslint .",

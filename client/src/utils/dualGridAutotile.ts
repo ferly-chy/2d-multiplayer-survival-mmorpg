@@ -66,53 +66,72 @@ export function resolveTileAsset(fileName: string): string {
     return defaultAsset;
 }
 
-// Import all existing autotile images (reusing the 4x5 format)
-const grassBeachAutotile = resolveTileAsset('tileset_grass_beach_autotile.png');
+/**
+ * Dual-grid transition atlases: many pairs are GPU-blended only; PNGs may be absent.
+ * Never throw at module load — missing files become a sentinel; preload/render skip them.
+ */
+export const MISSING_TRANSITION_TILESET_MARKER = '__missing_transition_tileset__';
+
+export function resolveTransitionTileAsset(fileName: string): string {
+    const shouldTryHd = USE_HD_TILE_ASSETS || HD_TILE_FILE_OVERRIDES.has(fileName);
+    if (shouldTryHd) {
+        const hdAsset = HD_TILE_ASSETS.get(fileName);
+        if (hdAsset) {
+            return hdAsset;
+        }
+    }
+
+    const defaultAsset = DEFAULT_TILE_ASSETS.get(fileName);
+    return defaultAsset ?? MISSING_TRANSITION_TILESET_MARKER;
+}
+
+// Transition atlases (4×5 dual-grid sheets). Prefer procedural GPU blends; canvas atlases optional.
+const grassBeachAutotile = resolveTransitionTileAsset('tileset_grass_beach_autotile.png');
 const beachSeaAutotile = '__procedural_beach_sea__';
-const seaDeepseaAutotile = resolveTileAsset('tileset_sea_deepsea_autotile.png');
-const grassDirtAutotile = resolveTileAsset('tileset_grass_dirt_autotile.png');
-const dirtBeachAutotile = resolveTileAsset('tileset_dirt_beach_autotile.png');
-const grassDirtRoadAutotile = resolveTileAsset('tileset_grass_dirtroad_autotile.png');
-const grassTundraAutotile = resolveTileAsset('tileset_grass_tundra_autotile.png');
-const grassTundraGrassAutotile = resolveTileAsset('tileset_grass_tundragrass_autotile.png');
-const grassForestAutotile = resolveTileAsset('tileset_grass_forest_autotile.png');
-const quarryGrassAutotile = resolveTileAsset('tileset_quarry_grass_autotile.png');
-const beachDirtRoadAutotile = resolveTileAsset('tileset_beach_dirtroad_autotile.png');
-const dirtDirtRoadAutotile = resolveTileAsset('tileset_dirt_dirtroad_autotile.png');
-const dirtRoadTundraAutotile = resolveTileAsset('tileset_dirtroad_tundra_autotile.png');
-const forestDirtRoadAutotile = resolveTileAsset('tileset_forest_dirtroad_autotile.png');
-const forestBeachAutotile = resolveTileAsset('tileset_forest_beach_autotile.png');
-const forestDirtAutotile = resolveTileAsset('tileset_forest_dirt_autotile.png');
-const tundraBeachAutotile = resolveTileAsset('tileset_tundra_beach_autotile.png');
-const dirtTundraAutotile = resolveTileAsset('tileset_dirt_tundra_autotile.png');
-const quarryDirtAutotile = resolveTileAsset('tileset_quarry_dirt_autotile.png');
-const quarryBeachAutotile = resolveTileAsset('tileset_quarry_beach_autotile.png');
-const quarryDirtRoadAutotile = resolveTileAsset('tileset_quarry_dirtroad_autotile.png');
-const quarryTundraAutotile = resolveTileAsset('tileset_quarry_tundra_autotile.png');
-const quarryAlpineAutotile = resolveTileAsset('tileset_quarry_alpine_autotile.png');
-const quarryForestAutotile = resolveTileAsset('tileset_quarry_forest_autotile.png');
-const asphaltDirtRoadAutotile = resolveTileAsset('tileset_asphalt_dirtroad_autotile.png');
-const asphaltDirtAutotile = resolveTileAsset('tileset_asphalt_dirt_autotile.png');
-const asphaltBeachAutotile = resolveTileAsset('tileset_asphalt_beach_autotile.png');
-const asphaltAlpineAutotile = resolveTileAsset('tileset_asphalt_alpine_autotile.png');
-const asphaltTundraAutotile = resolveTileAsset('tileset_asphalt_tundra_autotile.png');
-const asphaltSeaAutotile = resolveTileAsset('tileset_asphalt_sea_autotile.png');
-const asphaltGrassAutotile = resolveTileAsset('tileset_asphalt_grass_autotile.png');
-const alpineDirtRoadAutotile = resolveTileAsset('tileset_alpine_dirtroad_autotile.png');
-const alpineDirtAutotile = resolveTileAsset('tileset_alpine_dirt_autotile.png');
-const alpineBeachAutotile = resolveTileAsset('tileset_alpine_beach_autotile.png');
-const alpineTundraAutotile = resolveTileAsset('tileset_alpine_tundra_autotile.png');
-const forestTundraAutotile = resolveTileAsset('tileset_forest_tundra_autotile.png');
-const beachHotSpringWaterAutotile = resolveTileAsset('tileset_beach_hotspringwater_autotile.png');
-const tundraGrassTundraAutotile = resolveTileAsset('tileset_tundragrass_tundra_autotile.png');
-const alpineTundraGrassAutotile = resolveTileAsset('tileset_alpine_tundragrass_autotile.png');
-const tundraGrassBeachAutotile = resolveTileAsset('tileset_tundragrass_beach_autotile.png');
-const quarryTundraGrassAutotile = resolveTileAsset('tileset_quarry_tundragrass_autotile.png');
-const dirtRoadTundraGrassAutotile = resolveTileAsset('tileset_dirtroad_tundragrass_autotile.png');
-const forestTundraGrassAutotile = resolveTileAsset('tileset_forest_tundragrass_autotile.png');
-const dirtTundraGrassAutotile = resolveTileAsset('tileset_dirt_tundragrass_autotile.png');
+const seaDeepseaAutotile = resolveTransitionTileAsset('tileset_sea_deepsea_autotile.png');
+const grassDirtAutotile = resolveTransitionTileAsset('tileset_grass_dirt_autotile.png');
+const dirtBeachAutotile = resolveTransitionTileAsset('tileset_dirt_beach_autotile.png');
+const grassDirtRoadAutotile = resolveTransitionTileAsset('tileset_grass_dirtroad_autotile.png');
+const grassTundraAutotile = resolveTransitionTileAsset('tileset_grass_tundra_autotile.png');
+const grassTundraGrassAutotile = resolveTransitionTileAsset('tileset_grass_tundragrass_autotile.png');
+const grassForestAutotile = resolveTransitionTileAsset('tileset_grass_forest_autotile.png');
+const quarryGrassAutotile = resolveTransitionTileAsset('tileset_quarry_grass_autotile.png');
+const beachDirtRoadAutotile = resolveTransitionTileAsset('tileset_beach_dirtroad_autotile.png');
+const dirtDirtRoadAutotile = resolveTransitionTileAsset('tileset_dirt_dirtroad_autotile.png');
+const dirtRoadTundraAutotile = resolveTransitionTileAsset('tileset_dirtroad_tundra_autotile.png');
+const forestDirtRoadAutotile = resolveTransitionTileAsset('tileset_forest_dirtroad_autotile.png');
+const forestBeachAutotile = resolveTransitionTileAsset('tileset_forest_beach_autotile.png');
+const forestDirtAutotile = resolveTransitionTileAsset('tileset_forest_dirt_autotile.png');
+const tundraBeachAutotile = resolveTransitionTileAsset('tileset_tundra_beach_autotile.png');
+const dirtTundraAutotile = resolveTransitionTileAsset('tileset_dirt_tundra_autotile.png');
+const quarryDirtAutotile = resolveTransitionTileAsset('tileset_quarry_dirt_autotile.png');
+const quarryBeachAutotile = resolveTransitionTileAsset('tileset_quarry_beach_autotile.png');
+const quarryDirtRoadAutotile = resolveTransitionTileAsset('tileset_quarry_dirtroad_autotile.png');
+const quarryTundraAutotile = resolveTransitionTileAsset('tileset_quarry_tundra_autotile.png');
+const quarryAlpineAutotile = resolveTransitionTileAsset('tileset_quarry_alpine_autotile.png');
+const quarryForestAutotile = resolveTransitionTileAsset('tileset_quarry_forest_autotile.png');
+const asphaltDirtRoadAutotile = resolveTransitionTileAsset('tileset_asphalt_dirtroad_autotile.png');
+const asphaltDirtAutotile = resolveTransitionTileAsset('tileset_asphalt_dirt_autotile.png');
+const asphaltBeachAutotile = resolveTransitionTileAsset('tileset_asphalt_beach_autotile.png');
+const asphaltAlpineAutotile = resolveTransitionTileAsset('tileset_asphalt_alpine_autotile.png');
+const asphaltTundraAutotile = resolveTransitionTileAsset('tileset_asphalt_tundra_autotile.png');
+const asphaltSeaAutotile = resolveTransitionTileAsset('tileset_asphalt_sea_autotile.png');
+const asphaltGrassAutotile = resolveTransitionTileAsset('tileset_asphalt_grass_autotile.png');
+const alpineDirtRoadAutotile = resolveTransitionTileAsset('tileset_alpine_dirtroad_autotile.png');
+const alpineDirtAutotile = resolveTransitionTileAsset('tileset_alpine_dirt_autotile.png');
+const alpineBeachAutotile = resolveTransitionTileAsset('tileset_alpine_beach_autotile.png');
+const alpineTundraAutotile = resolveTransitionTileAsset('tileset_alpine_tundra_autotile.png');
+const forestTundraAutotile = resolveTransitionTileAsset('tileset_forest_tundra_autotile.png');
+const beachHotSpringWaterAutotile = resolveTransitionTileAsset('tileset_beach_hotspringwater_autotile.png');
+const tundraGrassTundraAutotile = resolveTransitionTileAsset('tileset_tundragrass_tundra_autotile.png');
+const alpineTundraGrassAutotile = resolveTransitionTileAsset('tileset_alpine_tundragrass_autotile.png');
+const tundraGrassBeachAutotile = resolveTransitionTileAsset('tileset_tundragrass_beach_autotile.png');
+const quarryTundraGrassAutotile = resolveTransitionTileAsset('tileset_quarry_tundragrass_autotile.png');
+const dirtRoadTundraGrassAutotile = resolveTransitionTileAsset('tileset_dirtroad_tundragrass_autotile.png');
+const forestTundraGrassAutotile = resolveTransitionTileAsset('tileset_forest_tundragrass_autotile.png');
+const dirtTundraGrassAutotile = resolveTransitionTileAsset('tileset_dirt_tundragrass_autotile.png');
 // Underwater autotile for snorkeling mode (beach/land to sea transition when underwater)
-const underwaterSeaAutotile = resolveTileAsset('tileset_underwater_sea_autotile.png');
+const underwaterSeaAutotile = resolveTransitionTileAsset('tileset_underwater_sea_autotile.png');
 
 // =============================================================================
 // CONSTANTS

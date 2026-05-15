@@ -467,8 +467,7 @@ export class ProceduralWorldRenderer {
                 pixelSize,
                 false,
                 false,
-                currentTimeMs,
-                'hotSpringGrass'
+                currentTimeMs
             );
 
             ctx.restore();

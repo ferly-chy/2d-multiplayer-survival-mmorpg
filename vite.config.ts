@@ -45,8 +45,10 @@ export default defineConfig(({ command, mode }) => {
     },
     server: {
       port: 3008,
+      // Prefer 3008; if busy (e.g. another dev server), use the next free port (3009, …).
+      strictPort: false,
       hmr: {
-        clientPort: 3008,
+        // Omit clientPort so HMR matches whichever port Vite actually binds (important when port increments).
         host: 'localhost',
       },
     },
