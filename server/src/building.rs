@@ -1406,7 +1406,7 @@ pub fn upgrade_foundation(
     Ok(())
 }
 
-/// Destroy a twig foundation (only twig foundations can be destroyed)
+/// Destroy a foundation owned by the player
 #[spacetimedb::reducer]
 pub fn destroy_foundation(ctx: &ReducerContext, foundation_id: u64) -> Result<(), String> {
     use crate::sound_events;
@@ -1436,21 +1436,14 @@ pub fn destroy_foundation(ctx: &ReducerContext, foundation_id: u64) -> Result<()
         return Err("Foundation is already destroyed.".to_string());
     }
     
-    // 4. Only twig foundations can be destroyed
-    if foundation.tier != 0 {
-        return Err("Only twig foundations can be destroyed.".to_string());
-    }
-    
-    // 4.5. Check ownership - only the player who placed it can destroy it
+    // 4. Check ownership - only the player who placed it can destroy it
     if foundation.owner != sender_id {
         return Err("You can only destroy foundations that you built.".to_string());
     }
     
-    // 4.6. Building privilege check: Only required if destroying OTHER players' structures
-    // Own twig structures can be destroyed without building privilege (for early game setup)
-    // But we already checked ownership above, so if we reach here, it's the player's own foundation
-    // So we skip building privilege check for own twig foundations
-    // (This allows players to destroy their own twig structures before placing a hearth)
+    // 4.5. Building privilege is intentionally not required for a player's own
+    // foundations, even after upgrading them. This keeps cleanup/refactor flows
+    // consistent regardless of tier.
     
     // 5. Check placement distance from player
     let world_x = (foundation.cell_x as f32 * FOUNDATION_TILE_SIZE_PX as f32) + (FOUNDATION_TILE_SIZE_PX as f32 / 2.0);
@@ -1497,8 +1490,8 @@ pub fn destroy_foundation(ctx: &ReducerContext, foundation_id: u64) -> Result<()
     sound_events::emit_foundation_twig_destroyed_sound(ctx, world_x, world_y, sender_id);
     
     log::info!(
-        "[DestroyFoundation] Successfully destroyed twig foundation {} at ({}, {}) and {} walls on it",
-        foundation_id, foundation.cell_x, foundation.cell_y, destroyed_wall_count
+        "[DestroyFoundation] Successfully destroyed foundation {} (tier {}) at ({}, {}) and {} walls on it",
+        foundation_id, foundation.tier, foundation.cell_x, foundation.cell_y, destroyed_wall_count
     );
     
     Ok(())

@@ -223,51 +223,21 @@ export const UpgradeRadialMenu: React.FC<UpgradeRadialMenuProps> = ({
   // Define upgrade options (always show all 3 tiers for non-fences, grey out unavailable ones)
   const upgradeOptions: UpgradeOption[] = [];
 
-  // For fences, show upgrade tiers (Wood, Stone, Metal) plus destroy option
+  // Fences start at Wood tier, so the radial should reflect the current wood state
+  // and the direct next upgrade path to Metal.
   if (tileType === 'fence') {
-    // Wood upgrade (Twig -> Wood)
-    const woodCosts = getUpgradeCosts(BuildingTier.Wood, tileType, costMultiplier);
-    const requiredWood = woodCosts.wood || 0;
-    const hasResourcesForWood = woodCount >= requiredWood;
-    const canUpgradeToWood = currentTier < BuildingTier.Wood && hasBuildingPrivilege && hasResourcesForWood;
+    const isFenceAtWoodTier = currentTier === BuildingTier.Wood;
     upgradeOptions.push({
       tier: BuildingTier.Wood,
       name: 'Wood',
       icon: faTree,
-      description: 'Upgrade to wood tier',
-      requirements: woodCosts,
-      available: canUpgradeToWood,
-      reason: currentTier >= BuildingTier.Wood 
-        ? 'Already at or above this tier' 
-        : !hasBuildingPrivilege
-          ? 'Building privilege required'
-          : !hasResourcesForWood
-            ? `Need ${requiredWood} wood (have ${woodCount})` 
-            : undefined,
+      description: isFenceAtWoodTier ? 'Current tier' : 'Lower than current tier',
+      requirements: {},
+      available: false,
+      reason: isFenceAtWoodTier ? 'Already at current tier' : 'Already above this tier',
     });
 
-    // Stone upgrade (-> Stone)
-    const stoneCosts = getUpgradeCosts(BuildingTier.Stone, tileType, costMultiplier);
-    const requiredStone = stoneCosts.stone || 0;
-    const hasResourcesForStone = stoneCount >= requiredStone;
-    const canUpgradeToStone = currentTier < BuildingTier.Stone && hasBuildingPrivilege && hasResourcesForStone;
-    upgradeOptions.push({
-      tier: BuildingTier.Stone,
-      name: 'Stone',
-      icon: faMountain,
-      description: 'Upgrade to stone tier',
-      requirements: stoneCosts,
-      available: canUpgradeToStone,
-      reason: currentTier >= BuildingTier.Stone 
-        ? 'Already at or above this tier' 
-        : !hasBuildingPrivilege
-          ? 'Building privilege required'
-          : !hasResourcesForStone
-            ? `Need ${requiredStone} stone (have ${stoneCount})` 
-            : undefined,
-    });
-
-    // Metal upgrade (-> Metal)
+    // Fences upgrade directly from Wood to Metal.
     const metalCosts = getUpgradeCosts(BuildingTier.Metal, tileType, costMultiplier);
     const requiredMetal = metalCosts.metal || 0;
     const hasResourcesForMetal = metalCount >= requiredMetal;
@@ -366,9 +336,9 @@ export const UpgradeRadialMenu: React.FC<UpgradeRadialMenuProps> = ({
             : undefined,
     });
 
-    // Destroy option (only for Twig tier)
-    // Always show the option - server will validate ownership
-    if (currentTier === BuildingTier.Twig && onDestroy) {
+    // Foundations can always be destroyed with the hammer. Other building pieces
+    // keep their existing destroy gating.
+    if ((tileType === 'foundation' || currentTier === BuildingTier.Twig) && onDestroy) {
       // PERFORMANCE FIX: Removed debug logging that ran every render frame
       
       upgradeOptions.push({
