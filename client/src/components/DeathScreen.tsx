@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { SleepingBag } from '../generated/types';
 import { drawMinimapOntoCanvas, MINIMAP_DIMENSIONS, worldToMinimapCoords, calculateMinimapViewport } from './Minimap'; // Import Minimap drawing and helpers
 import { gameConfig } from '../config/gameConfig'; // Import gameConfig
-import { useGameScreenWorldTables } from '../engine/selectors';
+import { useGameScreenWorldTables } from '../engine/react/selectors';
 
 interface DeathScreenProps {
   onRespawnRandomly: () => void | Promise<void>;

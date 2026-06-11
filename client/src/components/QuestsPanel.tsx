@@ -14,7 +14,7 @@ import {
     ShowSovaSoundBoxFn,
     SovaMessageAdderFn
 } from '../hooks/useSovaTutorials';
-import { useQuestUiTables } from '../engine/selectors';
+import { useQuestUiTables } from '../engine/react/selectors';
 
 // Helper: get human-readable label for quest objective (e.g. "Beach Lyme Grass", "Plant Fiber", "Wood")
 function getObjectiveLabel(quest: TutorialQuestDefinition, which: 'primary' | 'secondary'): string {

@@ -1,13 +1,13 @@
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Identity } from 'spacetimedb';
 import type * as SpacetimeDB from '../../../generated/types';
 import type { Projectile as SpacetimeDBProjectile } from '../../../generated/types';
+import type { MutableRef, StateSetter } from '../../types';
 import type { GameplayTableBindings } from './gameplayConnectionSetup';
 import { recordProjectileDebugEvent } from '../../../utils/projectileDebug';
 
-type MapSetter<T> = Dispatch<SetStateAction<Map<string, T>>>;
-type ValueSetter<T> = Dispatch<SetStateAction<T>>;
-type Ref<T> = MutableRefObject<T>;
+type MapSetter<T> = StateSetter<Map<string, T>>;
+type ValueSetter<T> = StateSetter<T>;
+type Ref<T> = MutableRef<T>;
 
 type WorldBindingKey =
   | 'tree'
@@ -72,7 +72,7 @@ interface CreateWorldTableBindingsOptions {
   setFumaroles: MapSetter<SpacetimeDB.Fumarole>;
   setBasaltColumns: MapSetter<SpacetimeDB.BasaltColumn>;
   setLivingCorals: MapSetter<SpacetimeDB.LivingCoral>;
-  setChunkWeather: Dispatch<SetStateAction<Map<string, any>>>;
+  setChunkWeather: StateSetter<Map<string, any>>;
   setDroneEvents: MapSetter<SpacetimeDB.DroneEvent>;
   treeBatchRef: Ref<SpacetimeDB.Tree[]>;
   treeFlushScheduledRef: Ref<boolean>;
@@ -84,17 +84,17 @@ interface CreateWorldTableBindingsOptions {
 
 interface CreateCombatTableBindingsOptions {
   connectionIdentity: Identity | null;
-  setPlayers: Dispatch<SetStateAction<Map<string, SpacetimeDB.Player>>>;
-  setLocalPlayerRegistered: Dispatch<SetStateAction<boolean>>;
+  setPlayers: StateSetter<Map<string, SpacetimeDB.Player>>;
+  setLocalPlayerRegistered: StateSetter<boolean>;
   setKnockedOutStatus: MapSetter<SpacetimeDB.KnockedOutStatus>;
-  setProjectiles: Dispatch<SetStateAction<Map<string, SpacetimeDBProjectile>>>;
+  setProjectiles: StateSetter<Map<string, SpacetimeDBProjectile>>;
   setDeathMarkers: MapSetter<SpacetimeDB.DeathMarker>;
-  setPlayerDodgeRollStates: Dispatch<SetStateAction<Map<string, SpacetimeDB.PlayerDodgeRollState>>>;
+  setPlayerDodgeRollStates: StateSetter<Map<string, SpacetimeDB.PlayerDodgeRollState>>;
   setFishingSessions: MapSetter<SpacetimeDB.FishingSession>;
   setSoundEvents: MapSetter<SpacetimeDB.SoundEvent>;
   setContinuousSounds: MapSetter<SpacetimeDB.ContinuousSound>;
-  setWildAnimals: Dispatch<SetStateAction<Map<string, SpacetimeDB.WildAnimal>>>;
-  setHostileDeathEvents: Dispatch<SetStateAction<Array<{ id: string; x: number; y: number; species: string; timestamp: number }>>>;
+  setWildAnimals: StateSetter<Map<string, SpacetimeDB.WildAnimal>>;
+  setHostileDeathEvents: StateSetter<Array<{ id: string; x: number; y: number; species: string; timestamp: number }>>;
   setAnimalCorpses: MapSetter<SpacetimeDB.AnimalCorpse>;
   setCaribouBreedingData: MapSetter<SpacetimeDB.CaribouBreedingData>;
   setWalrusBreedingData: MapSetter<SpacetimeDB.WalrusBreedingData>;

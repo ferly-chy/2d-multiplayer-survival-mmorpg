@@ -14,7 +14,7 @@ import { parseCraftIntent, resolveRecipeByName, getCraftFeedback } from '../util
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGear } from '@fortawesome/free-solid-svg-icons';
 import { useGameUI } from '../contexts/GameUIContext';
-import { useChatRuntimeData } from '../engine/selectors';
+import { useChatRuntimeData } from '../engine/react/selectors';
 
 interface ChatProps {
   connection: DbConnection | null;

@@ -11,7 +11,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import type { LevelUpNotification, AchievementUnlockNotification, AchievementDefinition } from '../generated/types';
 import { queueNotificationSound } from '../utils/notificationSoundQueue';
-import { useNotificationLists, useWorldTable } from '../engine/selectors';
+import { useNotificationLists, useWorldTable } from '../engine/react/selectors';
 
 // Style constants - matching DayNightCycleTracker exactly
 const UI_BG_COLOR = 'linear-gradient(180deg, rgba(15, 25, 20, 0.98) 0%, rgba(20, 35, 30, 0.95) 100%)';

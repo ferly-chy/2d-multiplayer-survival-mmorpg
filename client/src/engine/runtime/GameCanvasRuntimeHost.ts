@@ -1,10 +1,7 @@
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { gameConfig } from '../../config/gameConfig';
 import { runtimeEngine } from '../runtimeEngine';
 import { renderGameCanvasFrame } from '../frame/renderGameCanvasFrame';
-import type { RuntimeFramePipeline } from '../types';
-import type { GameLoopMetrics } from '../../hooks/useGameLoop';
-import type { FrameInfo } from '../../hooks/useGameLoop';
+import type { FrameInfo, GameLoopMetrics, MutableRef, RuntimeFramePipeline, StateSetter } from '../types';
 import type { Projectile as SpacetimeDBProjectile } from '../../generated/types';
 import type { CampfireFireGpuEmitter } from '../../utils/renderers/campfireFireOverlayUtils';
 import { addCameraSample, isProfilerRecording } from '../../utils/profilerRecording';
@@ -35,33 +32,33 @@ export interface GameCanvasRuntimeFrameBindings {
   fixedSimulationEnabled: boolean;
   getCurrentPositionNow?: () => { x: number; y: number } | null;
   getReconciliationProfilerSnapshot?: () => ReconciliationProfilerSnapshot | null;
-  predictedPositionRef: MutableRefObject<{ x: number; y: number } | null>;
+  predictedPositionRef: MutableRef<{ x: number; y: number } | null>;
   getCurrentFacingDirectionNow?: () => string | undefined;
-  localFacingDirectionRef: MutableRefObject<string | undefined>;
+  localFacingDirectionRef: MutableRef<string | undefined>;
   localPlayer: { positionX: number; positionY: number } | null | undefined;
   updateInteractionResult?: () => void;
   isAutoWalking: boolean;
   canvasWidth: number;
   canvasHeight: number;
-  gameLoopMetricsRef: MutableRefObject<GameLoopMetrics | null>;
-  deltaTimeRef: MutableRefObject<number>;
-  interactionScanFrameSkipRef: MutableRefObject<number>;
-  cameraOffsetRef: MutableRefObject<{ x: number; y: number }>;
+  gameLoopMetricsRef: MutableRef<GameLoopMetrics | null>;
+  deltaTimeRef: MutableRef<number>;
+  interactionScanFrameSkipRef: MutableRef<number>;
+  cameraOffsetRef: MutableRef<{ x: number; y: number }>;
 }
 
 export interface GameCanvasRuntimeControllerRefs {
-  worldMousePosRef: MutableRefObject<{ x: number | null; y: number | null }>;
-  cameraOffsetRef: MutableRefObject<{ x: number; y: number }>;
-  predictedPositionRef: MutableRefObject<{ x: number; y: number } | null>;
-  localFacingDirectionRef: MutableRefObject<string | undefined>;
-  localOptimisticDodgeRollStartMsRef: MutableRefObject<number>;
+  worldMousePosRef: MutableRef<{ x: number | null; y: number | null }>;
+  cameraOffsetRef: MutableRef<{ x: number; y: number }>;
+  predictedPositionRef: MutableRef<{ x: number; y: number } | null>;
+  localFacingDirectionRef: MutableRef<string | undefined>;
+  localOptimisticDodgeRollStartMsRef: MutableRef<number>;
   /** Wall-clock ms when local player pressed jump; render + input merge with server like dodge roll. */
-  localOptimisticJumpPressMsRef: MutableRefObject<number>;
-  interpolatedCloudsRef: MutableRefObject<Map<string, any>>;
-  cycleProgressRef: MutableRefObject<number>;
-  ySortedEntitiesRef: MutableRefObject<any[]>;
-  swimmingPlayersForBottomHalfRef: MutableRefObject<any[]>;
-  renderGameDepsRef: MutableRefObject<{
+  localOptimisticJumpPressMsRef: MutableRef<number>;
+  interpolatedCloudsRef: MutableRef<Map<string, any>>;
+  cycleProgressRef: MutableRef<number>;
+  ySortedEntitiesRef: MutableRef<any[]>;
+  swimmingPlayersForBottomHalfRef: MutableRef<any[]>;
+  renderGameDepsRef: MutableRef<{
     messages: Map<string, any>;
     projectiles: Map<string, SpacetimeDBProjectile>;
     holdInteractionProgress: { targetId: string | number | bigint | null; targetType: string; startTime: number } | null;
@@ -102,13 +99,13 @@ export interface GameCanvasRuntimeControllerSnapshot
   showBuildingRadialMenu: boolean;
   radialMenuMouseX: number;
   radialMenuMouseY: number;
-  setShowBuildingRadialMenu: Dispatch<SetStateAction<boolean>>;
+  setShowBuildingRadialMenu: StateSetter<boolean>;
   showUpgradeRadialMenu: boolean;
-  setShowUpgradeRadialMenu: Dispatch<SetStateAction<boolean>>;
+  setShowUpgradeRadialMenu: StateSetter<boolean>;
   processInputsAndActions: () => void;
-  upgradeMenuFoundationRef: MutableRefObject<any>;
-  upgradeMenuWallRef: MutableRefObject<any>;
-  upgradeMenuFenceRef: MutableRefObject<any>;
+  upgradeMenuFoundationRef: MutableRef<any>;
+  upgradeMenuWallRef: MutableRef<any>;
+  upgradeMenuFenceRef: MutableRef<any>;
   cursorStyle: string;
 }
 

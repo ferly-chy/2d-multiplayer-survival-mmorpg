@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { FrameInfo } from '../../hooks/useGameLoop';
+import type { FrameInfo } from '../types';
 import type { RuntimeEngineConfig } from '../types';
 import { runtimeEngine } from '../runtimeEngine';
 

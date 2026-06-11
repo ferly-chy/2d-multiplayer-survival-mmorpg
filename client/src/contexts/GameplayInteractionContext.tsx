@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import type { GameplayBridgeRuntimeResult } from '../engine/runtime/useGameplayBridgeRuntime';
+import type { GameplayBridgeRuntimeResult } from '../engine/react/useGameplayBridgeRuntime';
 
 const GameplayInteractionContext = createContext<GameplayBridgeRuntimeResult | null>(null);
 

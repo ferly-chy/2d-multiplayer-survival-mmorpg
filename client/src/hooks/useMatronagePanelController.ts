@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Identity } from 'spacetimedb';
 import { useGameConnection } from '../contexts/GameConnectionContext';
-import { useLocalPlayer, useUITable, useWorldTable } from '../engine/selectors';
+import { useLocalPlayer, useUITable, useWorldTable } from '../engine/react/selectors';
 
 export type MatronageTab = 'overview' | 'members' | 'invitations' | 'management' | 'explore';
 

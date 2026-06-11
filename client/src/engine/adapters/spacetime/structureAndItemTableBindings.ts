@@ -1,11 +1,11 @@
-import type { Dispatch, SetStateAction } from 'react';
 import type { Identity } from 'spacetimedb';
 import type * as SpacetimeDB from '../../../generated/types';
 import type { RangedWeaponStats as SpacetimeDBRangedWeaponStats } from '../../../generated/types';
 import type { GameplayTableBindings } from './gameplayConnectionSetup';
+import type { StateSetter } from '../../types';
 
-type MapSetter<T> = Dispatch<SetStateAction<Map<string, T>>>;
-type ValueSetter<T> = Dispatch<SetStateAction<T>>;
+type MapSetter<T> = StateSetter<Map<string, T>>;
+type ValueSetter<T> = StateSetter<T>;
 
 type StructuresBindingKey =
   | 'barbecue'

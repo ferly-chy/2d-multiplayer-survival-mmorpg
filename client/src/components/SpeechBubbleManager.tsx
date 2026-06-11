@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import SpeechBubble from './SpeechBubble';
 import { Message as SpacetimeDBMessage, Player as SpacetimeDBPlayer } from '../generated/types';
-import { useSpeechBubbleRuntimeData } from '../engine/selectors';
+import { useSpeechBubbleRuntimeData } from '../engine/react/selectors';
 
 interface SpeechBubbleData {
   id: string;

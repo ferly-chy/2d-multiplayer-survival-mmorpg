@@ -1,0 +1,98 @@
+/**
+ * Selector hook that returns all world tables needed by GameScreen and its children.
+ * Reads from engine store; useSpacetimeTables remains the writer.
+ */
+import type { WorldState } from '../../../generated/types';
+import { useEngineSnapshot } from '../useEngineSnapshot';
+
+const emptyMap = () => new Map();
+const emptyArr = () => [] as Array<{ id: string; x: number; y: number; species: string; timestamp: number }>;
+
+export function useGameScreenWorldTables() {
+  return useEngineSnapshot((s) => {
+    const t = s.world.tables;
+    const get = <T>(key: string, def: T): T => (t[key] as T | undefined) ?? def;
+    return {
+      players: get('players', emptyMap()),
+      trees: get('trees', emptyMap()),
+      stones: get('stones', emptyMap()),
+      runeStones: get('runeStones', emptyMap()),
+      cairns: get('cairns', emptyMap()),
+      playerDiscoveredCairns: get('playerDiscoveredCairns', emptyMap()),
+      campfires: get('campfires', emptyMap()),
+      furnaces: get('furnaces', emptyMap()),
+      barbecues: get('barbecues', emptyMap()),
+      lanterns: get('lanterns', emptyMap()),
+      turrets: get('turrets', emptyMap()),
+      homesteadHearths: get('homesteadHearths', emptyMap()),
+      brothPots: get('brothPots', emptyMap()),
+      harvestableResources: get('harvestableResources', emptyMap()),
+      droppedItems: get('droppedItems', emptyMap()),
+      woodenStorageBoxes: get('woodenStorageBoxes', emptyMap()),
+      sleepingBags: get('sleepingBags', emptyMap()),
+      playerCorpses: get('playerCorpses', emptyMap()),
+      stashes: get('stashes', emptyMap()),
+      shelters: get('shelters', emptyMap()),
+      plantedSeeds: get('plantedSeeds', emptyMap()),
+      minimapCache: get('minimapCache', null as unknown),
+      wildAnimals: get('wildAnimals', emptyMap()),
+      hostileDeathEvents: get('hostileDeathEvents', emptyArr()),
+      animalCorpses: get('animalCorpses', emptyMap()),
+      barrels: get('barrels', emptyMap()),
+      roadLampposts: get('roadLampposts', emptyMap()),
+      seaStacks: get('seaStacks', emptyMap()),
+      foundationCells: get('foundationCells', emptyMap()),
+      wallCells: get('wallCells', emptyMap()),
+      doors: get('doors', emptyMap()),
+      fences: get('fences', emptyMap()),
+      fumaroles: get('fumaroles', emptyMap()),
+      basaltColumns: get('basaltColumns', emptyMap()),
+      livingCorals: get('livingCorals', emptyMap()),
+      inventoryItems: get('inventoryItems', emptyMap()),
+      itemDefinitions: get('itemDefinitions', emptyMap()),
+      worldState: get<WorldState | null>('worldState', null),
+      activeEquipments: get('activeEquipments', emptyMap()),
+      recipes: get('recipes', emptyMap()),
+      craftingQueueItems: get('craftingQueueItems', emptyMap()),
+      activeConsumableEffects: get('activeConsumableEffects', emptyMap()),
+      grass: get('grass', emptyMap()),
+      grassState: get('grassState', emptyMap()),
+      knockedOutStatus: get('knockedOutStatus', emptyMap()),
+      rangedWeaponStats: get('rangedWeaponStats', emptyMap()),
+      projectiles: get('projectiles', emptyMap()),
+      deathMarkers: get('deathMarkers', emptyMap()),
+      playerDrinkingCooldowns: get('playerDrinkingCooldowns', emptyMap()),
+      playerDodgeRollStates: get('playerDodgeRollStates', emptyMap()),
+      rainCollectors: get('rainCollectors', emptyMap()),
+      waterPatches: get('waterPatches', emptyMap()),
+      fertilizerPatches: get('fertilizerPatches', emptyMap()),
+      firePatches: get('firePatches', emptyMap()),
+      placedExplosives: get('placedExplosives', emptyMap()),
+      hotSprings: get('hotSprings', emptyMap()),
+      chunkWeather: get('chunkWeather', emptyMap()),
+      alkStations: get('alkStations', emptyMap()),
+      alkContracts: get('alkContracts', emptyMap()),
+      alkPlayerContracts: get('alkPlayerContracts', emptyMap()),
+      alkState: get('alkState', null),
+      playerShardBalance: get('playerShardBalance', emptyMap()),
+      memoryGridProgress: get('memoryGridProgress', emptyMap()),
+      monumentParts: get('monumentParts', emptyMap()),
+      largeQuarries: get('largeQuarries', emptyMap()),
+      playerStats: get('playerStats', emptyMap()),
+      achievementDefinitions: get('achievementDefinitions', emptyMap()),
+      playerAchievements: get('playerAchievements', emptyMap()),
+      achievementUnlockNotifications: get('achievementUnlockNotifications', emptyMap()),
+      levelUpNotifications: get('levelUpNotifications', emptyMap()),
+      plantConfigDefinitions: get('plantConfigDefinitions', emptyMap()),
+      discoveredPlants: get('discoveredPlants', emptyMap()),
+      leaderboardEntries: get('leaderboardEntries', emptyMap()),
+      caribouBreedingData: get('caribouBreedingData', emptyMap()),
+      walrusBreedingData: get('walrusBreedingData', emptyMap()),
+      caribouRutState: get('caribouRutState', null),
+      walrusRutState: get('walrusRutState', null),
+      clouds: get('clouds', emptyMap()),
+      droneEvents: get('droneEvents', emptyMap()),
+      fishingSessions: get('fishingSessions', emptyMap()),
+    };
+  });
+}

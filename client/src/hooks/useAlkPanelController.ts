@@ -4,7 +4,7 @@ import type { AlkContract, AlkContractKind, AlkPlayerContract } from '../generat
 import { useGameConnection } from '../contexts/GameConnectionContext';
 import { useGameplaySession } from '../contexts/GameplaySessionContext';
 import { useGameplayMovement } from '../contexts/GameplayMovementContext';
-import { useAlkPanelRuntimeData, useGameScreenWorldTables, useLocalPlayer } from '../engine/selectors';
+import { useAlkPanelRuntimeData, useGameScreenWorldTables, useLocalPlayer } from '../engine/react/selectors';
 import {
   buildItemDefinitionsByName,
   buildPlayerInventoryCountsByDefId,

@@ -4,7 +4,7 @@ import { drawMinimapOntoCanvas } from './Minimap';
 import { useMinimapInteraction } from '../hooks/useMinimapInteraction';
 import { useGameUI } from '../contexts/GameUIContext';
 import { useGameplayMovement } from '../contexts/GameplayMovementContext';
-import { useGameScreenWorldTables, useLocalPlayer, useUITable } from '../engine/selectors';
+import { useGameScreenWorldTables, useLocalPlayer, useUITable } from '../engine/react/selectors';
 
 const EMPTY_MAP = new Map();
 

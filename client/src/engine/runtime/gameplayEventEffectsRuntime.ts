@@ -7,7 +7,6 @@ import type {
   PlayerDiscoveredCairn,
   WildAnimal,
 } from '../../generated/types';
-import { playImmediateSound } from '../../hooks/useSoundSystem';
 import {
   cleanupCutGrassEffectSystem,
   handleGrassStateDestroyed,
@@ -23,12 +22,14 @@ type AnimalCorpseDeleteListener = (ctx: unknown, corpse: AnimalCorpse) => void;
 type BarrelUpdateListener = (ctx: unknown, oldBarrel: Barrel, newBarrel: Barrel) => void;
 type BarrelDeleteListener = (ctx: unknown, barrel: Barrel) => void;
 type WildAnimalInsertListener = (ctx: unknown, animal: WildAnimal) => void;
+type ImmediateSoundPlayer = (soundType: 'cairn_unlock', volume?: number) => void;
 
 let hasDispatchedHostileEncounterEvent = false;
 
 class GameplayEventEffectsRuntime {
   private activeConnection: DbConnection | null = null;
   private localPlayerId: string | null = null;
+  private playImmediateSound: ImmediateSoundPlayer | null = null;
   private playedCairnIds = new Set<string>();
   private grassDeleteListener: GrassDeleteListener | null = null;
   private cairnInsertListener: CairnInsertListener | null = null;
@@ -38,9 +39,14 @@ class GameplayEventEffectsRuntime {
   private barrelDeleteListener: BarrelDeleteListener | null = null;
   private wildAnimalInsertListener: WildAnimalInsertListener | null = null;
 
-  start(connection: DbConnection | null, localPlayerId: string | null): void {
+  start(
+    connection: DbConnection | null,
+    localPlayerId: string | null,
+    options: { playImmediateSound?: ImmediateSoundPlayer } = {},
+  ): void {
     const connectionChanged = this.activeConnection !== connection;
     const playerChanged = this.localPlayerId !== localPlayerId;
+    this.playImmediateSound = options.playImmediateSound ?? null;
 
     if (connectionChanged) {
       this.detachListeners();
@@ -87,7 +93,7 @@ class GameplayEventEffectsRuntime {
         }
 
         this.playedCairnIds.add(cairnKey);
-        playImmediateSound('cairn_unlock');
+        this.playImmediateSound?.('cairn_unlock');
       };
       this.activeConnection.db.player_discovered_cairn.onInsert(this.cairnInsertListener);
     }

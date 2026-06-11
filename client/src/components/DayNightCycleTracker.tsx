@@ -11,7 +11,7 @@ import {
 } from '../generated/types';
 import { Identity } from 'spacetimedb';
 import { calculateChunkIndex } from '../utils/chunkUtils';
-import { useLocalPlayer, useQuestUiTables, useWorldTable } from '../engine/selectors';
+import { useLocalPlayer, useQuestUiTables, useWorldTable } from '../engine/react/selectors';
 import springIcon from '../assets/ui/spring.png';
 import summerIcon from '../assets/ui/summer.png';
 import autumnIcon from '../assets/ui/autumn.png';

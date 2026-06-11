@@ -1,4 +1,25 @@
-import type { FrameInfo } from '../hooks/useGameLoop';
+export interface FrameInfo {
+  deltaTime: number;
+  frameCount: number;
+  fps: number;
+}
+
+/** Dev-only telemetry for acceptance gates (60/120/144 Hz, slow-frame ratio). */
+export interface GameLoopMetrics {
+  fps: number;
+  effectiveUpdateRate: number;
+  slowFrameRatio: number;
+  maxFrameTimeMs: number;
+  totalFrames: number;
+  slowFrames: number;
+}
+
+export interface MutableRef<T> {
+  current: T;
+}
+
+export type StateUpdater<T> = T | ((current: T) => T);
+export type StateSetter<T> = (value: StateUpdater<T>) => void;
 
 export interface EngineConnectionSnapshot {
   connection: unknown | null;

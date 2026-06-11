@@ -1,13 +1,10 @@
 import { gameConfig, getViewBounds } from '../../config/gameConfig';
-import { walkingAnimationFrameRef, sprintAnimationFrameRef, idleAnimationFrameRef } from '../../hooks/useAnimationCycle';
-import { shakeOffsetXRef, shakeOffsetYRef, vignetteOpacityRef } from '../../hooks/useDamageEffects';
 import { renderPlayerCorpse } from '../../utils/renderers/playerCorpseRenderingUtils';
 import { renderAllFootprints } from '../../utils/renderers/terrainTrailUtils';
 import { beginProjectileRenderPass } from '../../utils/renderers/projectileRenderingUtils';
 import { worldPosToTileCoords } from '../../utils/renderers/placementRenderingUtils';
 import { logLagDiagnostic } from '../../utils/gameDebugUtils';
 import { mark } from '../../utils/profiler';
-import { renderWardParticles } from '../../hooks/useWardParticles';
 import { renderCutGrassEffects } from '../../effects/cutGrassEffect';
 import { renderArrowBreakEffects } from '../../effects/arrowBreakEffect';
 import { renderCampfireFireOverlay } from '../../utils/renderers/campfireFireOverlayUtils';
@@ -132,6 +129,13 @@ export function renderGameCanvasFrame(args: any): void {
     hasRepairHammer,
     worldParticlesQuality,
     renderParticles,
+    renderWardParticles,
+    walkingAnimationFrameRef,
+    sprintAnimationFrameRef,
+    idleAnimationFrameRef,
+    shakeOffsetXRef,
+    shakeOffsetYRef,
+    vignetteOpacityRef,
     computeCampfireFireOverlayEmitters,
     campfireParticles,
     fireArrowParticles,

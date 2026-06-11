@@ -4,8 +4,8 @@
  */
 import { useEffect } from 'react';
 import { useMusicSystem } from './useMusicSystem';
-import { useMusicSystemTables } from '../engine/selectors/useMusicSystemTables';
-import { useLocalPlayer } from '../engine/selectors/useLocalPlayer';
+import { useMusicSystemTables } from '../engine/react/selectors/useMusicSystemTables';
+import { useLocalPlayer } from '../engine/react/selectors/useLocalPlayer';
 import { useSettings } from '../contexts/SettingsContext';
 import { getTileTypeFromChunkData } from '../utils/renderers/placementRenderingUtils';
 import type { DbConnection } from '../generated';

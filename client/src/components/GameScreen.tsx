@@ -83,7 +83,7 @@ import SOVALoadingBar from './SOVALoadingBar';
 
 // Import other necessary imports
 import { useMusicSystem } from '../hooks/useMusicSystem';
-import { useGameplayScreenRuntime } from '../engine/runtime/useGameplayScreenRuntime';
+import { useGameplayScreenRuntime } from '../engine/react/useGameplayScreenRuntime';
 import { useGameplaySession } from '../contexts/GameplaySessionContext';
 import { useGameplayInteraction } from '../contexts/GameplayInteractionContext';
 import { useGameplayMovement } from '../contexts/GameplayMovementContext';

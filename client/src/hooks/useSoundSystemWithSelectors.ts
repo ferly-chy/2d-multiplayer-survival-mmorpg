@@ -3,9 +3,9 @@
  * Replaces inline useEngineSnapshot + useSoundSystem wiring in App.
  */
 import { useSoundSystem } from './useSoundSystem';
-import { useSoundSystemTables } from '../engine/selectors/useSoundSystemTables';
-import { useLocalPlayer } from '../engine/selectors/useLocalPlayer';
-import { usePredictedPosition } from '../engine/selectors/usePredictedPosition';
+import { useSoundSystemTables } from '../engine/react/selectors/useSoundSystemTables';
+import { useLocalPlayer } from '../engine/react/selectors/useLocalPlayer';
+import { usePredictedPosition } from '../engine/react/selectors/usePredictedPosition';
 import { useSettings } from '../contexts/SettingsContext';
 import type { DbConnection } from '../generated';
 

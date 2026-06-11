@@ -1,6 +1,5 @@
-import type { FrameInfo } from '../hooks/useGameLoop';
 import { UiSnapshotStore } from './store/uiSnapshotStore';
-import type { EngineRuntimeIntent, EngineRuntimeSnapshot, RuntimeEngineConfig, RuntimeFramePipeline, RuntimeFramePipelineConfig } from './types';
+import type { EngineRuntimeIntent, EngineRuntimeSnapshot, FrameInfo, RuntimeEngineConfig, RuntimeFramePipeline, RuntimeFramePipelineConfig } from './types';
 
 type FrameCallback = (frameInfo: FrameInfo) => void;
 type StateUpdater<T> = T | ((current: T) => T);

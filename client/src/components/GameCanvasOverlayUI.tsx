@@ -9,7 +9,7 @@ import { BuildingMode, BuildingTier, FoundationShape } from '../hooks/useBuildin
 import { logDebug } from '../utils/gameDebugUtils';
 import { useGameplaySession } from '../contexts/GameplaySessionContext';
 import { useEngineSnapshot } from '../engine/react/useEngineSnapshot';
-import { useGameScreenWorldTables, useLocalPlayer } from '../engine/selectors';
+import { useGameScreenWorldTables, useLocalPlayer } from '../engine/react/selectors';
 import { calculateChunkIndex } from '../utils/chunkUtils';
 import {
   EMPTY_TOOLTIP_WORLD_ENV,

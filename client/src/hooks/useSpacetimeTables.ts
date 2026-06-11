@@ -11,9 +11,9 @@ import { useEffect, useRef } from 'react';
 import { DbConnection } from '../generated';
 import { useEngineSnapshot } from '../engine/react/useEngineSnapshot';
 import { gameplaySubscriptionsRuntime } from '../engine/runtime/gameplaySubscriptionsRuntime';
-import { useGameplayConnectionSetup } from '../engine/runtime/useGameplayConnectionSetup';
-import { useGameplaySpatialSubscriptionRuntime } from '../engine/runtime/useGameplaySpatialSubscriptionRuntime';
-import { useGameplayTableStateRegistry } from '../engine/runtime/useGameplayTableStateRegistry';
+import { useGameplayConnectionSetup } from '../engine/react/useGameplayConnectionSetup';
+import { useGameplaySpatialSubscriptionRuntime } from '../engine/react/useGameplaySpatialSubscriptionRuntime';
+import { useGameplayTableStateRegistry } from '../engine/react/useGameplayTableStateRegistry';
 
 // ─── Spatial chunk-subscription strategy ─────────────────────────────────────
 // - Batch and throttle chunk subscriptions to avoid bursty update spikes.

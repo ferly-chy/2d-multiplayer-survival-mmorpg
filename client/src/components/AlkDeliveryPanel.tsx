@@ -16,7 +16,7 @@ import {
     AlkPlayerContract,
     ItemDefinition,
 } from '../generated/types';
-import { useAlkPanelRuntimeData } from '../engine/selectors';
+import { useAlkPanelRuntimeData } from '../engine/react/selectors';
 import {
     buildItemDefinitionsByName,
     buildPlayerInventoryCountsByDefId,

@@ -13,7 +13,7 @@ import { GameUIProvider } from '../contexts/GameUIContext';
 import { GameplaySessionProvider } from '../contexts/GameplaySessionContext';
 import { GameplayInteractionProvider } from '../contexts/GameplayInteractionContext';
 import { GameplayMovementProvider } from '../contexts/GameplayMovementContext';
-import { useGameplayRuntimeHost } from '../engine/runtime/useGameplayRuntimeHost';
+import { useGameplayRuntimeHost } from '../engine/react/useGameplayRuntimeHost';
 
 export interface GameplayRuntimeBridgeProps {
     localPlayerId?: string;

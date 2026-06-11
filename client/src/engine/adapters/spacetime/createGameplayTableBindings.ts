@@ -1,6 +1,6 @@
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Identity } from 'spacetimedb';
 import type * as SpacetimeDB from '../../../generated/types';
+import type { MutableRef, StateSetter } from '../../types';
 import type {
   Projectile as SpacetimeDBProjectile,
   RangedWeaponStats as SpacetimeDBRangedWeaponStats,
@@ -17,9 +17,9 @@ import {
   createWorldTableBindings,
 } from './worldAndCombatTableBindings';
 
-type MapSetter<T> = Dispatch<SetStateAction<Map<string, T>>>;
-type ValueSetter<T> = Dispatch<SetStateAction<T>>;
-type Ref<T> = MutableRefObject<T>;
+type MapSetter<T> = StateSetter<Map<string, T>>;
+type ValueSetter<T> = StateSetter<T>;
+type Ref<T> = MutableRef<T>;
 
 interface CreateGameplayTableBindingsOptions {
   connectionIdentity: Identity | null;
@@ -50,7 +50,7 @@ interface CreateGameplayTableBindingsOptions {
   setWoodenStorageBoxes: MapSetter<SpacetimeDB.WoodenStorageBox>;
   setRecipes: MapSetter<SpacetimeDB.Recipe>;
   setCraftingQueueItems: MapSetter<SpacetimeDB.CraftingQueueItem>;
-  setLocalPlayerRegistered: Dispatch<SetStateAction<boolean>>;
+  setLocalPlayerRegistered: StateSetter<boolean>;
   setSleepingBags: MapSetter<SpacetimeDB.SleepingBag>;
   setPlayerCorpses: MapSetter<SpacetimeDB.PlayerCorpse>;
   setStashes: MapSetter<SpacetimeDB.Stash>;
@@ -76,7 +76,7 @@ interface CreateGameplayTableBindingsOptions {
   setContinuousSounds: MapSetter<SpacetimeDB.ContinuousSound>;
   setPlayerDrinkingCooldowns: MapSetter<SpacetimeDB.PlayerDrinkingCooldown>;
   setWildAnimals: MapSetter<SpacetimeDB.WildAnimal>;
-  setHostileDeathEvents: Dispatch<SetStateAction<Array<{ id: string; x: number; y: number; species: string; timestamp: number }>>>;
+  setHostileDeathEvents: StateSetter<Array<{ id: string; x: number; y: number; species: string; timestamp: number }>>;
   setAnimalCorpses: MapSetter<SpacetimeDB.AnimalCorpse>;
   setBarrels: MapSetter<SpacetimeDB.Barrel>;
   setRoadLampposts: MapSetter<SpacetimeDB.RoadLamppost>;
@@ -88,7 +88,7 @@ interface CreateGameplayTableBindingsOptions {
   setWallCells: MapSetter<SpacetimeDB.WallCell>;
   setDoors: MapSetter<SpacetimeDB.Door>;
   setFences: MapSetter<SpacetimeDB.Fence>;
-  setChunkWeather: Dispatch<SetStateAction<Map<string, any>>>;
+  setChunkWeather: StateSetter<Map<string, any>>;
   setAlkStations: MapSetter<SpacetimeDB.AlkStation>;
   setAlkContracts: MapSetter<SpacetimeDB.AlkContract>;
   setAlkPlayerContracts: MapSetter<SpacetimeDB.AlkPlayerContract>;

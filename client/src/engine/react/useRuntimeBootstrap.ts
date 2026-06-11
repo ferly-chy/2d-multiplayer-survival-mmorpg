@@ -3,6 +3,7 @@ import type { DbConnection } from '../../generated';
 import { uiSubscriptionsRuntime } from '../runtime/uiSubscriptionsRuntime';
 import { worldChunkDataRuntime } from '../runtime/worldChunkDataRuntime';
 import { gameplayEventEffectsRuntime } from '../runtime/gameplayEventEffectsRuntime';
+import { playImmediateSound } from '../../hooks/useSoundSystem';
 
 export function useRuntimeBootstrap(
   connection: DbConnection | null,
@@ -19,7 +20,7 @@ export function useRuntimeBootstrap(
   }, [connection]);
 
   useEffect(() => {
-    gameplayEventEffectsRuntime.start(connection, localPlayerId);
+    gameplayEventEffectsRuntime.start(connection, localPlayerId, { playImmediateSound });
 
     return () => {
       gameplayEventEffectsRuntime.stop();

@@ -18,6 +18,9 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import type { MutableRefObject } from 'react';
+import type { FrameInfo, GameLoopMetrics } from '../engine/types';
+
+export type { FrameInfo, GameLoopMetrics } from '../engine/types';
 
 interface GameLoopOptions {
   targetFPS?: number;
@@ -25,22 +28,6 @@ interface GameLoopOptions {
   enableProfiling?: boolean;
   /** Dev-only: ref to receive periodic metrics (effective FPS, slow-frame ratio, max frame time) */
   metricsRef?: MutableRefObject<GameLoopMetrics | null>;
-}
-
-export interface FrameInfo {
-  deltaTime: number;
-  frameCount: number;
-  fps: number;
-}
-
-/** Dev-only telemetry for acceptance gates (60/120/144 Hz, slow-frame ratio) */
-export interface GameLoopMetrics {
-  fps: number;
-  effectiveUpdateRate: number; // callbacks/sec
-  slowFrameRatio: number; // 0..1
-  maxFrameTimeMs: number;
-  totalFrames: number;
-  slowFrames: number;
 }
 
 /** Clamp deltaTime to prevent extreme values from pause/resume or tab switching */

@@ -50,7 +50,7 @@ import { resetInsanityState } from './utils/renderers/insanityOverlayUtils';
 import { useRuntimeBootstrap } from './engine/react/useRuntimeBootstrap';
 import { useRuntimeConnectionBridge } from './engine/react/useRuntimeConnectionBridge';
 import { useRuntimeViewport } from './engine/react/useRuntimeViewport';
-import { useLocalPlayer, useOnlinePlayerCount, useRuntimeReadiness } from './engine/selectors';
+import { useLocalPlayer, useOnlinePlayerCount, useRuntimeReadiness } from './engine/react/selectors';
 
 /** Server capacity - must match server/src/lib.rs MAX_PLAYERS */
 const MAX_PLAYERS = 50;

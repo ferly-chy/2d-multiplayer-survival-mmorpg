@@ -17,7 +17,7 @@ import type {
 import { useAssetLoader } from '../hooks/useAssetLoader';
 import { useDoodadImages } from '../hooks/useDoodadImages';
 import { useGameViewport } from '../hooks/useGameViewport';
-import type { GameLoopMetrics } from '../hooks/useGameLoop';
+import type { GameLoopMetrics } from '../engine/types';
 import { useDamageEffects } from '../hooks/useDamageEffects';
 import { useSettings } from '../contexts/SettingsContext';
 import { useErrorDisplay } from '../contexts/ErrorDisplayContext';
@@ -25,7 +25,7 @@ import { useGameUI } from '../contexts/GameUIContext';
 import { useGameplaySession } from '../contexts/GameplaySessionContext';
 import { useGameplayInteraction } from '../contexts/GameplayInteractionContext';
 import { useGameplayMovement } from '../contexts/GameplayMovementContext';
-import { useLocalPlayer } from '../engine/selectors';
+import { useLocalPlayer } from '../engine/react/selectors';
 
 // --- Rendering Utilities ---
 import { setWaterOverlayIntensity } from '../utils/renderers/waterOverlayUtils';
@@ -35,15 +35,15 @@ import GameCanvasOverlayUI from './GameCanvasOverlayUI';
 import type { PlacementItemInfo, PlacementActions } from '../hooks/usePlacementManager';
 // V2 system removed due to performance issues
 import { useGameCanvasAssetPreload } from '../hooks/useGameCanvasAssetPreload';
-import { useGameCanvasFramePipeline } from '../engine/runtime/useGameCanvasFramePipeline';
-import { useGameCanvasSceneRuntime } from '../engine/runtime/useGameCanvasSceneRuntime';
-import { useGameCanvasEffectsRuntime } from '../engine/runtime/useGameCanvasEffectsRuntime';
-import { useGameCanvasParticleRuntime } from '../engine/runtime/useGameCanvasParticleRuntime';
-import { useGameCanvasControllerRuntime } from '../engine/runtime/useGameCanvasControllerRuntime';
-import { useGameCanvasControllerBridgeRuntime } from '../engine/runtime/useGameCanvasControllerBridgeRuntime';
-import { useGameCanvasHostSyncRuntime } from '../engine/runtime/useGameCanvasHostSyncRuntime';
-import { useGameCanvasOverlayRuntime } from '../engine/runtime/useGameCanvasOverlayRuntime';
-import { useGameCanvasRenderRuntime } from '../engine/runtime/useGameCanvasRenderRuntime';
+import { useGameCanvasFramePipeline } from '../engine/react/useGameCanvasFramePipeline';
+import { useGameCanvasSceneRuntime } from '../engine/react/useGameCanvasSceneRuntime';
+import { useGameCanvasEffectsRuntime } from '../engine/react/useGameCanvasEffectsRuntime';
+import { useGameCanvasParticleRuntime } from '../engine/react/useGameCanvasParticleRuntime';
+import { useGameCanvasControllerRuntime } from '../engine/react/useGameCanvasControllerRuntime';
+import { useGameCanvasControllerBridgeRuntime } from '../engine/react/useGameCanvasControllerBridgeRuntime';
+import { useGameCanvasHostSyncRuntime } from '../engine/react/useGameCanvasHostSyncRuntime';
+import { useGameCanvasOverlayRuntime } from '../engine/react/useGameCanvasOverlayRuntime';
+import { useGameCanvasRenderRuntime } from '../engine/react/useGameCanvasRenderRuntime';
 import { GameCanvasRuntimeHost } from '../engine/runtime/GameCanvasRuntimeHost';
 
 // --- Prop Interface ---

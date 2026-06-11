@@ -12,7 +12,7 @@ Runtime modules own subscriptions, table bindings, and side effects. React hooks
 - `useGameCanvasHostSyncRuntime()` is the single React adapter that synchronizes those host-owned surfaces from `GameCanvas`.
 - `useGameCanvasOverlayRuntime()` now owns hover and overlay prop shaping so `GameCanvas` stays closer to shell/view composition.
 - `useGameCanvasControllerBridgeRuntime()` narrows controller output down to frame bindings and a tiny view-facing surface for the canvas host.
-- `useGameCanvasRenderRuntime` and `useGameCanvasFramePipeline` are temporary React adapters that configure and mount the host.
+- `useGameCanvasRenderRuntime` and `useGameCanvasFramePipeline` have moved to `engine/react/`; they configure/mount the host from the React boundary.
 
 ### Current Migration Status
 

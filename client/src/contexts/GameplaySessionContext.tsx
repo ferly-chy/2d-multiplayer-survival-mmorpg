@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import type { GameplaySessionRuntimeResult } from '../engine/runtime/useGameplaySessionRuntime';
+import type { GameplaySessionRuntimeResult } from '../engine/react/useGameplaySessionRuntime';
 
 const GameplaySessionContext = createContext<GameplaySessionRuntimeResult | null>(null);
 

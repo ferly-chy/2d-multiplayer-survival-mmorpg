@@ -15,7 +15,7 @@ import {
 } from '../../utils/renderers/foundationRenderingUtils';
 import { gameConfig, isPlayerMoving } from '../../config/gameConfig';
 import { getTileTypeFromChunkData } from '../../utils/renderers/placementRenderingUtils';
-import type { MutableRefObject } from 'react';
+import type { MutableRef } from '../types';
 
 const LOCAL_DODGE_ROLL_VISUAL_DURATION_MS = 180;
 let lastProjectileCollisionEntitiesRef: any[] | null = null;
@@ -52,7 +52,7 @@ interface RenderEntityWorldPassesOptions {
   currentCycleProgress: number;
   localPredictedDodgeRollVisualState: any;
   localOptimisticDodgeRollStartMs: number;
-  localOptimisticJumpPressMsRef: MutableRefObject<number>;
+  localOptimisticJumpPressMsRef: MutableRef<number>;
   renderPlayerCorpseFn: (props: any) => void;
   localPlayer: any;
   currentPredictedPosition: { x: number; y: number } | null;

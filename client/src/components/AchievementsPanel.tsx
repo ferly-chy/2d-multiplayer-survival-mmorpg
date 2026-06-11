@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import type { AchievementDefinition } from '../generated/types';
 import { useGameConnection } from '../contexts/GameConnectionContext';
 import { useGameUI } from '../contexts/GameUIContext';
-import { useGameScreenWorldTables } from '../engine/selectors';
+import { useGameScreenWorldTables } from '../engine/react/selectors';
 import achievementsIcon from '../assets/ui/achievements.png';
 
 /** Cairn achievements are hidden for now - set false to re-enable. */

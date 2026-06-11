@@ -14,7 +14,7 @@ import { useGameUI } from '../contexts/GameUIContext';
 import { useGameplaySession } from '../contexts/GameplaySessionContext';
 import { useGameplayMovement } from '../contexts/GameplayMovementContext';
 import { playImmediateSound } from '../hooks/useSoundSystem';
-import { useGameScreenWorldTables, useLocalPlayer, useUITable } from '../engine/selectors';
+import { useGameScreenWorldTables, useLocalPlayer, useUITable } from '../engine/react/selectors';
 import './InterfaceContainer.css';
 
 /** Cairns tab is hidden for now - graphical placeholders only. Set false to re-enable. */
